@@ -80,18 +80,12 @@ void simpleRaytracing(const std::string &filename, const int IMAGE_WIDTH, const 
 
 hittable_list createWorld() {
     hittable_list world;
-    // Diffuse
-    auto mat1 = std::make_shared<lambertian>(vec3(0.7, 0.3, 0.3));
-    auto mat2 = std::make_shared<lambertian>(vec3(0.8, 0.8, 0));
-
-    world.add(std::make_shared<sphere>(vec3(0, 0, -1), 0.5, mat1));
-    world.add(std::make_shared<sphere>(vec3(0, -100.5, -1), 100, mat2));
-
-    // Metal
-    const auto &matMetal1 = make_shared<metal>(vec3(0.8, 0.6, 0.2));
-    const auto &matMetal2 = make_shared<metal>(vec3(0.8, 0.8, 0.8));
-    world.add(make_shared<sphere>(vec3(1, 0, -1), 0.5, matMetal1));
-    world.add(make_shared<sphere>(vec3(-1, 0, -1), 0.5, matMetal2));
+    world.add(make_shared<sphere>(vec3(0,0,-1), 0.5, make_shared<lambertian>(vec3(0.1, 0.2, 0.5))));
+    world.add(make_shared<sphere>(
+            vec3(0,-100.5,-1), 100, make_shared<lambertian>(vec3(0.8, 0.8, 0.0))));
+    world.add(make_shared<sphere>(vec3(1,0,-1), 0.5, make_shared<metal>(vec3(0.8, 0.6, 0.2))));
+    world.add(make_shared<sphere>(vec3(-1,0,-1), 0.5, make_shared<dielectric>(1.5)));
+    world.add(make_shared<sphere>(vec3(-1,0,-1), -0.45, make_shared<dielectric>(1.5)));
     return world;
 }
 
