@@ -146,9 +146,9 @@ vec3 reflect(const vec3& v, const vec3& n) {
     return v - 2 * dot(n, v) * n;
 }
 
-vec3 refract(const vec3& v, const vec3& n, double etai_over_etao) {
-    double cos_theta = dot(-v, n);
-    vec3 r_out_parallel = etai_over_etao * (v + cos_theta * n);
+vec3 refract(const vec3& uv, const vec3& n, double etai_over_etao) {
+    double cos_theta = dot(-uv, n);
+    vec3 r_out_parallel = etai_over_etao * (uv + cos_theta * n);
     vec3 r_out_perp = -sqrt(1.0 - r_out_parallel.length_squared()) * n;
     return  r_out_parallel + r_out_perp;
 }

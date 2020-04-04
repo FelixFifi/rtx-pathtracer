@@ -10,7 +10,7 @@
 void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT);
 void simpleRaytracing(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT,
                       const int SAMPLES_PER_PIXEL, const int MAX_DEPTH);
-
+hittable_list random_scene();
 
 hittable_list createWorld();
 
@@ -40,8 +40,8 @@ vec3 rayColor(const hittable_list& world, const ray& r, int depth) {
 }
 
 int main() {
-    const int IMAGE_WIDTH = 400;
-    const int IMAGE_HEIGHT = 200;
+    const int IMAGE_WIDTH = 600;
+    const int IMAGE_HEIGHT = 300;
 
     const std::string filename = "simple.ppm";
     const int SAMPLES_PER_PIXEL = 100;
@@ -54,9 +54,14 @@ int main() {
 
 void simpleRaytracing(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT,
                       const int SAMPLES_PER_PIXEL, const int MAX_DEPTH) {
-    camera cam = camera();
+    double aspect_ratio = ((double) IMAGE_WIDTH) / IMAGE_HEIGHT;
+    vec3 lookfrom(13,2,3);
+    vec3 lookat(0,0,0);
+    vec3 vup(0,1,0);
 
-    hittable_list world = createWorld();
+    camera cam(lookfrom, lookat, vup, 20, aspect_ratio);
+
+    hittable_list world = random_scene();
 
     std::fstream fstream = std::fstream();
     fstream.open(filename, std::_S_out);
@@ -75,6 +80,7 @@ void simpleRaytracing(const std::string &filename, const int IMAGE_WIDTH, const 
             color.write_color(fstream, SAMPLES_PER_PIXEL);
         }
         fstream << "\n";
+        std::cerr << "Row " << IMAGE_HEIGHT - row << " of " << IMAGE_HEIGHT << std::endl;
     }
 }
 
@@ -83,11 +89,12 @@ hittable_list createWorld() {
     world.add(make_shared<sphere>(vec3(0,0,-1), 0.5, make_shared<lambertian>(vec3(0.1, 0.2, 0.5))));
     world.add(make_shared<sphere>(
             vec3(0,-100.5,-1), 100, make_shared<lambertian>(vec3(0.8, 0.8, 0.0))));
-    world.add(make_shared<sphere>(vec3(1,0,-1), 0.5, make_shared<metal>(vec3(0.8, 0.6, 0.2))));
+    world.add(make_shared<sphere>(vec3(1,0,-1), 0.5, make_shared<metal>(vec3(0.8, 0.6, 0.2), 0.3)));
     world.add(make_shared<sphere>(vec3(-1,0,-1), 0.5, make_shared<dielectric>(1.5)));
     world.add(make_shared<sphere>(vec3(-1,0,-1), -0.45, make_shared<dielectric>(1.5)));
     return world;
 }
+
 
 void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT) {
     std::fstream fstream = std::fstream();
@@ -103,4 +110,46 @@ void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const i
         }
         fstream << "\n";
     }
+}
+
+hittable_list random_scene() {
+    hittable_list world;
+
+    world.add(make_shared<sphere>(
+            vec3(0,-1000,0), 1000, make_shared<lambertian>(vec3(0.5, 0.5, 0.5))));
+
+    int i = 1;
+    for (int a = -11; a < 11; a++) {
+        for (int b = -11; b < 11; b++) {
+            auto choose_mat = random_double();
+            vec3 center(a + 0.9*random_double(), 0.2, b + 0.9*random_double());
+            if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    auto albedo = vec3::random() * vec3::random();
+                    world.add(
+                            make_shared<sphere>(center, 0.2, make_shared<lambertian>(albedo)));
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    auto albedo = vec3::random(.5, 1);
+                    auto fuzz = random_double(0, .5);
+                    world.add(
+                            make_shared<sphere>(center, 0.2, make_shared<metal>(albedo, fuzz)));
+                } else {
+                    // glass
+                    world.add(make_shared<sphere>(center, 0.2, make_shared<dielectric>(1.5)));
+                }
+            }
+        }
+    }
+
+    world.add(make_shared<sphere>(vec3(0, 1, 0), 1.0, make_shared<dielectric>(1.5)));
+
+    world.add(
+            make_shared<sphere>(vec3(-4, 1, 0), 1.0, make_shared<lambertian>(vec3(0.4, 0.2, 0.1))));
+
+    world.add(
+            make_shared<sphere>(vec3(4, 1, 0), 1.0, make_shared<metal>(vec3(0.7, 0.6, 0.5), 0.0)));
+
+    return world;
 }

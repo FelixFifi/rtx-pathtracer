@@ -24,8 +24,7 @@ public:
             scattered = ray(rec.p, direction);
             return true;
         } else {
-            attenuation = vec3(0,0,0);
-            std::cerr << "hit backside of lambertian" << std::endl;
+            //std::cerr << "hit backside of lambertian" << std::endl;
             return false;
         }
     }
@@ -35,22 +34,22 @@ public:
 
 class metal : public material {
 public:
-    metal(const vec3& a) : albedo(a) {}
+    metal(const vec3& albedo, double fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1.0) {}
 
     virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
         if (rec.front_face) {
             attenuation = albedo;
             vec3 reflected = reflect(r_in.direction(), rec.normal);
-            scattered = ray(rec.p, reflected);
+            scattered = ray(rec.p, reflected + fuzz*random_in_unit_sphere());
             return true;
         } else {
-            attenuation = vec3(0,0,0);
-            std::cerr << "hit backside of metal" << std::endl;
+            //std::cerr << "hit backside of metal" << std::endl;
             return false;
         }
     }
 public:
     vec3 albedo;
+    double fuzz;
 };
 
 double schlick(double cosine, double ref_idx);

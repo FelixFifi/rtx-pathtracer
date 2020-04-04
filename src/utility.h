@@ -32,4 +32,8 @@ inline double random_double(double min, double max) {
     return min + (max-min)*random_double();
 }
 
+inline double degrees_to_radians(double degree) {
+    return degree / 180.0 * pi;
+}
+
 #endif //RTX_RAYTRACER_UTILITY_H
