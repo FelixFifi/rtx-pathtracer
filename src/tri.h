@@ -13,6 +13,20 @@ public:
         normal = cross(b - a, c - a);
         u_normal = unit_vector(normal);
         plane_offset = dot(u_normal, a);
+
+        normal_a = u_normal;
+        normal_b = u_normal;
+        normal_c = u_normal;
+    };
+
+    tri(const vec3& a, const vec3& b, const vec3& c, const vec3& na, const vec3& nb, const vec3& nc, shared_ptr<material> mat_ptr) : a(a), b(b), c(c), mat_ptr(mat_ptr) {
+        normal = cross(b - a, c - a);
+        u_normal = unit_vector(normal);
+        plane_offset = dot(u_normal, a);
+
+        normal_a = na;
+        normal_b = nb;
+        normal_c = nc;
     };
 
     virtual bool hit(const ray& r, double t_min, double t_max, hit_record& rec) const {
@@ -33,7 +47,8 @@ public:
         double lc = dot(nc, u_normal) / normal.length();
 
         if ((la >= 0) && (la <= 1.0) && (lb >= 0) && (lb <= 1.0) && (lc >= 0) && (lc <= 1.0)) {
-            rec.set_face_normal(r, u_normal);
+            vec3 interpolated_normal = unit_vector(la * normal_a + lb * normal_b + lc * normal_c);
+            rec.set_face_normal(r, interpolated_normal);
             rec.t = t;
             rec.p = p;
             rec.mat_ptr = mat_ptr;
@@ -46,6 +61,7 @@ public:
     const vec3 a, b, c;
 private:
     vec3 normal, u_normal;
+    vec3 normal_a, normal_b, normal_c;
     double plane_offset;
     shared_ptr<material> mat_ptr;
 };

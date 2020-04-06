@@ -18,7 +18,7 @@ public:
     lambertian(const vec3& a) : albedo(a) {}
 
     virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
-        if (rec.front_face) {
+        if (true || rec.front_face) {
             attenuation = albedo;
             vec3 direction = rec.normal + random_unit_vector();
             scattered = ray(rec.p, direction);

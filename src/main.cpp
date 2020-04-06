@@ -6,6 +6,7 @@
 #include "sphere.h"
 #include "material.h"
 #include "tri.h"
+#include "obj_reader.h"
 
 
 void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT);
@@ -41,11 +42,13 @@ vec3 rayColor(const hittable_list& world, const ray& r, int depth) {
 }
 
 int main() {
-    const int IMAGE_WIDTH = 400;
-    const int IMAGE_HEIGHT = 200;
+
+
+    const int IMAGE_WIDTH = 100;
+    const int IMAGE_HEIGHT = 50;
 
     const std::string filename = "simple.ppm";
-    const int SAMPLES_PER_PIXEL = 1000;
+    const int SAMPLES_PER_PIXEL = 20;
     const int MAX_DEPTH = 20;
 
     simpleRaytracing(filename, IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES_PER_PIXEL, MAX_DEPTH);
@@ -56,14 +59,14 @@ int main() {
 void simpleRaytracing(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT,
                       const int SAMPLES_PER_PIXEL, const int MAX_DEPTH) {
     double aspect_ratio = ((double) IMAGE_WIDTH) / IMAGE_HEIGHT;
-    vec3 lookfrom(0,1,1);
-    vec3 lookat(0,0.5,0);
+    vec3 lookfrom(0,10,20);
+    vec3 lookat(0,3,0);
     vec3 vup(0,1,0);
 
-    camera cam(lookfrom, lookat, vup, 40, aspect_ratio);
+    camera cam(lookfrom, lookat, vup, 90, aspect_ratio);
 
-    hittable_list world = createWorld();
-
+    hittable_list world;
+    world.add(readObjFile("/home/felixfifi/projects/rtx-raytracer/objs/teapot-low.obj"));
     std::fstream fstream = std::fstream();
     fstream.open(filename, std::_S_out);
 
@@ -93,7 +96,7 @@ hittable_list createWorld() {
     world.add(make_shared<sphere>(vec3(1,0,-1), 0.5, make_shared<metal>(vec3(0.8, 0.6, 0.2), 0.3)));
     world.add(make_shared<sphere>(vec3(-1,0,-1), 0.5, make_shared<dielectric>(1.5)));
     world.add(make_shared<sphere>(vec3(-1,0,-1), -0.45, make_shared<dielectric>(1.5)));
-    world.add(make_shared<tri>(vec3(-1,0,-1),vec3(1,0,-1),vec3(-1,0.5,-1), make_shared<metal>(vec3(0.8, 0.1, 0), 0.3)));
+    world.add(make_shared<tri>(vec3(-1,0,-1),vec3(1,0,-0.5),vec3(-1,0.5,-0.5), make_shared<metal>(vec3(1, 1, 1), 0.1)));
     return world;
 }
 
