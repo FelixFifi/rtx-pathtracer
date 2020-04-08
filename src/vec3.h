@@ -103,6 +103,10 @@ inline vec3 operator/(vec3 v, double t) {
     return (1/t) * v;
 }
 
+inline vec3 operator/(vec3 v, vec3 w) {
+    return vec3(v.x() / w.x(), v.y() / w.y(), v.z() / w.z());
+}
+
 inline double dot(const vec3 &u, const vec3 &v) {
     return u.e[0] * v.e[0]
            + u.e[1] * v.e[1]

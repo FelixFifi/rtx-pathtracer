@@ -7,6 +7,7 @@
 #include "material.h"
 #include "tri.h"
 #include "obj_reader.h"
+#include "AABB.h"
 
 
 void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT);
@@ -42,8 +43,6 @@ vec3 rayColor(const hittable_list& world, const ray& r, int depth) {
 }
 
 int main() {
-
-
     const int IMAGE_WIDTH = 100;
     const int IMAGE_HEIGHT = 50;
 

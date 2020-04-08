@@ -6,6 +6,7 @@
 #define RTX_RAYTRACER_TRI_MESH_H
 
 #include "hittable.h"
+#include "AABB.h"
 #include <vector>
 
 using std::vector;
@@ -23,9 +24,15 @@ class tri_mesh : public hittable {
 public:
     tri_mesh(shared_ptr<vector<vec3>> vertices, shared_ptr<vector<vec3>> normals,shared_ptr<vector<vec3>> texture_coords,
              shared_ptr<vector<vector<index>>> faces, shared_ptr<material> mat_ptr) :
-    vertices(vertices), normals(normals), texture_coords(texture_coords), faces(faces), mat_ptr(mat_ptr) {}
+    vertices(vertices), normals(normals), texture_coords(texture_coords), faces(faces), mat_ptr(mat_ptr) {
+        aabb = AABB(vertices);
+    }
 
     virtual bool hit(const ray& r, double t_min, double t_max, hit_record& rec) const {
+        if (!aabb.hit(r, t_min, t_max)) {
+            return false;
+        }
+
         hit_record temp_rec;
         bool hit_anything = false;
         auto closest_so_far = t_max;
@@ -80,6 +87,7 @@ public:
     shared_ptr<vector<vec3>> texture_coords;
     shared_ptr<vector<vector<index>>> faces;
     shared_ptr<material> mat_ptr;
+    AABB aabb;
 };
 
 #endif //RTX_RAYTRACER_TRI_MESH_H
