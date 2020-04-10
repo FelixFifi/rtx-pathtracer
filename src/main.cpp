@@ -8,6 +8,8 @@
 #include "tri.h"
 #include "obj_reader.h"
 #include "AABB.h"
+#include "RayTracingApp.h"
+
 
 
 void createSimplePPM(const std::string &filename, const int IMAGE_WIDTH, const int IMAGE_HEIGHT);
@@ -43,14 +45,27 @@ vec3 rayColor(const hittable_list& world, const ray& r, int depth) {
 }
 
 int main() {
-    const int IMAGE_WIDTH = 100;
-    const int IMAGE_HEIGHT = 50;
+    const int WIDTH = 1280;
+    const int HEIGHT = 720;
+    RayTracingApp app(WIDTH, HEIGHT);
+
+    try {
+        app.run();
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+
+
+    return 0;
 
     const std::string filename = "simple.ppm";
     const int SAMPLES_PER_PIXEL = 20;
     const int MAX_DEPTH = 20;
 
-    simpleRaytracing(filename, IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES_PER_PIXEL, MAX_DEPTH);
+    simpleRaytracing(filename, WIDTH, HEIGHT, SAMPLES_PER_PIXEL, MAX_DEPTH);
 
     return 0;
 }
