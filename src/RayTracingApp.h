@@ -9,7 +9,20 @@
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
+
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+
 #include <vulkan/vulkan.hpp>
+
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
+
+// #VKRay
+#define ALLOC_DEDICATED
+
+#include <nvmath/nvmath.h>
+#include <nvvkpp/utilities_vkpp.hpp>
+#include <nvvkpp/descriptorsets_vkpp.hpp>
+#include <nvvkpp/raytraceKHR_vkpp.hpp>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
@@ -43,6 +56,7 @@ const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 const std::vector<const char *> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
+        //, "VK_LAYER_LUNARG_api_dump"
 };
 
 const std::vector<const char *> deviceExtensions = {
@@ -50,6 +64,7 @@ const std::vector<const char *> deviceExtensions = {
         VK_KHR_RAY_TRACING_EXTENSION_NAME,
         VK_KHR_MAINTENANCE3_EXTENSION_NAME,
         VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
@@ -67,19 +82,6 @@ const bool enableValidationLayers = false;
 #else
 const bool enableValidationLayers = true;
 #endif
-
-PFN_vkCreateDebugUtilsMessengerEXT pfnVkCreateDebugUtilsMessengerEXT;
-PFN_vkDestroyDebugUtilsMessengerEXT pfnVkDestroyDebugUtilsMessengerEXT;
-
-VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger)
-{
-    return pfnVkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
-}
-
-VKAPI_ATTR void VKAPI_CALL vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, VkAllocationCallbacks const * pAllocator)
-{
-    return pfnVkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
-}
 
 
 struct QueueFamilyIndices {
@@ -164,14 +166,16 @@ public:
     }
 
 public:
-    const uint32_t WIDTH, HEIGHT;
+    const uint32_t WIDTH, HEIGHT; // TODO: Disable resize or remove these
 
 private:
-    SDL_Window *window;
+    SDL_Window *window = nullptr;
 
     vk::Instance instance;
     vk::DebugUtilsMessengerEXT debugMessenger;
     vk::SurfaceKHR surface;
+
+    vk::DynamicLoader dl;
 
     vk::PhysicalDevice physicalDevice;
     vk::Device device;
@@ -181,7 +185,7 @@ private:
 
     vk::SwapchainKHR swapChain;
     std::vector<vk::Image> swapChainImages;
-    vk::Format swapChainImageFormat;
+    vk::Format swapChainImageFormat{};
     vk::Extent2D swapChainExtent;
 
     std::vector<vk::ImageView> swapChainImageViews;
@@ -224,10 +228,28 @@ private:
 
     // Ray tracing
     vk::PhysicalDeviceRayTracingPropertiesKHR rtProperties;
+    nvvkpp::RaytracingBuilderKHR rtBuilder;
 
+    std::vector<vk::DescriptorSetLayoutBinding> rtDescSetLayoutBind;
+    vk::DescriptorPool rtDescPool;
+    vk::DescriptorSetLayout rtDescSetLayout;
+    vk::DescriptorSet rtDescSet;
+
+    std::vector<vk::RayTracingShaderGroupCreateInfoKHR> rtShaderGroups;
+    vk::PipelineLayout rtPipelineLayout;
+    vk::Pipeline rtPipeline;
+    vk::Buffer rtSBTBuffer;
+    vk::DeviceMemory rtSBTBufferMemory;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+
+    struct RtPushConstant {
+        nvmath::vec4f clearColor;
+        nvmath::vec3f lightPosition;
+        float lightIntensity;
+        int lightType;
+    } rtPushConstants;
 
 
     void initWindow() {
@@ -252,11 +274,19 @@ private:
     }
 
     void initVulkan() {
+        setupDispatchLoader();
         createInstance();
-        setupDebugMessenger();
+
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
+
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(device);
+
+        setupDebugMessenger();
+
         createSwapChain();
         createImageViews();
         createRenderPass();
@@ -275,8 +305,19 @@ private:
         createDescriptorPool();
         createDescriptorSets();
         initRayTracing();
+        createBottomLevelAS();
+        createTopLevelAS();
+        createRtDescriptorSet();
+        createRtPipeline();
+        createRtShaderBindingTable();
         createCommandBuffers();
         createSyncObjects();
+    }
+
+    void setupDispatchLoader() const {
+        PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
+                dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
     }
 
     void mainLoop() {
@@ -316,6 +357,7 @@ private:
         imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
         updateUniformBuffer(imageIndex);
+        updateRtDescriptorSet(imageIndex);
 
 
         vk::Semaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
@@ -338,6 +380,10 @@ private:
                 framebufferResized = false;
                 recreateSwapChain();
                 break;
+            case vk::Result::eSuccess:
+                break;
+            default:
+                throw std::runtime_error("Unknown present result");
         }
 
         if (framebufferResized) {
@@ -419,6 +465,15 @@ private:
 
         device.destroy(commandPool, nullptr);
 
+        device.destroy(rtSBTBuffer);
+        device.free(rtSBTBufferMemory);
+        device.destroy(rtPipeline);
+        device.destroy(rtPipelineLayout);
+
+        rtBuilder.destroy();
+        device.destroy(rtDescPool);
+        device.destroy(rtDescSetLayout);
+
         device.destroy(nullptr);
 
         if (enableValidationLayers) {
@@ -427,6 +482,7 @@ private:
 
         instance.destroy(surface, nullptr);
         instance.destroy(nullptr);
+
 
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -444,11 +500,11 @@ private:
 
 
         auto extensions = getRequiredExtensions();
-        uint32_t enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        auto enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 
         vk::InstanceCreateInfo createInfo;
         if (enableValidationLayers) {
-            uint32_t enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            auto enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 
             createInfo = vk::InstanceCreateInfo({}, &appInfo, enabledLayerCount, validationLayers.data(),
                                                 enabledExtensionCount, extensions.data());
@@ -458,14 +514,14 @@ private:
             createInfo.pNext = &debugCreateInfo;
         } else {
             uint32_t enabledLayerCount = 0;
-            vk::InstanceCreateInfo createInfo({}, &appInfo, enabledLayerCount, nullptr, enabledExtensionCount,
-                                              extensions.data());
+            createInfo = vk::InstanceCreateInfo({}, &appInfo, enabledLayerCount, nullptr, enabledExtensionCount,
+                                                extensions.data());
         }
 
         instance = vk::createInstance(createInfo);
     }
 
-    void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo) {
+    static void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo) {
         vk::DebugUtilsMessageSeverityFlagsEXT messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
                                                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
                                                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
@@ -477,22 +533,6 @@ private:
     }
 
     void setupDebugMessenger() {
-        if (!enableValidationLayers) return;
-
-        pfnVkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(instance.getProcAddr("vkCreateDebugUtilsMessengerEXT"));
-        if (!pfnVkCreateDebugUtilsMessengerEXT)
-        {
-            std::cout << "GetInstanceProcAddr: Unable to find pfnVkCreateDebugUtilsMessengerEXT function." << std::endl;
-            exit(1);
-        }
-
-        pfnVkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(instance.getProcAddr("vkDestroyDebugUtilsMessengerEXT"));
-        if (!pfnVkDestroyDebugUtilsMessengerEXT)
-        {
-            std::cout << "GetInstanceProcAddr: Unable to find pfnVkDestroyDebugUtilsMessengerEXT function." << std::endl;
-            exit(1);
-        }
-
         vk::DebugUtilsMessengerCreateInfoEXT createInfo;
         populateDebugMessengerCreateInfo(createInfo);
 
@@ -514,7 +554,7 @@ private:
     void pickPhysicalDevice() {
         vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
 
-        if (devices.size() == 0) {
+        if (devices.empty()) {
             throw std::runtime_error("failed to find GPUs with Vulkan support!");
         }
 
@@ -531,10 +571,11 @@ private:
     }
 
     void createLogicalDevice() {
-        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+        QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
 
         std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+        std::set<uint32_t> uniqueQueueFamilies = {queueFamilyIndices.graphicsFamily.value(),
+                                                  queueFamilyIndices.presentFamily.value()};
 
         float queuePriority = 1.0f;
         for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -542,12 +583,19 @@ private:
             queueCreateInfos.push_back(queueCreateInfo);
         }
 
+
+        vk::PhysicalDeviceBufferDeviceAddressFeatures addresFeatures;
+        addresFeatures.bufferDeviceAddress = true;
+
         vk::PhysicalDeviceFeatures deviceFeatures = {};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
+        deviceFeatures.robustBufferAccess = false;
 
+        vk::PhysicalDeviceFeatures2 deviceFeatures2(deviceFeatures);
+        deviceFeatures2.setPNext(&addresFeatures);
 
-        uint32_t queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        uint32_t enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        auto queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        auto enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 
 
         uint32_t enabledLayerCount = 0;
@@ -559,12 +607,13 @@ private:
 
         vk::DeviceCreateInfo createInfo({}, queueCreateInfoCount, queueCreateInfos.data(), enabledLayerCount,
                                         enabledLayerNames, enabledExtensionCount, deviceExtensions.data(),
-                                        &deviceFeatures);
+                                        nullptr);
+        createInfo.setPNext(&deviceFeatures2);
 
         device = physicalDevice.createDevice(createInfo);
 
-        graphicsQueue = device.getQueue(indices.graphicsFamily.value(), 0);
-        presentQueue = device.getQueue(indices.presentFamily.value(), 0);
+        graphicsQueue = device.getQueue(queueFamilyIndices.graphicsFamily.value(), 0);
+        presentQueue = device.getQueue(queueFamilyIndices.presentFamily.value(), 0);
     }
 
     void createSwapChain() {
@@ -590,10 +639,10 @@ private:
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
 
-        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-        uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+        QueueFamilyIndices queueFamilies = findQueueFamilies(physicalDevice);
+        uint32_t queueFamilyIndices[] = {queueFamilies.graphicsFamily.value(), queueFamilies.presentFamily.value()};
 
-        if (indices.graphicsFamily != indices.presentFamily) {
+        if (queueFamilies.graphicsFamily != queueFamilies.presentFamily) {
             createInfo.imageSharingMode = vk::SharingMode::eConcurrent;
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
@@ -616,10 +665,8 @@ private:
         swapChainExtent = extent;
     }
 
-    vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats) {
+    static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats) {
         for (const auto &availableFormat : availableFormats) {
-
-
             if (availableFormat.format == vk::Format::eB8G8R8A8Srgb &&
                 availableFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
                 return availableFormat;
@@ -629,7 +676,7 @@ private:
         return availableFormats[0];
     }
 
-    vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes) {
+    static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes) {
         for (const auto &availablePresentMode : availablePresentModes) {
             if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
                 return availablePresentMode;
@@ -647,8 +694,8 @@ private:
             int height;
             SDL_Vulkan_GetDrawableSize(window, &width, &height);
 
-            uint32_t u_width = static_cast<uint32_t>(width);
-            uint32_t u_height = static_cast<uint32_t>(height);
+            auto u_width = static_cast<uint32_t>(width);
+            auto u_height = static_cast<uint32_t>(height);
 
             width = std::clamp(u_width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
             height = std::clamp(u_height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -684,7 +731,7 @@ private:
         return indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
     }
 
-    bool checkDeviceExtensionSupport(vk::PhysicalDevice physicalDevice) {
+    static bool checkDeviceExtensionSupport(vk::PhysicalDevice physicalDevice) {
 
         std::vector<vk::ExtensionProperties> availableExtensions = physicalDevice.enumerateDeviceExtensionProperties();
 
@@ -727,7 +774,7 @@ private:
 
     std::vector<const char *> getRequiredExtensions() {
         unsigned int sdlExtensionCount = 0;
-        SDL_Vulkan_GetInstanceExtensions(window, &sdlExtensionCount, NULL);
+        SDL_Vulkan_GetInstanceExtensions(window, &sdlExtensionCount, nullptr);
 
         std::vector<const char *> extensions;
         extensions.resize(sdlExtensionCount);
@@ -749,7 +796,7 @@ private:
         return extensions;
     }
 
-    bool checkValidationLayerSupport() {
+    static bool checkValidationLayerSupport() {
         std::vector<vk::LayerProperties> availableLayers = vk::enumerateInstanceLayerProperties();
 
         for (const char *layerName : validationLayers) {
@@ -903,7 +950,9 @@ private:
         memcpy(data, vertices.data(), (size_t) bufferSize);
         device.unmapMemory(stagingBufferMemory);
 
-        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer |
+                                 vk::BufferUsageFlagBits::eStorageBuffer |
+                                 vk::BufferUsageFlagBits::eShaderDeviceAddress,
                      vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
 
         copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
@@ -929,7 +978,8 @@ private:
         memcpy(data, indices.data(), (size_t) bufferSize);
         device.unmapMemory(stagingBufferMemory);
 
-        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer |
+                                 vk::BufferUsageFlagBits::eStorageBuffer,
                      vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer, indexBufferMemory);
 
         copyBuffer(stagingBuffer, indexBuffer, bufferSize);
@@ -948,7 +998,7 @@ private:
         endSingleTimeCommands(commandBuffer);
     }
 
-    uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+    uint32_t findMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) {
         vk::PhysicalDeviceMemoryProperties memProperties;
         memProperties = physicalDevice.getMemoryProperties();
 
@@ -961,19 +1011,22 @@ private:
         throw std::runtime_error("failed to find suitable memory type!");
     }
 
-    void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
+    void createBuffer(vk::DeviceSize size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties,
                       vk::Buffer &buffer, vk::DeviceMemory &bufferMemory) {
         vk::BufferCreateInfo bufferInfo({}, size, usage, vk::SharingMode::eExclusive,
                                         0, nullptr);
 
         buffer = device.createBuffer(bufferInfo);
 
-        vk::MemoryRequirements memRequirements = device.getBufferMemoryRequirements(buffer);
+        vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(buffer);
 
-        vk::MemoryAllocateInfo allocInfo(memRequirements.size,
-                                         findMemoryType(memRequirements.memoryTypeBits, properties));
+        vk::MemoryAllocateInfo allocateInfo(memoryRequirements.size,
+                                            findMemoryType(memoryRequirements.memoryTypeBits, properties));
+        vk::MemoryAllocateFlagsInfo allocateFlagsInfo;
+        allocateFlagsInfo.flags = vk::MemoryAllocateFlagBits::eDeviceAddress;
+        allocateInfo.pNext = &allocateFlagsInfo;
 
-        bufferMemory = device.allocateMemory(allocInfo);
+        bufferMemory = device.allocateMemory(allocateInfo);
 
         device.bindBufferMemory(buffer, bufferMemory, 0);
     }
@@ -1065,8 +1118,8 @@ private:
         device.destroy(depthImage);
         device.freeMemory(depthImageMemory);
 
-        for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
-            device.destroy(swapChainFramebuffers[i]);
+        for (auto swapChainFramebuffer : swapChainFramebuffers) {
+            device.destroy(swapChainFramebuffer);
         }
 
         device.freeCommandBuffers(commandPool, commandBuffers);
@@ -1075,8 +1128,8 @@ private:
         device.destroy(pipelineLayout);
         device.destroy(renderPass);
 
-        for (size_t i = 0; i < swapChainImageViews.size(); i++) {
-            device.destroy(swapChainImageViews[i]);
+        for (auto swapChainImageView : swapChainImageViews) {
+            device.destroy(swapChainImageView);
         }
 
         device.destroy(swapChain);
@@ -1117,7 +1170,8 @@ private:
 
     void createDecriptorSetLayout() {
         vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer,
-                                                        1, vk::ShaderStageFlagBits::eVertex,
+                                                        1, vk::ShaderStageFlagBits::eVertex |
+                                                           vk::ShaderStageFlagBits::eRaygenKHR,
                                                         nullptr);
 
         vk::DescriptorSetLayoutBinding samplerLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler,
@@ -1288,8 +1342,9 @@ private:
     }
 
     void
-    createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-                vk::MemoryPropertyFlags properties, vk::Image &image, vk::DeviceMemory &imageMemory) {
+    createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,
+                const vk::ImageUsageFlags &usage,
+                const vk::MemoryPropertyFlags &properties, vk::Image &image, vk::DeviceMemory &imageMemory) {
         vk::ImageCreateInfo imageInfo({}, vk::ImageType::e2D, format, {width, height, 1}, 1, 1,
                                       vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, 0,
                                       nullptr, vk::ImageLayout::eUndefined);
@@ -1335,7 +1390,7 @@ private:
         textureImageView = createImageView(textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
     }
 
-    vk::ImageView createImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
+    vk::ImageView createImageView(vk::Image image, vk::Format format, const vk::ImageAspectFlags &aspectFlags) {
         vk::ImageSubresourceRange subresourceRange(aspectFlags, 0, 1, 0, 1);
 
         vk::ImageViewCreateInfo viewInfo({}, image, vk::ImageViewType::e2D, format, {}, subresourceRange);
@@ -1356,7 +1411,7 @@ private:
 
         createImage(swapChainExtent.width, swapChainExtent.height, depthFormat, vk::ImageTiling::eOptimal,
                     vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal,
-                    depthImage,depthImageMemory);
+                    depthImage, depthImageMemory);
         depthImageView = createImageView(depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
 
         transitionImageLayout(depthImage, depthFormat, vk::ImageLayout::eUndefined,
@@ -1371,12 +1426,12 @@ private:
         );
     }
 
-    bool hasStencilComponent(vk::Format format) {
+    static bool hasStencilComponent(vk::Format format) {
         return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
     }
 
     vk::Format findSupportedFormat(const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
-                                   vk::FormatFeatureFlags features) {
+                                   const vk::FormatFeatureFlags &features) {
         for (vk::Format format : candidates) {
             vk::FormatProperties props;
             props = physicalDevice.getFormatProperties(format);
@@ -1432,8 +1487,265 @@ private:
     }
 
     void initRayTracing() {
+        auto properties = physicalDevice.getProperties2<vk::PhysicalDeviceProperties2, vk::PhysicalDeviceRayTracingPropertiesKHR>();
+        rtProperties = properties.get<vk::PhysicalDeviceRayTracingPropertiesKHR>();
+
+        QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+        rtBuilder.setup(device, physicalDevice, queueFamilyIndices.graphicsFamily.value());
     }
 
+    nvvkpp::RaytracingBuilderKHR::Blas toBlas() {
+        // Setting up the creation info of acceleration structure
+        vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
+        asCreate.setGeometryType(vk::GeometryTypeKHR::eTriangles);
+        asCreate.setIndexType(vk::IndexType::eUint32);
+        asCreate.setVertexFormat(vk::Format::eR32G32B32Sfloat);
+        asCreate.setMaxPrimitiveCount(indices.size() / 3);  // Nb triangles
+        asCreate.setMaxVertexCount(vertices.size());
+        asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
+
+        // Building part
+        vk::BufferDeviceAddressInfo infoVB = vk::BufferDeviceAddressInfo(vertexBuffer);
+        vk::BufferDeviceAddressInfo infoIB = vk::BufferDeviceAddressInfo(indexBuffer);
+
+        std::cout << VULKAN_HPP_DEFAULT_DISPATCHER.vkGetBufferDeviceAddressKHR << std::endl;
+
+        vk::DeviceAddress vertexAddress = device.getBufferAddressKHR(&infoVB);
+        vk::DeviceAddress indexAddress = device.getBufferAddressKHR(&infoIB);
+
+        vk::AccelerationStructureGeometryTrianglesDataKHR triangles;
+        triangles.setVertexFormat(asCreate.vertexFormat);
+        triangles.setVertexData(vertexAddress);
+        triangles.setVertexStride(sizeof(Vertex));
+        triangles.setIndexType(asCreate.indexType);
+        triangles.setIndexData(indexAddress);
+        triangles.setTransformData({});
+
+        // Setting up the build info of the acceleration
+        vk::AccelerationStructureGeometryKHR asGeom;
+        asGeom.setGeometryType(asCreate.geometryType);
+        asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
+        asGeom.geometry.setTriangles(triangles);
+
+        // The primitive itself
+        vk::AccelerationStructureBuildOffsetInfoKHR offset;
+        offset.setFirstVertex(0);
+        offset.setPrimitiveCount(asCreate.maxPrimitiveCount);
+        offset.setPrimitiveOffset(0);
+        offset.setTransformOffset(0);
+
+        // Our blas is only one geometry, but could be made of many geometries
+        nvvkpp::RaytracingBuilderKHR::Blas blas{};
+        blas.asGeometry.emplace_back(asGeom);
+        blas.asCreateGeometryInfo.emplace_back(asCreate);
+        blas.asBuildOffsetInfo.emplace_back(offset);
+
+        return blas;
+    }
+
+    void createBottomLevelAS() {
+        std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
+
+        allBlas.push_back(toBlas());
+
+        std::cout << VULKAN_HPP_DEFAULT_DISPATCHER.vkGetBufferMemoryRequirements2KHR << VULKAN_HPP_DEFAULT_DISPATCHER.vkGetBufferMemoryRequirements2 << std::endl;
+
+        rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
+    }
+
+    void createTopLevelAS() {
+        std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
+        tlas.reserve(1);
+
+        for (int i = 0; i < static_cast<int>(1); ++i) {
+            nvvkpp::RaytracingBuilderKHR::Instance rayInst;
+            rayInst.transform = {};
+            rayInst.instanceId = i;
+            rayInst.blasId = 0;
+            rayInst.hitGroupId = 0; // Same hit group for all
+            rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleCullDisable; // TODO
+            tlas.emplace_back(rayInst);
+        }
+
+        rtBuilder.buildTlas(tlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
+    }
+
+    void createRtDescriptorSet() {
+        using vkDT = vk::DescriptorType;
+        using vkSS = vk::ShaderStageFlagBits;
+        using vkDSLB = vk::DescriptorSetLayoutBinding;
+
+        rtDescSetLayoutBind.emplace_back(vkDSLB(0, vkDT::eAccelerationStructureKHR, 1, vkSS::eRaygenKHR)); // TLAS
+        rtDescSetLayoutBind.emplace_back(vkDSLB(1, vkDT::eStorageImage, 1, vkSS::eRaygenKHR)); // Output image
+
+        rtDescPool = nvvkpp::util::createDescriptorPool(device, rtDescSetLayoutBind);
+        rtDescSetLayout = nvvkpp::util::createDescriptorSetLayout(device, rtDescSetLayoutBind);
+        rtDescSet = device.allocateDescriptorSets({rtDescPool, 1, &rtDescSetLayout})[0];
+
+        vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
+        descASInfo.setAccelerationStructureCount(1);
+        descASInfo.setPAccelerationStructures(&rtBuilder.getAccelerationStructure());
+        vk::DescriptorImageInfo imageInfo{
+                {}, swapChainImageViews[0], vk::ImageLayout::eGeneral}; // TODO: Update each frame
+
+        std::vector<vk::WriteDescriptorSet> writes;
+        writes.emplace_back(
+                nvvkpp::util::createWrite(rtDescSet, rtDescSetLayoutBind[0], &descASInfo));
+        writes.emplace_back(nvvkpp::util::createWrite(rtDescSet, rtDescSetLayoutBind[1], &imageInfo));
+        device.updateDescriptorSets(static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    }
+
+    void updateRtDescriptorSet(uint32_t currentImage) {
+        using vkDT = vk::DescriptorType;
+
+        // (1) Output buffer
+        vk::DescriptorImageInfo imageInfo{
+                {}, swapChainImageViews[currentImage], vk::ImageLayout::eGeneral};
+        vk::WriteDescriptorSet wds{rtDescSet, 1, 0, 1, vkDT::eStorageImage, &imageInfo};
+        device.updateDescriptorSets(wds, nullptr);
+    }
+
+    void createRtPipeline() {
+        auto raygenCode = readFile("shaders/raytrace.rgen.spv");
+        auto missCode = readFile("shaders/raytrace.rmiss.spv");
+        auto chitCode = readFile("shaders/raytrace.rchit.spv");
+
+        vk::ShaderModule raygenShaderModule = createShaderModule(raygenCode);
+        vk::ShaderModule missShaderModule = createShaderModule(missCode);
+        vk::ShaderModule chitShaderModule = createShaderModule(chitCode);
+
+        std::vector<vk::PipelineShaderStageCreateInfo> stages;
+
+        // Raygen
+        vk::RayTracingShaderGroupCreateInfoKHR rg{vk::RayTracingShaderGroupTypeKHR::eGeneral,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+
+        stages.push_back({{}, vk::ShaderStageFlagBits::eRaygenKHR, raygenShaderModule, "main"});
+        rg.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
+        rtShaderGroups.push_back(rg);
+        // Miss
+        vk::RayTracingShaderGroupCreateInfoKHR mg{vk::RayTracingShaderGroupTypeKHR::eGeneral,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+        stages.push_back({{}, vk::ShaderStageFlagBits::eMissKHR, missShaderModule, "main"});
+        mg.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
+        rtShaderGroups.push_back(mg);
+
+        // Hit Group - Closest Hit + AnyHit
+
+        vk::RayTracingShaderGroupCreateInfoKHR hg{vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                                  VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+        stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, chitShaderModule, "main"});
+        hg.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+        rtShaderGroups.push_back(hg);
+
+        vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
+
+        // Push constant: we want to be able to update constants used by the shaders
+        vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eRaygenKHR
+                                           | vk::ShaderStageFlagBits::eClosestHitKHR
+                                           | vk::ShaderStageFlagBits::eMissKHR,
+                                           0, sizeof(RtPushConstant)};
+        pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
+        pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
+
+        // Descriptor sets: one specific to ray tracing, and one shared with the rasterization pipeline
+        std::vector<vk::DescriptorSetLayout> rtDescSetLayouts = {rtDescSetLayout};
+        pipelineLayoutCreateInfo.setSetLayoutCount(static_cast<uint32_t>(rtDescSetLayouts.size()));
+        pipelineLayoutCreateInfo.setPSetLayouts(rtDescSetLayouts.data());
+
+        rtPipelineLayout = device.createPipelineLayout(pipelineLayoutCreateInfo);
+
+        // Assemble the shader stages and recursion depth info into the ray tracing pipeline
+        vk::RayTracingPipelineCreateInfoKHR rayPipelineInfo;
+        rayPipelineInfo.setStageCount(static_cast<uint32_t>(stages.size()));  // Stages are shaders
+        rayPipelineInfo.setPStages(stages.data());
+
+        rayPipelineInfo.setGroupCount(
+                static_cast<uint32_t>(rtShaderGroups.size()));  // 1-raygen, n-miss, n-(hit[+anyhit+intersect])
+        rayPipelineInfo.setPGroups(rtShaderGroups.data());
+
+        rayPipelineInfo.setMaxRecursionDepth(1);  // Ray depth
+        rayPipelineInfo.setLayout(rtPipelineLayout);
+        rtPipeline = device.createRayTracingPipelineKHR({}, rayPipelineInfo).value;
+
+        device.destroy(raygenShaderModule);
+        device.destroy(missShaderModule);
+        device.destroy(chitShaderModule);
+    }
+
+    void createRtShaderBindingTable() {
+        auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 3 shaders: raygen, miss, chit
+        uint64_t groupHandleSize = static_cast<uint64_t>(rtProperties.shaderGroupHandleSize); // Size of a program identifier
+
+        // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
+        uint64_t sbtSize = groupCount * groupHandleSize;
+
+        std::vector<uint8_t> shaderHandleStorage(sbtSize);
+        device.getRayTracingShaderGroupHandlesKHR(rtPipeline, 0, groupCount, sbtSize,
+                                                  shaderHandleStorage.data());
+        // Write the handles in the SBT
+        vk::Buffer stagingBuffer;
+        vk::DeviceMemory stagingBufferMemory;
+
+        createBuffer(sbtSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                     stagingBuffer, stagingBufferMemory);
+
+        void *data;
+        data = device.mapMemory(stagingBufferMemory, 0, sbtSize);
+
+        memcpy(data, shaderHandleStorage.data(), (size_t) sbtSize);
+
+        device.unmapMemory(stagingBufferMemory);
+
+        createBuffer(sbtSize, vk::BufferUsageFlagBits::eRayTracingKHR, vk::MemoryPropertyFlagBits::eDeviceLocal,
+                     rtSBTBuffer, rtSBTBufferMemory);
+        copyBuffer(stagingBuffer, vertexBuffer, sbtSize);
+
+        device.destroy(stagingBuffer);
+        device.freeMemory(stagingBufferMemory);
+    }
+
+    void raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4f &clearColor) {
+        // Initializing push constant values
+        rtPushConstants.clearColor = clearColor;
+        rtPushConstants.lightPosition = nvmath::vec3f(20, 20, 20);
+        rtPushConstants.lightIntensity = 20.0f;
+        rtPushConstants.lightType = 0;
+
+        cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
+        cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
+                                  {rtDescSet}, {});
+        cmdBuf.pushConstants<RtPushConstant>(rtPipelineLayout,
+                                             vk::ShaderStageFlagBits::eRaygenKHR
+                                             | vk::ShaderStageFlagBits::eClosestHitKHR
+                                             | vk::ShaderStageFlagBits::eMissKHR,
+                                             0, rtPushConstants);
+
+        vk::DeviceSize progSize = rtProperties.shaderGroupHandleSize;  // Size of a program identifier
+        vk::DeviceSize rayGenOffset = 0u * progSize;  // Start at the beginning of sbtBuffer
+        vk::DeviceSize missOffset = 1u * progSize;  // Jump over raygen
+        vk::DeviceSize missStride = progSize;
+        vk::DeviceSize hitGroupOffset = 2u * progSize;  // Jump over the previous shaders
+        vk::DeviceSize hitGroupStride = progSize;
+
+        vk::DeviceSize sbtSize = progSize * (vk::DeviceSize) rtShaderGroups.size();
+
+        const vk::StridedBufferRegionKHR raygenShaderBindingTable = {rtSBTBuffer, rayGenOffset,
+                                                                     progSize, sbtSize};
+        const vk::StridedBufferRegionKHR missShaderBindingTable = {rtSBTBuffer, missOffset,
+                                                                   progSize, sbtSize};
+        const vk::StridedBufferRegionKHR hitShaderBindingTable = {rtSBTBuffer, hitGroupOffset,
+                                                                  progSize, sbtSize};
+        const vk::StridedBufferRegionKHR callableShaderBindingTable;
+
+        cmdBuf.traceRaysKHR(&raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
+                            &callableShaderBindingTable,      //
+                            swapChainExtent.width, swapChainExtent.height, 1);  //
+    }
 
     static std::vector<char> readFile(const std::string &filename) {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);
