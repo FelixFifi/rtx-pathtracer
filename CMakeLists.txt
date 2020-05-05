@@ -10,5 +10,5 @@ include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} "../nvidia_shared
 
 
 link_directories(${Vulkan_LIBRARY} ${SDL2_LIBRARIES})
-add_executable(rtx_raytracer src/main.cpp src/vec3.h src/ray.h src/camera.h src/hittable.h src/sphere.h src/hittable_list.h src/utility.h src/material.h src/tri.h src/obj_reader.h src/tri_mesh.h src/AABB.h src/model_instance.h src/RayTracingApp.h)
+add_executable(rtx_raytracer src/main.cpp src/RayTracingApp.h src/PostProcessing.h src/VulkanOps.h src/VulkanOps.cpp src/PostProcessing.cpp src/CommonOps.h src/VulkanWindow.cpp src/VulkanWindow.h src/VulkanLoader.h src/VulkanLoader.cpp)
 target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS})

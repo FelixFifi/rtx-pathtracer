@@ -1,0 +1,13 @@
+//
+// Created by felixfifi on 04.05.20.
+//
+
+#ifndef RTX_RAYTRACER_VULKANLOADER_H
+#define RTX_RAYTRACER_VULKANLOADER_H
+
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+
+#define VK_ENABLE_BETA_EXTENSIONS
+#include <vulkan/vulkan.hpp>
+
+#endif //RTX_RAYTRACER_VULKANLOADER_H

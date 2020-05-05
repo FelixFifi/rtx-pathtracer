@@ -1,0 +1,175 @@
+//
+// Created by felixfifi on 03.05.20.
+//
+
+#include "VulkanOps.h"
+
+void VulkanOps::createBuffer(uint64_t size, const vk::BufferUsageFlags &usage,
+                             const vk::MemoryPropertyFlags &properties, vk::Buffer &buffer,
+                             vk::DeviceMemory &bufferMemory) {
+    vk::BufferCreateInfo bufferInfo({}, size, usage, vk::SharingMode::eExclusive,
+                                    0, nullptr);
+
+    buffer = device.createBuffer(bufferInfo);
+
+    vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(buffer);
+
+    vk::MemoryAllocateInfo allocateInfo(memoryRequirements.size,
+                                        findMemoryType(memoryRequirements.memoryTypeBits, properties));
+    vk::MemoryAllocateFlagsInfo allocateFlagsInfo;
+    allocateFlagsInfo.flags = vk::MemoryAllocateFlagBits::eDeviceAddress;
+    allocateInfo.pNext = &allocateFlagsInfo;
+
+    bufferMemory = device.allocateMemory(allocateInfo);
+
+    device.bindBufferMemory(buffer, bufferMemory, 0);
+}
+
+void VulkanOps::copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, uint64_t size) {
+    vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+    vk::BufferCopy copyRegion(0, 0, size);
+    commandBuffer.copyBuffer(srcBuffer, dstBuffer, copyRegion);
+
+    endSingleTimeCommands(commandBuffer);
+}
+
+void VulkanOps::createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,
+                            const vk::ImageUsageFlags &usage,
+                            const vk::MemoryPropertyFlags &properties, vk::Image &image,
+                            vk::DeviceMemory &imageMemory) {
+    vk::ImageCreateInfo imageInfo({}, vk::ImageType::e2D, format, {width, height, 1}, 1, 1,
+                                  vk::SampleCountFlagBits::e1, tiling, usage, vk::SharingMode::eExclusive, 0,
+                                  nullptr, vk::ImageLayout::eUndefined);
+
+    image = device.createImage(imageInfo);
+
+    vk::MemoryRequirements memRequirements;
+    memRequirements = device.getImageMemoryRequirements(image);
+
+    vk::MemoryAllocateInfo allocInfo(memRequirements.size,
+                                     findMemoryType(memRequirements.memoryTypeBits, properties));
+
+    imageMemory = device.allocateMemory(allocInfo);
+    device.bindImageMemory(image, imageMemory, 0);
+}
+
+vk::ImageView
+VulkanOps::createImageView(vk::Image image, vk::Format format, const vk::ImageAspectFlags &aspectFlags) {
+    vk::ImageSubresourceRange subresourceRange(aspectFlags, 0, 1, 0, 1);
+
+    vk::ImageViewCreateInfo viewInfo({}, image, vk::ImageViewType::e2D, format, {}, subresourceRange);
+
+    return device.createImageView(viewInfo);
+}
+
+void
+VulkanOps::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+    vk::CommandBuffer commandBuffer = VulkanOps::beginSingleTimeCommands();
+
+    vk::ImageAspectFlags aspectMask;
+
+    if (newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+        aspectMask = vk::ImageAspectFlagBits::eDepth;
+
+        if (hasStencilComponent(format)) {
+            aspectMask |= vk::ImageAspectFlagBits::eStencil;
+        }
+    } else {
+        aspectMask = vk::ImageAspectFlagBits::eColor;
+    }
+
+    vk::ImageMemoryBarrier barrier({}, {}, oldLayout, newLayout, {}, {}, image, {aspectMask, 0, 1, 0, 1});
+
+    vk::PipelineStageFlags sourceStage;
+    vk::PipelineStageFlags destinationStage;
+
+    vk::AccessFlags srcAccessMask, dstAccessMask;
+    if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
+        srcAccessMask = {};
+        dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTransfer;
+    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+               newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+        srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+    } else if (oldLayout == vk::ImageLayout::eUndefined &&
+               newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+        srcAccessMask = {};
+        dstAccessMask =
+                vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+    } else {
+        throw std::invalid_argument("unsupported layout transition!");
+    }
+
+    commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    VulkanOps::endSingleTimeCommands(commandBuffer);
+}
+
+bool VulkanOps::hasStencilComponent(vk::Format format) {
+    return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
+}
+
+void VulkanOps::copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) {
+    vk::CommandBuffer commandBuffer = VulkanOps::beginSingleTimeCommands();
+
+    vk::BufferImageCopy region(0, 0, 0,
+                               {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                               {0, 0, 0}, {width, height, 1});
+
+    commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+
+    VulkanOps::endSingleTimeCommands(commandBuffer);
+}
+
+vk::CommandBuffer VulkanOps::beginSingleTimeCommands() {
+    vk::CommandBufferAllocateInfo allocInfo(commandPool, vk::CommandBufferLevel::ePrimary, 1);
+
+    vk::CommandBuffer commandBuffer;
+    commandBuffer = device.allocateCommandBuffers(allocInfo)[0];
+
+    vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit, {});
+    commandBuffer.begin(beginInfo);
+
+    return commandBuffer;
+}
+
+void VulkanOps::endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo(0, nullptr, {},
+                              1, &commandBuffer, 0, nullptr);
+
+    graphicsQueue.submit(submitInfo, nullptr);
+    graphicsQueue.waitIdle();
+
+    device.freeCommandBuffers(commandPool, commandBuffer);
+}
+
+uint32_t VulkanOps::findMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) {
+    vk::PhysicalDeviceMemoryProperties memProperties;
+    memProperties = physicalDevice.getMemoryProperties();
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
+vk::ShaderModule VulkanOps::createShaderModule(const std::vector<char> &code) {
+    vk::ShaderModuleCreateInfo createInfo({}, code.size(), reinterpret_cast<const uint32_t *>(code.data()));
+
+    return device.createShaderModule(createInfo);
+}
