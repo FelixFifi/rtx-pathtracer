@@ -283,4 +283,8 @@ const vk::Sampler &PostProcessing::getOffscreenImageSampler() const {
     return offscreenImageSampler;
 }
 
+const vk::Extent2D &PostProcessing::getExtentOffscreen() const {
+    return extentOffscreen;
+}
+
 

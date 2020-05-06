@@ -50,9 +50,10 @@ public:
                       vk::Buffer &buffer, vk::DeviceMemory &bufferMemory);
 
     template<class T>
-    void createBufferFromData(const std::vector<T> &dataToCopy, const vk::BufferUsageFlags &usage,
+    void createBufferFromData(const std::vector<T> &dataToCopy, vk::BufferUsageFlags &usage,
                                          const vk::MemoryPropertyFlags &memoryProperties, vk::Buffer &outBuffer,
                                          vk::DeviceMemory &outMemory) {
+        usage = usage | vk::BufferUsageFlagBits::eTransferDst;
 
         vk::DeviceSize bufferSize = sizeof(dataToCopy[0]) * dataToCopy.size();
 
@@ -102,6 +103,8 @@ public:
     bool hasStencilComponent(vk::Format format);
 
     vk::ShaderModule createShaderModule(const std::vector<char> &code);
+
+    const vk::Device &getDevice() const;
 };
 
 #endif //RTX_RAYTRACER_VULKANOPS_H

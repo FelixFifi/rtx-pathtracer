@@ -131,7 +131,9 @@ void VulkanWindow::initVulkan() {
 
     vulkanOps = std::make_shared<VulkanOps>(surface, physicalDevice, device, commandPool, graphicsQueue);
 
-    setupDebugMessenger();
+    if(enableValidationLayers) {
+        setupDebugMessenger();
+    }
 
     createSwapChainDependant();
 
@@ -266,6 +268,8 @@ void VulkanWindow::pickPhysicalDevice() {
     if (!physicalDevice) {
         throw std::runtime_error("failed to find a suitable GPU!");
     }
+
+    queueFamilyIndices = findQueueFamilies(physicalDevice);
 }
 
 void VulkanWindow::createLogicalDevice() {
@@ -707,7 +711,11 @@ const std::vector<vk::CommandBuffer> &VulkanWindow::getCommandBuffers() const {
     return commandBuffers;
 }
 
-std::shared_ptr<VulkanOps> VulkanWindow::getVulkanOps() const {
+const std::shared_ptr<VulkanOps> &VulkanWindow::getVulkanOps() const {
     return vulkanOps;
+}
+
+const QueueFamilyIndices &VulkanWindow::getQueueFamilyIndices() const {
+    return queueFamilyIndices;
 }
 

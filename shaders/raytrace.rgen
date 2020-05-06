@@ -6,5 +6,5 @@ layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 
 void main()
 {
-    imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(0.5, 0.5, 0.5, 1.0));
+    imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(0.0, 1.0, 0.5, 1.0));
 }

@@ -62,6 +62,10 @@ private:
 
 
     vk::Extent2D extentOffscreen;
+public:
+    const vk::Extent2D &getExtentOffscreen() const;
+
+private:
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;
