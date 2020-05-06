@@ -30,13 +30,6 @@
 
 #include <glm/gtx/hash.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-
-#include <stb_image.h>
-
-#define TINYOBJLOADER_IMPLEMENTATION
-
-#include <tiny_obj_loader.h>
 
 #include <iostream>
 #include <exception>
@@ -113,33 +106,19 @@ struct UniformBufferObject {
 
 class RayTracingApp {
 public:
-    RayTracingApp(uint32_t width, uint32_t height) {
-        fDrawCallback drawFunc = [this] (uint32_t imageIndex) { drawCallback(imageIndex); };
-        fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
-        vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
+    RayTracingApp(uint32_t width, uint32_t height);
 
-        VulkanOps vulkanOps = vulkanWindow.getVulkanOps();
-
-        vk::Image image;
-        vk::DeviceMemory memory;
-
-        vulkanOps.createImage(512, 256, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-                              vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-                              vk::MemoryPropertyFlagBits::eDeviceLocal,
-                              image, memory);
-
-        postProcessing = PostProcessing({width, height}, vulkanWindow);
-    }
-
-    void run() {
-        vulkanWindow.run();
-    }
-
-public:
-
+    void run();
+    void cleanup();
 private:
-    VulkanWindow vulkanWindow;
     PostProcessing postProcessing;
+    VulkanWindow vulkanWindow;
+
+
+    void drawCallback(uint32_t imageIndex);
+    void recreateSwapchainCallback();
+
+
 /*
 
     vk::Instance instance;
@@ -210,13 +189,6 @@ private:
     } rtPushConstants;
 */
 
-    void drawCallback(uint32_t imageIndex) {
-        postProcessing.drawCallback(imageIndex);
-    }
-
-    void recreateSwapchainCallback() {
-        postProcessing.recreateSwapChainCallback();
-    }
 
 /*
     void cleanup() {

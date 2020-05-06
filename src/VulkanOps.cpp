@@ -64,7 +64,8 @@ VulkanOps::createImageView(vk::Image image, vk::Format format, const vk::ImageAs
 }
 
 void
-VulkanOps::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+VulkanOps::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout,
+                                 vk::ImageLayout newLayout) {
     vk::CommandBuffer commandBuffer = VulkanOps::beginSingleTimeCommands();
 
     vk::ImageAspectFlags aspectMask;
@@ -106,6 +107,14 @@ VulkanOps::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLa
 
         sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
         destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+    } else if (oldLayout == vk::ImageLayout::eUndefined &&
+               newLayout == vk::ImageLayout::eGeneral) {
+        srcAccessMask = {};
+        dstAccessMask =
+                vk::AccessFlagBits::eMemoryWrite;
+
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTopOfPipe; // TODO: optimize
     } else {
         throw std::invalid_argument("unsupported layout transition!");
     }
@@ -173,3 +182,8 @@ vk::ShaderModule VulkanOps::createShaderModule(const std::vector<char> &code) {
 
     return device.createShaderModule(createInfo);
 }
+
+VulkanOps::VulkanOps(const vk::SurfaceKHR &surface, const vk::PhysicalDevice &physicalDevice, const vk::Device &device,
+                     const vk::CommandPool &commandPool, const vk::Queue &graphicsQueue)
+        : surface(surface), physicalDevice(physicalDevice), device(device), commandPool(commandPool),
+          graphicsQueue(graphicsQueue) {}

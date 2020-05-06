@@ -10,6 +10,8 @@
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
+
+    // TODO:https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDebugUtilsObjectNameInfoEXT.html https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_EXT_debug_utils.html
     std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
     return VK_FALSE;
@@ -25,7 +27,6 @@ VulkanWindow::VulkanWindow(int width, int height, fDrawCallback drawCallback,
 
 void VulkanWindow::run() {
     mainLoop();
-    cleanup();
 }
 
 void VulkanWindow::drawFrame() {
@@ -128,7 +129,7 @@ void VulkanWindow::initVulkan() {
 
     createCommandPool();
 
-    vulkanOps = VulkanOps(surface, physicalDevice, device, commandPool, graphicsQueue);
+    vulkanOps = std::make_shared<VulkanOps>(surface, physicalDevice, device, commandPool, graphicsQueue);
 
     setupDebugMessenger();
 
@@ -483,8 +484,8 @@ void VulkanWindow::createImageViews() {
     swapChainImageViews.resize(swapChainImages.size());
 
     for (size_t i = 0; i < swapChainImages.size(); i++) {
-        swapChainImageViews[i] = vulkanOps.createImageView(swapChainImages[i], swapChainImageFormat,
-                                                            vk::ImageAspectFlagBits::eColor);
+        swapChainImageViews[i] = vulkanOps->createImageView(swapChainImages[i], swapChainImageFormat,
+                                                           vk::ImageAspectFlagBits::eColor);
     }
 }
 
@@ -649,33 +650,25 @@ void VulkanWindow::cleanup() {
     cleanupSwapChain();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        device.destroy(renderFinishedSemaphores[i], nullptr);
-        device.destroy(imageAvailableSemaphores[i], nullptr);
-        device.destroy(inFlightFences[i], nullptr);
+        device.destroy(renderFinishedSemaphores[i]);
+        device.destroy(imageAvailableSemaphores[i]);
+        device.destroy(inFlightFences[i]);
     }
 
-    device.destroy(commandPool, nullptr);
+    device.destroy(commandPool);
 
-    device.destroy(nullptr);
+    device.destroy();
 
     if (enableValidationLayers) {
         instance.destroyDebugUtilsMessengerEXT(debugMessenger);
     }
 
-    instance.destroy(surface, nullptr);
-    instance.destroy(nullptr);
+    instance.destroy(surface);
+    instance.destroy();
 
 
     SDL_DestroyWindow(window);
     SDL_Quit();
-}
-
-VulkanWindow::~VulkanWindow() {
-    cleanup();
-}
-
-const VulkanOps &VulkanWindow::getVulkanOps() const {
-    return vulkanOps;
 }
 
 const std::vector<vk::Framebuffer> &VulkanWindow::getSwapChainFramebuffers() const {
@@ -712,5 +705,9 @@ const vk::CommandPool &VulkanWindow::getCommandPool() const {
 
 const std::vector<vk::CommandBuffer> &VulkanWindow::getCommandBuffers() const {
     return commandBuffers;
+}
+
+std::shared_ptr<VulkanOps> VulkanWindow::getVulkanOps() const {
+    return vulkanOps;
 }
 

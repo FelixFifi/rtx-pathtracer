@@ -11,6 +11,8 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
+#include <memory>
+
 
 const std::vector<const char *> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -85,7 +87,7 @@ private:
 
     bool framebufferResized = false;
 
-    VulkanOps vulkanOps;
+    std::shared_ptr<VulkanOps> vulkanOps;
 public:
     const vk::PhysicalDevice &getPhysicalDevice() const;
 
@@ -93,7 +95,7 @@ public:
 
     vk::Format getSwapChainImageFormat() const;
 
-    const VulkanOps &getVulkanOps() const;
+    std::shared_ptr<VulkanOps> getVulkanOps() const;
 
     const std::vector<vk::Framebuffer> &getSwapChainFramebuffers() const;
 
@@ -130,13 +132,12 @@ private:
 
     SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice physicalDevice);
 
-    void cleanup();
 public:
     VulkanWindow() = default;
     VulkanWindow(int width, int height, fDrawCallback drawCallback, fRecreateSwapchainCallback recreateSwapchainCallback);
-    ~VulkanWindow();
 
     void run();
+    void cleanup();
 
     bool sdlEventHandler();
 

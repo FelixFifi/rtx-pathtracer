@@ -32,7 +32,7 @@ private:
 
 public:
     VulkanOps(const vk::SurfaceKHR &surface, const vk::PhysicalDevice &physicalDevice, const vk::Device &device, const vk::CommandPool &commandPool,
-              const vk::Queue &graphicsQueue) : surface(surface), physicalDevice(physicalDevice), device(device), commandPool(commandPool), graphicsQueue(graphicsQueue) {};
+              const vk::Queue &graphicsQueue);
 
     VulkanOps() = default;
 

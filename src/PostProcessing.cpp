@@ -6,18 +6,10 @@
 #include "CommonOps.h"
 
 
-PostProcessing::PostProcessing(vk::Extent2D extentOffscreen, VulkanWindow vulkanWindow) : extentOffscreen(extentOffscreen),
+PostProcessing::PostProcessing(vk::Extent2D extentOffscreen, VulkanWindow vulkanWindow) : extentOffscreen(
+        extentOffscreen),
                                                                                           vulkanWindow(vulkanWindow) {
     vulkanOps = vulkanWindow.getVulkanOps();
-
-    vk::Image image;
-    vk::DeviceMemory memory;
-
-    vulkanOps.createImage(512, 256, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-                          vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-                          vk::MemoryPropertyFlagBits::eDeviceLocal,
-                          image, memory);
-
     physicalDevice = vulkanWindow.getPhysicalDevice();
     device = vulkanWindow.getDevice();
 
@@ -36,8 +28,8 @@ void PostProcessing::init() {
     createIndexBuffer();
 
     createDecriptorSetLayout();
-    createDescriptorPool();
-    createDescriptorSets();
+
+    createSwapChainDependant();
 }
 
 void PostProcessing::drawCallback(uint32_t imageIndex) {
@@ -51,7 +43,7 @@ void PostProcessing::createVertexBuffer() {
 
     vk::MemoryPropertyFlags memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
 
-    vulkanOps.createBufferFromData(fullscreenQuadVertices, usage, memoryProperties, vertexBuffer, vertexBufferMemory);
+    vulkanOps->createBufferFromData(fullscreenQuadVertices, usage, memoryProperties, vertexBuffer, vertexBufferMemory);
 }
 
 void PostProcessing::createIndexBuffer() {
@@ -60,9 +52,8 @@ void PostProcessing::createIndexBuffer() {
 
     vk::MemoryPropertyFlags memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
 
-    vulkanOps.createBufferFromData(fullscreenQuadInd, usage, memoryProperties, indexBuffer, indexBufferMemory);
+    vulkanOps->createBufferFromData(fullscreenQuadInd, usage, memoryProperties, indexBuffer, indexBufferMemory);
 }
-
 
 
 void PostProcessing::recreateSwapChainCallback() {
@@ -76,9 +67,9 @@ void PostProcessing::recreateSwapChainCallback() {
 void PostProcessing::createSwapChainDependant() {
     createDescriptorPool();
     createDescriptorSets();
-    configureCommandBuffers();
-
     createGraphicsPipeline();
+
+    configureCommandBuffers();
 }
 
 void PostProcessing::getSwapChainObjects() {
@@ -89,17 +80,28 @@ void PostProcessing::getSwapChainObjects() {
 }
 
 void PostProcessing::cleanupSwapChainDependant() {
+    device.destroy(descriptorPool);
+
     device.destroy(graphicsPipeline);
     device.destroy(pipelineLayout);
 
-    device.freeDescriptorSets(descriptorPool, descriptorSets);
-    device.destroy(descriptorPool);
 
 }
 
 void PostProcessing::cleanup() {
     cleanupSwapChainDependant();
     device.destroy(descriptorSetLayout);
+
+    device.free(vertexBufferMemory);
+    device.destroy(vertexBuffer);
+
+    device.free(indexBufferMemory);
+    device.destroy(indexBuffer);
+
+    device.destroy(offscreenImageSampler);
+    device.destroy(offscreenImageView);
+    device.free(offscreenImageMemory);
+    device.destroy(offscreenImage);
 
 
 }
@@ -121,13 +123,15 @@ void PostProcessing::createDescriptorPool() {
             vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler,
                                    static_cast<uint32_t>(swapChainFramebuffers.size()))};
 
-    vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(swapChainFramebuffers.size()), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+    vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(swapChainFramebuffers.size()),
+                                          static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
     descriptorPool = device.createDescriptorPool(poolInfo);
 }
 
 void PostProcessing::createDescriptorSets() {
-    std::vector<vk::DescriptorSetLayout> layouts(static_cast<uint32_t>(swapChainFramebuffers.size()), descriptorSetLayout);
+    std::vector<vk::DescriptorSetLayout> layouts(static_cast<uint32_t>(swapChainFramebuffers.size()),
+                                                 descriptorSetLayout);
     vk::DescriptorSetAllocateInfo allocInfo(descriptorPool, static_cast<uint32_t>(swapChainFramebuffers.size()),
                                             layouts.data());
 
@@ -140,7 +144,7 @@ void PostProcessing::createDescriptorSets() {
 
         std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {};
 
-        descriptorWrites[1] = vk::WriteDescriptorSet(descriptorSets[i], 0, 0, 1,
+        descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSets[i], 0, 0, 1,
                                                      vk::DescriptorType::eCombinedImageSampler, &imageInfo,
                                                      nullptr, nullptr);
 
@@ -148,24 +152,19 @@ void PostProcessing::createDescriptorSets() {
     }
 }
 
-
 void PostProcessing::createOffscreenImage() {
-    vulkanOps.createImage(512, 256, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-                           vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+    vulkanOps->createImage(extentOffscreen.width, extentOffscreen.height, offscreenImageFormat, vk::ImageTiling::eOptimal,
+                           vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
                            vk::MemoryPropertyFlagBits::eDeviceLocal,
                            offscreenImage, offscreenImageMemory);
 
-    vulkanOps.createImage(extentOffscreen.width, extentOffscreen.height, vk::Format::eR32G32B32A32Sfloat, vk::ImageTiling::eOptimal,
-                           vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment,
-                           vk::MemoryPropertyFlagBits::eDeviceLocal,
-                           offscreenImage, offscreenImageMemory);
-
-    vulkanOps.transitionImageLayout(offscreenImage, vk::Format::eR32G32B32A32Sfloat, vk::ImageLayout::eUndefined,
+    vulkanOps->transitionImageLayout(offscreenImage, offscreenImageFormat, vk::ImageLayout::eUndefined,
                                      vk::ImageLayout::eGeneral);
 }
 
 void PostProcessing::createOffscreenImageView() {
-    offscreenImageView = vulkanOps.createImageView(offscreenImage, vk::Format::eR32G32B32A32Sfloat, vk::ImageAspectFlagBits::eColor);
+    offscreenImageView = vulkanOps->createImageView(offscreenImage, offscreenImageFormat,
+                                                    vk::ImageAspectFlagBits::eColor);
 }
 
 void PostProcessing::createOffscreenSampler() {
@@ -180,8 +179,8 @@ void PostProcessing::createGraphicsPipeline() {
     auto vertShaderCode = readFile("shaders/post.vert.spv");
     auto fragShaderCode = readFile("shaders/post.frag.spv");
 
-    vk::ShaderModule vertShaderModule = vulkanOps.createShaderModule(vertShaderCode);
-    vk::ShaderModule fragShaderModule = vulkanOps.createShaderModule(fragShaderCode);
+    vk::ShaderModule vertShaderModule = vulkanOps->createShaderModule(vertShaderCode);
+    vk::ShaderModule fragShaderModule = vulkanOps->createShaderModule(fragShaderCode);
 
     vk::PipelineShaderStageCreateInfo vertShaderStageInfo({}, vk::ShaderStageFlagBits::eVertex,
                                                           vertShaderModule, "main", {});

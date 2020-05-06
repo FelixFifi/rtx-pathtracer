@@ -13,6 +13,7 @@ int main() {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+    app.cleanup();
 
     return EXIT_SUCCESS;
 }

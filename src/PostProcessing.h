@@ -21,18 +21,18 @@ struct VertexTex {
         return bindingDescription;
     }
 
-    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions = {};
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions = {};
 
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
         attributeDescriptions[0].offset = offsetof(VertexTex, pos);
 
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 1;
-        attributeDescriptions[2].format = vk::Format::eR32G32Sfloat;
-        attributeDescriptions[2].offset = offsetof(VertexTex, texCoord);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = vk::Format::eR32G32Sfloat;
+        attributeDescriptions[1].offset = offsetof(VertexTex, texCoord);
 
         return attributeDescriptions;
     }
@@ -51,8 +51,10 @@ const std::vector<VertexTex> fullscreenQuadVertices = {
 
 const std::vector<uint32_t> fullscreenQuadInd = {
         0, 1, 2,
-        0, 3, 1
+        1, 3, 2
 };
+
+static const vk::Format offscreenImageFormat = vk::Format::eR32G32B32A32Sfloat;
 
 class PostProcessing {
 private:
@@ -62,7 +64,7 @@ private:
     vk::Extent2D extentOffscreen;
 
     // From window
-    VulkanOps vulkanOps;
+    std::shared_ptr<VulkanOps> vulkanOps;
     vk::PhysicalDevice physicalDevice;
     vk::Device device;
 
@@ -108,6 +110,7 @@ public:
 
     void drawCallback(uint32_t imageIndex);
 
+    void cleanup();
 private:
     void init();
 
@@ -135,8 +138,6 @@ private:
     void cleanupSwapChainDependant();
 
     void getSwapChainObjects();
-
-    void cleanup();
 
     void createSwapChainDependant();
 };
