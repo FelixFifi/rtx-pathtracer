@@ -20,12 +20,17 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     loadModels();
 
+    createUniformBuffers();
+    createDecriptorSetLayout();
+    createDescriptorPool();
+    createDescriptorSets();
+
     initRayTracing();
 }
 
 void RayTracingApp::loadModels() {
     // Currently only one hardcoded
-    models.emplace_back(Model(MODEL_PATH, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH, vulkanOps));
 }
 
 void RayTracingApp::run() {
@@ -33,6 +38,8 @@ void RayTracingApp::run() {
 }
 
 void RayTracingApp::drawCallback(uint32_t imageIndex) {
+    updateUniformBuffer(imageIndex);
+
     vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
 
     raytrace(cmdBuf, {1, 0, 0, 0});
@@ -47,6 +54,82 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 void RayTracingApp::recreateSwapchainCallback() {
     postProcessing.recreateSwapChainCallback();
 }
+
+void RayTracingApp::createUniformBuffers() {
+    vk::DeviceSize bufferSize = sizeof(CameraMatrices);
+
+    vulkanOps->createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                                uniformBuffer, uniformBufferMemory);
+}
+
+void RayTracingApp::createDecriptorSetLayout() {
+    vk::DescriptorSetLayoutBinding uniformBufferLayoutBinding(0, vk::DescriptorType::eUniformBuffer,
+                                                              1, vk::ShaderStageFlagBits::eRaygenKHR,
+                                                              nullptr);
+
+    std::array<vk::DescriptorSetLayoutBinding, 1> bindings = {uniformBufferLayoutBinding};
+    vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
+
+
+    descriptorSetLayout = device.createDescriptorSetLayout(layoutInfo);
+}
+
+void RayTracingApp::createDescriptorPool() {
+    std::array<vk::DescriptorPoolSize, 1> poolSizes = {
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
+                                   static_cast<uint32_t>(1))}; // TODO: One per frame
+
+    vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
+                                          static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+
+    descriptorPool = device.createDescriptorPool(poolInfo);
+}
+
+void RayTracingApp::createDescriptorSets() {
+    std::vector<vk::DescriptorSetLayout> layouts(static_cast<uint32_t>(1), // TODO: One per frame
+                                                 descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo(descriptorPool, static_cast<uint32_t>(1),
+                                            layouts.data());
+
+    descriptorSet = device.allocateDescriptorSets(allocInfo)[0];
+
+    for (size_t i = 0; i < 1; i++) {
+        vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
+
+
+        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {};
+
+        descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
+                                                     vk::DescriptorType::eUniformBuffer, nullptr,
+                                                     &bufferInfo, nullptr);
+
+        device.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+}
+
+void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    CameraMatrices ubo = {};
+    ubo.view = glm::lookAt(glm::vec3(10 * glm::sin(time), 10 * glm::cos(time) , 0.0f), glm::vec3(0.0f, 0.0f, glm::sin(time/4.0f)), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(90.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
+                                1000.0f);
+    ubo.proj[1][1] *= -1;
+
+    ubo.projInverse = glm::inverse(ubo.proj);
+    ubo.viewInverse = glm::inverse(ubo.view);
+
+    void *data;
+    device.mapMemory(uniformBufferMemory, 0, sizeof(ubo), {}, &data);
+    memcpy(data, &ubo, sizeof(ubo));
+    device.unmapMemory(uniformBufferMemory);
+}
+
+
 
 void RayTracingApp::initRayTracing() {
     auto properties = physicalDevice.getProperties2<vk::PhysicalDeviceProperties2, vk::PhysicalDeviceRayTracingPropertiesKHR>();
@@ -63,19 +146,19 @@ void RayTracingApp::initRayTracing() {
     createRtShaderBindingTable();
 }
 
-nvvkpp::RaytracingBuilderKHR::Blas RayTracingApp::ModelToBlas(const Model &model) {
+nvvkpp::RaytracingBuilderKHR::Blas RayTracingApp::modelToBlas(const std::unique_ptr<Model> &model) {
     // Setting up the creation info of acceleration structure
     vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
     asCreate.setGeometryType(vk::GeometryTypeKHR::eTriangles);
     asCreate.setIndexType(vk::IndexType::eUint32);
     asCreate.setVertexFormat(vk::Format::eR32G32B32Sfloat);
-    asCreate.setMaxPrimitiveCount(model.indices.size() / 3);  // Nb triangles
-    asCreate.setMaxVertexCount(model.vertices.size());
+    asCreate.setMaxPrimitiveCount(model->indices.size() / 3);  // Nb triangles
+    asCreate.setMaxVertexCount(model->vertices.size());
     asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
 
     // Building part
-    auto infoVB = vk::BufferDeviceAddressInfo(model.vertexBuffer);
-    auto infoIB = vk::BufferDeviceAddressInfo(model.indexBuffer);
+    auto infoVB = vk::BufferDeviceAddressInfo(model->vertexBuffer);
+    auto infoIB = vk::BufferDeviceAddressInfo(model->indexBuffer);
 
     vk::DeviceAddress vertexAddress = device.getBufferAddressKHR(&infoVB);
     vk::DeviceAddress indexAddress = device.getBufferAddressKHR(&infoIB);
@@ -114,7 +197,7 @@ void RayTracingApp::createBottomLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
 
     for (const auto &model : models) {
-        allBlas.push_back(ModelToBlas(model));
+        allBlas.push_back(modelToBlas(model));
     }
 
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
@@ -122,7 +205,7 @@ void RayTracingApp::createBottomLevelAS() {
 
 void RayTracingApp::createTopLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
-    tlas.reserve(1);
+    tlas.reserve(models.size());
 
     for (int i = 0; i < static_cast<int>(1); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
@@ -219,7 +302,7 @@ void RayTracingApp::createRtPipeline() {
     pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
 
     // Descriptor sets: one specific to ray tracing, and one shared with the rasterization pipeline
-    std::vector<vk::DescriptorSetLayout> rtDescSetLayouts = {rtDescSetLayout};
+    std::vector<vk::DescriptorSetLayout> rtDescSetLayouts = {rtDescSetLayout, descriptorSetLayout};
     pipelineLayoutCreateInfo.setSetLayoutCount(static_cast<uint32_t>(rtDescSetLayouts.size()));
     pipelineLayoutCreateInfo.setPSetLayouts(rtDescSetLayouts.data());
 
@@ -270,7 +353,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
-                              {rtDescSet}, {});
+                              {rtDescSet, descriptorSet}, {});
     cmdBuf.pushConstants<RtPushConstant>(rtPipelineLayout,
                                          vk::ShaderStageFlagBits::eRaygenKHR
                                          | vk::ShaderStageFlagBits::eClosestHitKHR
@@ -300,8 +383,14 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4
 }
 
 void RayTracingApp::cleanup() {
+    device.free(uniformBufferMemory);
+    device.destroy(uniformBuffer);
+
+    device.destroy(descriptorPool);
+    device.destroy(descriptorSetLayout);
+
     for (auto &model: models) {
-        model.cleanup();
+        model->cleanup();
     }
 
     device.destroy(rtSBTBuffer);

@@ -37,10 +37,11 @@ const std::string MODEL_PATH = "models/chalet.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 
-struct UniformBufferObject {
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
+struct CameraMatrices {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewInverse;
+    glm::mat4 projInverse;
 };
 
 class RayTracingApp {
@@ -55,7 +56,15 @@ private:
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
 
-    std::vector<Model> models;
+    std::vector<std::unique_ptr<Model>> models;
+
+    // Vulkan
+    vk::Buffer uniformBuffer;
+    vk::DeviceMemory uniformBufferMemory;
+
+    vk::DescriptorSetLayout descriptorSetLayout;
+    vk::DescriptorPool descriptorPool;
+    vk::DescriptorSet descriptorSet;
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;
@@ -151,7 +160,7 @@ private:
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        UniformBufferObject ubo = {};
+        CameraMatrices ubo = {};
         ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f,
@@ -325,7 +334,7 @@ private:
 
 
     void createUniformBuffers() {
-        vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+        vk::DeviceSize bufferSize = sizeof(CameraMatrices);
 
         uniformBuffers.resize(swapChainImages.size());
         uniformBuffersMemory.resize(swapChainImages.size());
@@ -451,7 +460,7 @@ private:
 */
     void initRayTracing();
 
-    nvvkpp::RaytracingBuilderKHR::Blas ModelToBlas(const Model &model);
+    nvvkpp::RaytracingBuilderKHR::Blas modelToBlas(const std::unique_ptr<Model> &model);
 
     void createBottomLevelAS();
 
@@ -466,6 +475,15 @@ private:
     void createRtShaderBindingTable();
 
     void raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4f &clearColor);
+
+    void createUniformBuffers();
+
+    void createDecriptorSetLayout();
+    void createDescriptorPool();
+    void createDescriptorSets();
+
+    void updateUniformBuffer(uint32_t currentImage);
+
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H
