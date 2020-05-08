@@ -115,8 +115,8 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraMatrices ubo = {};
-    ubo.view = glm::lookAt(glm::vec3(10 * glm::sin(time), 10 * glm::cos(time) , 0.0f), glm::vec3(0.0f, 0.0f, glm::sin(time/4.0f)), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(90.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
+    ubo.view = glm::lookAt(glm::vec3(5 * glm::sin(time), 5 * glm::cos(time) , 0.0f), glm::vec3(0.0f, 0.0f, glm::sin(time/4.0f)), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
     ubo.proj[1][1] *= -1;
 
@@ -195,6 +195,7 @@ nvvkpp::RaytracingBuilderKHR::Blas RayTracingApp::modelToBlas(const std::unique_
 
 void RayTracingApp::createBottomLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
+    allBlas.reserve(models.size());
 
     for (const auto &model : models) {
         allBlas.push_back(modelToBlas(model));
@@ -209,11 +210,11 @@ void RayTracingApp::createTopLevelAS() {
 
     for (int i = 0; i < static_cast<int>(1); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
-        rayInst.transform = {};
+        rayInst.transform = nvmath::mat4f_id;
         rayInst.instanceId = i;
-        rayInst.blasId = 0;
+        rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
-        rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleCullDisable; // TODO
+        rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable; // TODO
         tlas.emplace_back(rayInst);
     }
 
@@ -238,10 +239,12 @@ void RayTracingApp::createRtDescriptorSet() {
     vk::DescriptorImageInfo imageInfo{
             {}, postProcessing.getOffscreenImageView(), vk::ImageLayout::eGeneral}; // TODO: Update each frame
 
-    std::vector<vk::WriteDescriptorSet> writes;
-    writes.emplace_back(
-            nvvkpp::util::createWrite(rtDescSet, rtDescSetLayoutBind[0], &descASInfo));
-    writes.emplace_back(nvvkpp::util::createWrite(rtDescSet, rtDescSetLayoutBind[1], &imageInfo));
+    std::array<vk::WriteDescriptorSet, 2> writes;
+    writes[0] = vk::WriteDescriptorSet(rtDescSet, 0, 0, 1, vk::DescriptorType::eAccelerationStructureKHR);
+    writes[0].setPNext(&descASInfo);
+
+    writes[1] = vk::WriteDescriptorSet(rtDescSet, 1, 0, 1, vk::DescriptorType::eStorageImage, &imageInfo);
+
     device.updateDescriptorSets(static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
 
@@ -372,9 +375,9 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4
     const vk::StridedBufferRegionKHR raygenShaderBindingTable = {rtSBTBuffer, rayGenOffset,
                                                                  progSize, sbtSize};
     const vk::StridedBufferRegionKHR missShaderBindingTable = {rtSBTBuffer, missOffset,
-                                                               progSize, sbtSize};
+                                                               missStride, sbtSize};
     const vk::StridedBufferRegionKHR hitShaderBindingTable = {rtSBTBuffer, hitGroupOffset,
-                                                              progSize, sbtSize};
+                                                              hitGroupStride, sbtSize};
     const vk::StridedBufferRegionKHR callableShaderBindingTable;
 
     cmdBuf.traceRaysKHR(&raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
