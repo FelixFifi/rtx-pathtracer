@@ -59,8 +59,8 @@ void RayTracingApp::createUniformBuffers() {
     vk::DeviceSize bufferSize = sizeof(CameraMatrices);
 
     vulkanOps->createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                                uniformBuffer, uniformBufferMemory);
+                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                            uniformBuffer, uniformBufferMemory);
 }
 
 void RayTracingApp::createDecriptorSetLayout() {
@@ -68,7 +68,15 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               1, vk::ShaderStageFlagBits::eRaygenKHR,
                                                               nullptr);
 
-    std::array<vk::DescriptorSetLayoutBinding, 1> bindings = {uniformBufferLayoutBinding};
+    vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
+                                                       vk::ShaderStageFlagBits::eClosestHitKHR);
+
+    vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
+                                                      vk::ShaderStageFlagBits::eClosestHitKHR);
+
+
+    std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
+                                                              indexBufferBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -76,9 +84,12 @@ void RayTracingApp::createDecriptorSetLayout() {
 }
 
 void RayTracingApp::createDescriptorPool() {
-    std::array<vk::DescriptorPoolSize, 1> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 3> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
-                                   static_cast<uint32_t>(1))}; // TODO: One per frame
+                                   static_cast<uint32_t>(1)),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size())
+    }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
                                           static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
@@ -98,11 +109,31 @@ void RayTracingApp::createDescriptorSets() {
         vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
 
 
-        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {};
+        unsigned long modelCount = models.size();
+        std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
+        std::vector<vk::DescriptorBufferInfo> indexBufferInfos;
+        vertexBufferInfos.reserve(modelCount);
+        indexBufferInfos.reserve(modelCount);
+
+        for (const auto &model: models) {
+            vk::DescriptorBufferInfo vertexBufferInfo(model->vertexBuffer, 0, VK_WHOLE_SIZE);
+            vk::DescriptorBufferInfo indexBufferInfo(model->indexBuffer, 0, VK_WHOLE_SIZE);
+
+            vertexBufferInfos.push_back(vertexBufferInfo);
+            indexBufferInfos.push_back(indexBufferInfo);
+        }
+
+        std::array<vk::WriteDescriptorSet, 3> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
                                                      &bufferInfo, nullptr);
+        descriptorWrites[1] = vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
+                                                     vk::DescriptorType::eStorageBuffer, nullptr,
+                                                     vertexBufferInfos.data(), nullptr);
+        descriptorWrites[2] = vk::WriteDescriptorSet(descriptorSet, 2, 0, modelCount,
+                                                     vk::DescriptorType::eStorageBuffer, nullptr,
+                                                     indexBufferInfos.data(), nullptr);
 
         device.updateDescriptorSets(descriptorWrites, nullptr);
     }
@@ -115,7 +146,8 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraMatrices ubo = {};
-    ubo.view = glm::lookAt(glm::vec3(5 * glm::sin(time), 5 * glm::cos(time) , 0.0f), glm::vec3(0.0f, 0.0f, glm::sin(time/4.0f)), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(time), 30 * glm::cos(time), 10.0f + 20.0f * glm::sin(time / 3.0f)),
+                           glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
     ubo.proj[1][1] *= -1;
@@ -128,7 +160,6 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     memcpy(data, &ubo, sizeof(ubo));
     device.unmapMemory(uniformBufferMemory);
 }
-
 
 
 void RayTracingApp::initRayTracing() {
@@ -340,7 +371,7 @@ void RayTracingApp::createRtShaderBindingTable() {
     device.getRayTracingShaderGroupHandlesKHR(rtPipeline, 0, groupCount, sbtSize,
                                               shaderHandleStorage.data());
 
-    
+
     // Write the handles in the SBT
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eRayTracingKHR;
     vulkanOps->createBufferFromData(shaderHandleStorage, usage,

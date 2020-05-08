@@ -21,6 +21,7 @@
 
 struct Vertex {
     glm::vec3 pos;
+    glm::vec3 normal;
     glm::vec3 color;
     glm::vec2 texCoord;
 
@@ -61,9 +62,12 @@ namespace std {
     template<>
     struct hash<Vertex> {
         size_t operator()(Vertex const &vertex) const {
-            return ((hash<glm::vec3>()(vertex.pos) ^
-                     (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-                   (hash<glm::vec2>()(vertex.texCoord) << 1);
+            size_t res = 17;
+            res = res * 31 + hash<glm::vec3>()(vertex.pos);
+            res = res * 31 + hash<glm::vec3>()(vertex.normal);
+            res = res * 31 + hash<glm::vec3>()(vertex.color);
+            res = res * 31 + hash<glm::vec2>()(vertex.texCoord);
+            return res;
         }
     };
 }

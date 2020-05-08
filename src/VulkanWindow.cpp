@@ -293,6 +293,9 @@ void VulkanWindow::createLogicalDevice() {
     vk::PhysicalDeviceRayTracingFeaturesKHR rtFeatures;
     rtFeatures.rayTracing = true;
 
+    vk::PhysicalDeviceDescriptorIndexingFeatures diFeatures;
+    diFeatures.runtimeDescriptorArray = true;
+
     vk::PhysicalDeviceFeatures deviceFeatures = {};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
     deviceFeatures.robustBufferAccess = false;
@@ -300,6 +303,7 @@ void VulkanWindow::createLogicalDevice() {
     vk::PhysicalDeviceFeatures2 deviceFeatures2(deviceFeatures);
     deviceFeatures2.setPNext(&addresFeatures);
     addresFeatures.setPNext(&rtFeatures);
+    rtFeatures.setPNext(&diFeatures);
 
     auto queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     auto enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
