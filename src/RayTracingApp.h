@@ -33,7 +33,8 @@
 #include "Model.h"
 
 
-const std::string MODEL_PATH = "objs/teapot.obj";
+const std::string MODEL_PATH1 = "objs/teapot.obj";
+const std::string MODEL_PATH2 = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 

@@ -29,9 +29,8 @@ void main()
 
     // Computing the normal at hit position
     vec3 normal = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
-    normal = (normal + vec3(1.0, 1.0, 1.0)) / 2.0;
     // Transforming the normal to world space
-    normal = normalize(normal);
+    normal = abs(normal);
 
     prd.hitValue = normal;
 }

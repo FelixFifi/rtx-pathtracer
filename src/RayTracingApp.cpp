@@ -30,7 +30,8 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
 void RayTracingApp::loadModels() {
     // Currently only one hardcoded
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH2, vulkanOps));
 }
 
 void RayTracingApp::run() {
@@ -239,9 +240,9 @@ void RayTracingApp::createTopLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
     tlas.reserve(models.size());
 
-    for (int i = 0; i < static_cast<int>(1); ++i) {
+    for (int i = 0; i < static_cast<int>(models.size()); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
-        rayInst.transform = nvmath::mat4f_id;
+        rayInst.transform = i == 0 ? nvmath::mat4f_id : nvmath::translation_mat4<nvmath::nv_scalar>(30.0f, 0.0f, 0.0f).scale(10.0f) ;
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
