@@ -3,7 +3,16 @@
 
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 
+layout(push_constant) uniform Constants
+        {
+        vec4  clearColor;
+        vec3  lightPosition;
+        float lightIntensity;
+        int   lightType;
+        }
+pushC;
+
 void main()
 {
-    hitValue = gl_WorldRayDirectionEXT.xxx;
+    hitValue = pushC.clearColor.xyz;
 }

@@ -43,7 +43,7 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
 
-    raytrace(cmdBuf, {1, 0, 0, 0});
+    raytrace(cmdBuf, {0, 0, 0, 0});
     vulkanOps->endSingleTimeCommands(cmdBuf);
 
     // TODO: Fences
@@ -258,7 +258,7 @@ void RayTracingApp::createRtDescriptorSet() {
     using vkSS = vk::ShaderStageFlagBits;
     using vkDSLB = vk::DescriptorSetLayoutBinding;
 
-    rtDescSetLayoutBind.emplace_back(vkDSLB(0, vkDT::eAccelerationStructureKHR, 1, vkSS::eRaygenKHR)); // TLAS
+    rtDescSetLayoutBind.emplace_back(vkDSLB(0, vkDT::eAccelerationStructureKHR, 1, vkSS::eRaygenKHR | vkSS::eClosestHitKHR)); // TLAS
     rtDescSetLayoutBind.emplace_back(vkDSLB(1, vkDT::eStorageImage, 1, vkSS::eRaygenKHR)); // Output image
 
     rtDescPool = nvvkpp::util::createDescriptorPool(device, rtDescSetLayoutBind);
@@ -294,10 +294,12 @@ void RayTracingApp::createRtPipeline() {
     auto raygenCode = readFile("shaders/raytrace.rgen.spv");
     auto missCode = readFile("shaders/raytrace.rmiss.spv");
     auto chitCode = readFile("shaders/raytrace.rchit.spv");
+    auto shadowMissCode = readFile("shaders/raytrace.shadow.rmiss.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
     vk::ShaderModule chitShaderModule = vulkanOps->createShaderModule(chitCode);
+    vk::ShaderModule shadowMissShaderModule = vulkanOps->createShaderModule(shadowMissCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -309,12 +311,22 @@ void RayTracingApp::createRtPipeline() {
     stages.push_back({{}, vk::ShaderStageFlagBits::eRaygenKHR, raygenShaderModule, "main"});
     rg.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(rg);
+
     // Miss
     vk::RayTracingShaderGroupCreateInfoKHR mg{vk::RayTracingShaderGroupTypeKHR::eGeneral,
                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
     stages.push_back({{}, vk::ShaderStageFlagBits::eMissKHR, missShaderModule, "main"});
     mg.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(mg);
+
+
+    // Miss shadow
+    vk::RayTracingShaderGroupCreateInfoKHR ms{vk::RayTracingShaderGroupTypeKHR::eGeneral,
+                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eMissKHR, shadowMissShaderModule, "main"});
+    ms.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(mg);
 
     // Hit Group - Closest Hit + AnyHit
@@ -352,17 +364,18 @@ void RayTracingApp::createRtPipeline() {
             static_cast<uint32_t>(rtShaderGroups.size()));  // 1-raygen, n-miss, n-(hit[+anyhit+intersect])
     rayPipelineInfo.setPGroups(rtShaderGroups.data());
 
-    rayPipelineInfo.setMaxRecursionDepth(1);  // Ray depth
+    rayPipelineInfo.setMaxRecursionDepth(2);  // Ray depth
     rayPipelineInfo.setLayout(rtPipelineLayout);
     rtPipeline = device.createRayTracingPipelineKHR({}, rayPipelineInfo).value;
 
     device.destroy(raygenShaderModule);
     device.destroy(missShaderModule);
     device.destroy(chitShaderModule);
+    device.destroy(shadowMissShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
-    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 3 shaders: raygen, miss, chit
+    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 4 shaders: raygen, miss, chit, shadow miss
     auto groupHandleSize = static_cast<uint64_t>(rtProperties.shaderGroupHandleSize); // Size of a program identifier
 
     // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
@@ -399,7 +412,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4
     vk::DeviceSize rayGenOffset = 0u * progSize;  // Start at the beginning of sbtBuffer
     vk::DeviceSize missOffset = 1u * progSize;  // Jump over raygen
     vk::DeviceSize missStride = progSize;
-    vk::DeviceSize hitGroupOffset = 2u * progSize;  // Jump over the previous shaders
+    vk::DeviceSize hitGroupOffset = 3u * progSize;  // Jump over the previous shaders
     vk::DeviceSize hitGroupStride = progSize;
 
     vk::DeviceSize sbtSize = progSize * (vk::DeviceSize) rtShaderGroups.size();
