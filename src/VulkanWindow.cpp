@@ -4,8 +4,13 @@
 
 #include <set>
 #include <iostream>
+#include <err.h>
 #include "VulkanWindow.h"
 #include "VulkanOps.h"
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_sdl.h"
+#include "imgui/imgui_impl_vulkan.h"
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -51,6 +56,10 @@ void VulkanWindow::drawFrame() {
             throw std::runtime_error("failed to acquire swap chain image!");
     }
 
+    // Start the Dear ImGui frame
+    ImGui_ImplSDL2_NewFrame(window);
+    ImGui_ImplVulkan_NewFrame();
+
     if (imagesInFlight[imageIndex]) {
         device.waitForFences(1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
     }
@@ -94,7 +103,7 @@ void VulkanWindow::drawFrame() {
 }
 
 void VulkanWindow::initWindow(int width, int height) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         std::string msg = "SDL init failed with error: ";
         msg += SDL_GetError();
         throw std::runtime_error(msg);
@@ -116,6 +125,7 @@ void VulkanWindow::initWindow(int width, int height) {
 
 
 void VulkanWindow::initVulkan() {
+
     setupDispatchLoader();
     createInstance();
 
@@ -138,6 +148,78 @@ void VulkanWindow::initVulkan() {
     createSwapChainDependant();
 
     createSyncObjects();
+
+    createImGuiDescriptorPool();
+    setupImGui();
+}
+
+void VulkanWindow::createImGuiDescriptorPool() {
+
+    vk::DescriptorPoolSize pool_sizes[] =
+            {
+                    { vk::DescriptorType::eCombinedImageSampler, 2 }
+//                    ,{ vk::DescriptorType::eSampler, 1000 },
+//                    { vk::DescriptorType::eSampledImage, 1000 },
+//                    { vk::DescriptorType::eStorageImage, 1000 },
+//                    { vk::DescriptorType::eUniformTexelBuffer, 1000 },
+//                    { vk::DescriptorType::eStorageTexelBuffer, 1000 },
+//                    { vk::DescriptorType::eUniformBuffer, 1000 },
+//                    { vk::DescriptorType::eStorageBuffer, 1000 },
+//                    { vk::DescriptorType::eUniformBufferDynamic, 1000 },
+//                    { vk::DescriptorType::eStorageBufferDynamic, 1000 },
+//                    { vk::DescriptorType::eInputAttachment, 1000 }
+            };
+    vk::DescriptorPoolCreateInfo pool_info = {};
+    pool_info.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    pool_info.maxSets = 2;
+    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+    imGuiDescriptorPool = device.createDescriptorPool(pool_info);
+}
+
+static void check_vk_result(VkResult err)
+{
+    if (err == 0) return;
+    printf("VkResult %d\n", err);
+    if (err < 0)
+        abort();
+}
+
+void VulkanWindow::setupImGui() {
+    IMGUI_CHECKVERSION();
+
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsClassic();
+
+    // Setup Platform/Renderer bindings
+    ImGui_ImplSDL2_InitForVulkan(window);
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = instance;
+    init_info.PhysicalDevice = physicalDevice;
+    init_info.Device = device;
+    init_info.QueueFamily = queueFamilyIndices.graphicsFamily.value();
+    init_info.Queue = graphicsQueue;
+    init_info.PipelineCache = VK_NULL_HANDLE;
+    init_info.DescriptorPool = imGuiDescriptorPool;
+    init_info.Allocator = nullptr;
+    init_info.MinImageCount = 2;
+    init_info.ImageCount = swapChainFramebuffers.size();
+    init_info.CheckVkResultFn = check_vk_result;
+    ImGui_ImplVulkan_Init(&init_info, renderPass);
+
+    vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
+
+    ImGui_ImplVulkan_CreateFontsTexture(cmdBuf);
+
+    vulkanOps->endSingleTimeCommands(cmdBuf);
+
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
 void VulkanWindow::mainLoop() {
@@ -165,6 +247,8 @@ bool VulkanWindow::sdlEventHandler() {
                 framebufferResized = true;
             }
         }
+
+        ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
 
 //            //If user presses any key
 //            if (sdlEvent.type == SDL_KEYDOWN){
@@ -545,7 +629,7 @@ void VulkanWindow::createFramebuffers() {
 void VulkanWindow::createCommandPool() {
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
 
-    vk::CommandPoolCreateInfo poolInfo({}, queueFamilyIndices.graphicsFamily.value());
+    vk::CommandPoolCreateInfo poolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queueFamilyIndices.graphicsFamily.value());
 
     commandPool = device.createCommandPool(poolInfo);
 }
@@ -661,6 +745,8 @@ void VulkanWindow::cleanupSwapChain() {
 
 void VulkanWindow::cleanup() {
     cleanupSwapChain();
+
+    device.destroy(imGuiDescriptorPool);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         device.destroy(renderFinishedSemaphores[i]);

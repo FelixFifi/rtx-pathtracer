@@ -10,6 +10,7 @@
 #include "VulkanWindow.h"
 #include <glm/glm.hpp>
 
+typedef std::function<void ()> fImGuiCallback;
 
 struct VertexTex {
     glm::vec3 pos;
@@ -80,7 +81,9 @@ private:
     std::vector<vk::Framebuffer> swapChainFramebuffers;
 
 
-    //
+    // ImGui
+    std::vector<fImGuiCallback> imGuiCallbacks;
+
 
     vk::Buffer vertexBuffer;
     vk::DeviceMemory vertexBufferMemory;
@@ -115,6 +118,8 @@ public:
     void drawCallback(uint32_t imageIndex);
 
     void cleanup();
+
+    void addImGuiCallback(const fImGuiCallback &callback);
 private:
     void init();
 
@@ -144,6 +149,8 @@ private:
     void getSwapChainObjects();
 
     void createSwapChainDependant();
+
+    void configureCommandBuffer(size_t imageIndex) const;
 };
 
 #endif //RTX_RAYTRACER_POSTPROCESSING_H

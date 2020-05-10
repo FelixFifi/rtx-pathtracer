@@ -53,6 +53,13 @@ public:
 
     void cleanup();
 
+    struct RtPushConstant {
+        nvmath::vec4f clearColor;
+        glm::vec3 lightPosition = {20,20,20};
+        float lightIntensity = 50;
+        int lightType = 0;
+    } rtPushConstants;
+
 private:
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
@@ -90,13 +97,6 @@ private:
     vk::Pipeline rtPipeline;
     vk::Buffer rtSBTBuffer;
     vk::DeviceMemory rtSBTBufferMemory;
-
-    struct RtPushConstant {
-        nvmath::vec4f clearColor;
-        nvmath::vec3f lightPosition;
-        float lightIntensity;
-        int lightType;
-    } rtPushConstants;
 
 private:
     void drawCallback(uint32_t imageIndex);
@@ -485,6 +485,7 @@ private:
 
     void updateUniformBuffer(uint32_t currentImage);
 
+    void imGuiWindowSetup();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

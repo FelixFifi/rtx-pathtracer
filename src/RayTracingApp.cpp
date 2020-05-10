@@ -2,6 +2,7 @@
 // Created by felixfifi on 06.05.20.
 //
 
+#include <imgui/imgui.h>
 #include "RayTracingApp.h"
 #include "Model.h"
 
@@ -11,6 +12,9 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
     postProcessing = PostProcessing({width, height}, vulkanWindow);
+
+    fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };;
+    postProcessing.addImGuiCallback(callbackImGui);
 
     device = vulkanWindow.getDevice();
     physicalDevice = vulkanWindow.getPhysicalDevice();
@@ -392,12 +396,19 @@ void RayTracingApp::createRtShaderBindingTable() {
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
 }
 
+void RayTracingApp::imGuiWindowSetup() {
+    ImGui::Begin("Raytrace Window");
+
+    ImGui::InputInt("LightType", &rtPushConstants.lightType);
+    ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
+    ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
+
+    ImGui::End();
+}
+
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4f &clearColor) {
     // Initializing push constant values
     rtPushConstants.clearColor = clearColor;
-    rtPushConstants.lightPosition = nvmath::vec3f(20, 20, 20);
-    rtPushConstants.lightIntensity = 20.0f;
-    rtPushConstants.lightType = 0;
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,

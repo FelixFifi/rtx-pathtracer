@@ -2,6 +2,9 @@
 // Created by felixfifi on 04.05.20.
 //
 
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_impl_sdl.h>
 #include "PostProcessing.h"
 #include "CommonOps.h"
 
@@ -33,9 +36,27 @@ void PostProcessing::init() {
 }
 
 void PostProcessing::drawCallback(uint32_t imageIndex) {
+    configureCommandBuffer(imageIndex); // TODO: extra command buffers and renderpass for Imgui
+
+    // ImGUI
+    ImGui::NewFrame();
+
+    for (const auto &callback: imGuiCallbacks) {
+        callback();
+    }
+
+    ImGui::Render();
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers[imageIndex]);
+
+    commandBuffers[imageIndex].endRenderPass();
+    commandBuffers[imageIndex].end();
 
 }
 
+void PostProcessing::addImGuiCallback(const fImGuiCallback &callback) {
+    imGuiCallbacks.push_back(callback);
+}
 
 void PostProcessing::createVertexBuffer() {
     vk::BufferUsageFlags usage =
@@ -69,7 +90,8 @@ void PostProcessing::createSwapChainDependant() {
     createDescriptorSets();
     createGraphicsPipeline();
 
-    configureCommandBuffers();
+    commandBuffers = vulkanWindow.getCommandBuffers();
+    //configureCommandBuffers();
 }
 
 void PostProcessing::getSwapChainObjects() {
@@ -89,6 +111,10 @@ void PostProcessing::cleanupSwapChainDependant() {
 }
 
 void PostProcessing::cleanup() {
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+
     cleanupSwapChainDependant();
     device.destroy(descriptorSetLayout);
 
@@ -244,35 +270,38 @@ void PostProcessing::configureCommandBuffers() {
     commandBuffers = vulkanWindow.getCommandBuffers();
 
     for (size_t i = 0; i < commandBuffers.size(); i++) {
-        vk::CommandBufferBeginInfo beginInfo({}, nullptr);
-
-        commandBuffers[i].begin(beginInfo);
-
-
-        std::array<vk::ClearValue, 2> clearValues = {};
-        clearValues[0].color = vk::ClearColorValue(std::array<float, 4>({0.0f, 0.0f, 0.0f, 1.0f}));
-        clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
-
-        vk::RenderPassBeginInfo renderPassInfo(renderPass, swapChainFramebuffers[i],
-                                               {{0, 0}, swapChainExtent},
-                                               static_cast<uint32_t>(clearValues.size()), clearValues.data());
-
-
-        commandBuffers[i].beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-        commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
-
-        vk::DeviceSize offset = 0;
-        commandBuffers[i].bindVertexBuffers(0, vertexBuffer, offset);
-        commandBuffers[i].bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
-        commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout,
-                                             0, descriptorSets[i], nullptr);
-
-        commandBuffers[i].drawIndexed(static_cast<uint32_t>(fullscreenQuadInd.size()), 1, 0,
-                                      0, 0);
-
-        commandBuffers[i].endRenderPass();
-        commandBuffers[i].end();
+        configureCommandBuffer(i);
     }
+}
+
+void PostProcessing::configureCommandBuffer(size_t imageIndex) const {
+    vk::CommandBufferBeginInfo beginInfo({}, nullptr);
+
+    commandBuffers[imageIndex].reset({});
+
+    commandBuffers[imageIndex].begin(beginInfo);
+
+
+    std::array<vk::ClearValue, 2> clearValues = {};
+    clearValues[0].color = vk::ClearColorValue(std::array<float, 4>({0.0f, 0.0f, 0.0f, 1.0f}));
+    clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+
+    vk::RenderPassBeginInfo renderPassInfo(renderPass, swapChainFramebuffers[imageIndex],
+                                           {{0, 0}, swapChainExtent},
+                                           static_cast<uint32_t>(clearValues.size()), clearValues.data());
+
+
+    commandBuffers[imageIndex].beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    commandBuffers[imageIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
+
+    vk::DeviceSize offset = 0;
+    commandBuffers[imageIndex].bindVertexBuffers(0, vertexBuffer, offset);
+    commandBuffers[imageIndex].bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
+    commandBuffers[imageIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout,
+                                                  0, descriptorSets[imageIndex], nullptr);
+
+    commandBuffers[imageIndex].drawIndexed(static_cast<uint32_t>(fullscreenQuadInd.size()), 1, 0,
+                                           0, 0);
 }
 
 const vk::ImageView &PostProcessing::getOffscreenImageView() const {

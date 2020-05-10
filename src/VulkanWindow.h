@@ -64,6 +64,9 @@ private:
     vk::Device device;
 
     QueueFamilyIndices queueFamilyIndices;
+
+    // ImGUI
+    vk::DescriptorPool imGuiDescriptorPool;
 public:
     const QueueFamilyIndices &getQueueFamilyIndices() const;
 
@@ -145,6 +148,7 @@ public:
     void run();
     void cleanup();
 
+private:
     bool sdlEventHandler();
 
     void setupDispatchLoader() const;
@@ -182,6 +186,12 @@ public:
     void drawFrame();
 
     void createSwapChainDependant();
+
+    void setupImGui();
+
+    void createImGuiDescriptorPool();
+
+    void createImGuiRenderPass();
 };
 
 
