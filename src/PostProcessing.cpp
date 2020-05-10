@@ -2,6 +2,7 @@
 // Created by felixfifi on 04.05.20.
 //
 
+#define IMGUI_UNLIMITED_FRAME_RATE
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui_impl_sdl.h>

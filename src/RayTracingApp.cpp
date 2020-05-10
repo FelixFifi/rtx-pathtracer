@@ -402,6 +402,7 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputInt("LightType", &rtPushConstants.lightType);
     ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
     ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
     ImGui::End();
 }
