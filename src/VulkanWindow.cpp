@@ -551,7 +551,7 @@ VulkanWindow::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &a
 vk::PresentModeKHR
 VulkanWindow::chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes) {
     for (const auto &availablePresentMode : availablePresentModes) {
-        if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+        if (availablePresentMode == vk::PresentModeKHR::eImmediate) {
             return availablePresentMode;
         }
     }

@@ -72,7 +72,7 @@ void main()
     // Tracing shadow ray only if the light is visible from the surface
     if(cosTheta > 0) {
         float tMin = 0.001;
-        float tMax = lightDistance;
+        float tMax = lightDistance - 0.001;
         vec3 origin = worldPos;
         vec3 rayDir = L;
         uint flags =
