@@ -32,7 +32,7 @@
 #include "VulkanWindow.h"
 #include "Model.h"
 
-
+const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string MODEL_PATH1 = "objs/teapot.obj";
 const std::string MODEL_PATH2 = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
@@ -65,6 +65,7 @@ private:
     VulkanWindow vulkanWindow;
 
     std::vector<std::unique_ptr<Model>> models;
+    std::vector<Material> materials;
 
     // Vulkan
     vk::Buffer uniformBuffer;
@@ -73,6 +74,9 @@ private:
     vk::DescriptorSetLayout descriptorSetLayout;
     vk::DescriptorPool descriptorPool;
     vk::DescriptorSet descriptorSet;
+
+    vk::Buffer materialBuffer;
+    vk::DeviceMemory materialBufferMemory;
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;

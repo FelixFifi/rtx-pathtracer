@@ -34,8 +34,17 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
 void RayTracingApp::loadModels() {
     // Currently only one hardcoded
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH2, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH2, MATERIAL_BASE_DIR, vulkanOps));
+
+    materials.reserve(models.size());
+    for (const auto &model : models) {
+        materials.push_back(model->material);
+    }
+
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
+    vulkanOps->createBufferFromData(materials, usage,
+                                    vk::MemoryPropertyFlagBits::eDeviceLocal, materialBuffer, materialBufferMemory);
 }
 
 void RayTracingApp::run() {
@@ -80,8 +89,12 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                       vk::ShaderStageFlagBits::eClosestHitKHR);
 
 
-    std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
-                                                              indexBufferBinding};
+    vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
+                                                      vk::ShaderStageFlagBits::eClosestHitKHR);
+
+
+    std::array<vk::DescriptorSetLayoutBinding, 4> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
+                                                              indexBufferBinding, materialBufferBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -89,11 +102,12 @@ void RayTracingApp::createDecriptorSetLayout() {
 }
 
 void RayTracingApp::createDescriptorPool() {
-    std::array<vk::DescriptorPoolSize, 3> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 4> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size())
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -128,7 +142,11 @@ void RayTracingApp::createDescriptorSets() {
             indexBufferInfos.push_back(indexBufferInfo);
         }
 
-        std::array<vk::WriteDescriptorSet, 3> descriptorWrites = {};
+        vk::DescriptorBufferInfo materialBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
+
+
+
+        std::array<vk::WriteDescriptorSet, 4> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
@@ -139,6 +157,9 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[2] = vk::WriteDescriptorSet(descriptorSet, 2, 0, modelCount,
                                                      vk::DescriptorType::eStorageBuffer, nullptr,
                                                      indexBufferInfos.data(), nullptr);
+        descriptorWrites[3] = vk::WriteDescriptorSet(descriptorSet, 3, 0, 1,
+                                                     vk::DescriptorType::eStorageBuffer, nullptr,
+                                                     &materialBufferInfo, nullptr);
 
         device.updateDescriptorSets(descriptorWrites, nullptr);
     }
@@ -246,7 +267,8 @@ void RayTracingApp::createTopLevelAS() {
 
     for (int i = 0; i < static_cast<int>(models.size()); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
-        rayInst.transform = i == 0 ? nvmath::mat4f_id : nvmath::translation_mat4<nvmath::nv_scalar>(30.0f, 0.0f, 0.0f).scale(10.0f) ;
+        rayInst.transform =
+                i == 0 ? nvmath::mat4f_id : nvmath::translation_mat4<nvmath::nv_scalar>(30.0f, 0.0f, 0.0f).scale(10.0f);
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
@@ -262,7 +284,8 @@ void RayTracingApp::createRtDescriptorSet() {
     using vkSS = vk::ShaderStageFlagBits;
     using vkDSLB = vk::DescriptorSetLayoutBinding;
 
-    rtDescSetLayoutBind.emplace_back(vkDSLB(0, vkDT::eAccelerationStructureKHR, 1, vkSS::eRaygenKHR | vkSS::eClosestHitKHR)); // TLAS
+    rtDescSetLayoutBind.emplace_back(
+            vkDSLB(0, vkDT::eAccelerationStructureKHR, 1, vkSS::eRaygenKHR | vkSS::eClosestHitKHR)); // TLAS
     rtDescSetLayoutBind.emplace_back(vkDSLB(1, vkDT::eStorageImage, 1, vkSS::eRaygenKHR)); // Output image
 
     rtDescPool = nvvkpp::util::createDescriptorPool(device, rtDescSetLayoutBind);
@@ -402,7 +425,8 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputInt("LightType", &rtPushConstants.lightType);
     ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
     ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
+                ImGui::GetIO().Framerate);
 
     ImGui::End();
 }
@@ -445,6 +469,8 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4
 void RayTracingApp::cleanup() {
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);
+    device.free(materialBufferMemory);
+    device.destroy(materialBuffer);
 
     device.destroy(descriptorPool);
     device.destroy(descriptorSetLayout);

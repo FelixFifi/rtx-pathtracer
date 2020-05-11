@@ -1,6 +1,7 @@
 cmake-build-*/
 objs/
 textures/
+materials/
 models/
 *.spv
 imgui.ini

@@ -13,6 +13,7 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 
 layout(binding = 1, set = 1, scalar) buffer Vertices { Vertex v[]; } vertices[];
 layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
+layout(binding = 3, set = 1, scalar) buffer Materials { Material mats[]; } materials;
 
 layout(location = 1) rayPayloadEXT bool isShadowed;
 
@@ -36,7 +37,8 @@ void main()
     Vertex v0 = vertices[objId].v[ind.x];
     Vertex v1 = vertices[objId].v[ind.y];
     Vertex v2 = vertices[objId].v[ind.z];
-    prd.hitValue = vec3(1.0, 0.0, 0.0);
+
+    Material mat = materials.mats[objId];
 
     const vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
@@ -95,6 +97,6 @@ void main()
     if (isShadowed || cosTheta <= 0) {
         prd.hitValue = vec3(0.0, 0.0, 0.0);
     } else {
-        prd.hitValue = cosTheta * lightIntensity.xxx;
+        prd.hitValue = cosTheta * lightIntensity * mat.diffuse;
     }
 }

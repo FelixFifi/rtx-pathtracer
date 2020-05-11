@@ -13,9 +13,10 @@
 
 #include <tiny_obj_loader.h>
 
-Model::Model(const std::string &objFilePath, const std::shared_ptr<VulkanOps> &vulkanOps) : device(
+Model::Model(const std::string &objFilePath, const std::string &materialBaseDir,
+             const std::shared_ptr<VulkanOps> &vulkanOps) : device(
         vulkanOps->getDevice()) {
-    loadModel(objFilePath);
+    loadModel(objFilePath, materialBaseDir);
     createBuffers(vulkanOps);
 }
 
@@ -33,14 +34,41 @@ void Model::createBuffers(const std::shared_ptr<VulkanOps> &vulkanOps) {
     vulkanOps->createBufferFromData(indices, usage, memoryProperties, indexBuffer, indexBufferMemory);
 }
 
-void Model::loadModel(const std::string &objFilePath) {
+void Model::loadModel(const std::string &objFilePath, const std::string &materialBaseDir) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, objFilePath.c_str())) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, objFilePath.c_str(), materialBaseDir.c_str())) {
         throw std::runtime_error(warn + err);
+    }
+
+    if (materials.size() == 1) {
+        hasMaterial = true;
+        tinyobj::material_t &tiny_material = materials[0];
+        material.diffuse = {tiny_material.diffuse[0], tiny_material.diffuse[1], tiny_material.diffuse[2]};
+        material.specular = {tiny_material.specular[0], tiny_material.specular[1], tiny_material.specular[2]};
+        material.specularHighlight = tiny_material.shininess;
+
+        switch (tiny_material.illum) {
+            case 0:
+            case 1:
+                material.type = EMatType::eDiffuse;
+                break;
+            case 2:
+            case 3:
+                material.type = EMatType::eSpecular;
+                break;
+            case 4:
+                material.type = EMatType::eTransparent;
+                break;
+            default:
+                throw std::runtime_error("Unknown illum mode");
+        }
+
+    } else if(materials.size() > 0) {
+        throw std::runtime_error("Multiple materials given in one obj file");
     }
 
     std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
@@ -66,8 +94,6 @@ void Model::loadModel(const std::string &objFilePath) {
                     1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
             };
 
-            vertex.color = {1.0f, 1.0f, 1.0f};
-
             if (uniqueVertices.count(vertex) == 0) {
                 uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
                 vertices.push_back(vertex);
@@ -84,3 +110,5 @@ void Model::cleanup() {
     device.free(indexBufferMemory);
     device.destroy(indexBuffer);
 }
+
+
