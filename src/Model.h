@@ -21,8 +21,8 @@
 
 
 struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 normal;
+    alignas(16) glm::vec3 pos;
+    alignas(16) glm::vec3 normal;
     glm::vec2 texCoord;
 
     bool operator==(const Vertex &other) const {
@@ -36,11 +36,11 @@ enum EMatType {
     eTransparent = 2
 };
 
-struct Material {
-    glm::vec3 diffuse;
-    glm::vec3 specular;
+struct alignas(16) Material {
+    alignas(16) glm::vec3 diffuse;
+    alignas(16) glm::vec3 specular;
     float specularHighlight;
-    float transparency;
+    alignas(4) float transparency;
     float refractionIndex;
     int type;
 };

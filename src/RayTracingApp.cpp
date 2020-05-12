@@ -34,13 +34,45 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
 void RayTracingApp::loadModels() {
     // Currently only one hardcoded
+    models.emplace_back(std::make_unique<Model>(MODEL_FLOOR, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
     models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
     models.emplace_back(std::make_unique<Model>(MODEL_PATH2, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
 
     materials.reserve(models.size());
     for (const auto &model : models) {
         materials.push_back(model->material);
     }
+
 
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
@@ -56,7 +88,7 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
 
-    raytrace(cmdBuf, {0, 0, 0, 0});
+    raytrace(cmdBuf);
     vulkanOps->endSingleTimeCommands(cmdBuf);
 
     // TODO: Fences
@@ -90,7 +122,7 @@ void RayTracingApp::createDecriptorSetLayout() {
 
 
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
-                                                      vk::ShaderStageFlagBits::eClosestHitKHR);
+                                                         vk::ShaderStageFlagBits::eClosestHitKHR);
 
 
     std::array<vk::DescriptorSetLayoutBinding, 4> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
@@ -145,7 +177,6 @@ void RayTracingApp::createDescriptorSets() {
         vk::DescriptorBufferInfo materialBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
 
 
-
         std::array<vk::WriteDescriptorSet, 4> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
@@ -172,7 +203,7 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraMatrices ubo = {};
-    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(time), 30 * glm::cos(time), 10.0f + 20.0f * glm::sin(time / 3.0f)),
+    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(time), 30 * glm::cos(time), 10.0f + 10.0f * glm::sin(time / 3.0f)),
                            glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
@@ -268,7 +299,7 @@ void RayTracingApp::createTopLevelAS() {
     for (int i = 0; i < static_cast<int>(models.size()); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
         rayInst.transform =
-                i == 0 ? nvmath::mat4f_id : nvmath::translation_mat4<nvmath::nv_scalar>(30.0f, 0.0f, 0.0f).scale(10.0f);
+                i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>((i - 1) * 30.0f, 0.0f, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
@@ -391,7 +422,7 @@ void RayTracingApp::createRtPipeline() {
             static_cast<uint32_t>(rtShaderGroups.size()));  // 1-raygen, n-miss, n-(hit[+anyhit+intersect])
     rayPipelineInfo.setPGroups(rtShaderGroups.data());
 
-    rayPipelineInfo.setMaxRecursionDepth(2);  // Ray depth
+    rayPipelineInfo.setMaxRecursionDepth(MAX_RECURSION);  // Ray depth
     rayPipelineInfo.setLayout(rtPipelineLayout);
     rtPipeline = device.createRayTracingPipelineKHR({}, rayPipelineInfo).value;
 
@@ -425,15 +456,15 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputInt("LightType", &rtPushConstants.lightType);
     ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
     ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
+    ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
+
 
     ImGui::End();
 }
 
-void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4f &clearColor) {
-    // Initializing push constant values
-    rtPushConstants.clearColor = clearColor;
+void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,

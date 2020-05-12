@@ -29,6 +29,7 @@ void main()
     float tMin     = 0.001;
     float tMax     = 10000.0;
 
+    prd.recursionDepth = 0;
     traceRayEXT(topLevelAS,     // acceleration structure
                 rayFlags,       // rayFlags
                 0xFF,           // cullMask

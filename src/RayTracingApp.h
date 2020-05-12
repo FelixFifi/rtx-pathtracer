@@ -33,10 +33,13 @@
 #include "Model.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
+const std::string MODEL_FLOOR = "objs/floor.obj";
 const std::string MODEL_PATH1 = "objs/teapot.obj";
 const std::string MODEL_PATH2 = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
+
+static const int MAX_RECURSION = 4;
 
 struct CameraMatrices {
     glm::mat4 view;
@@ -54,10 +57,11 @@ public:
     void cleanup();
 
     struct RtPushConstant {
-        nvmath::vec4f clearColor;
+        alignas(16) glm::vec4 clearColor =  { 0.3, 0.3, 1, 0 };
         glm::vec3 lightPosition = {20,20,20};
-        float lightIntensity = 50;
+        float lightIntensity = 500;
         int lightType = 0;
+        uint maxRecursion = MAX_RECURSION;
     } rtPushConstants;
 
 private:
@@ -479,7 +483,7 @@ private:
 
     void createRtShaderBindingTable();
 
-    void raytrace(const vk::CommandBuffer &cmdBuf, const nvmath::vec4f &clearColor);
+    void raytrace(const vk::CommandBuffer &cmdBuf);
 
     void createUniformBuffers();
 

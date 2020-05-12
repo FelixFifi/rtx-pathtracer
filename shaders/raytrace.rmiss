@@ -14,5 +14,6 @@ pushC;
 
 void main()
 {
-    hitValue = pushC.clearColor.xyz;
+    float a = ((gl_WorldRayDirectionEXT.z + 1.0) / 2.0);
+    hitValue = a * vec3(0.8, 0.8, 0.8) + (1.0 - a) * pushC.clearColor.xyz;
 }

@@ -1,6 +1,5 @@
 #!/bin/bash
-glslc shader.vert -o vert.spv
-glslc shader.frag -o frag.spv
+rm *.spv
 glslc post.vert -o post.vert.spv
 glslc post.frag -o post.frag.spv
 glslc raytrace.rchit -o raytrace.rchit.spv
