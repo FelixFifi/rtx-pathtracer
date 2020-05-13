@@ -4,6 +4,10 @@ struct hitPayload
     uint recursionDepth;
 };
 
+struct shadowCheck {
+    bool isShadowed;
+};
+
 struct pushConstant
 {
     vec4  clearColor;
@@ -11,4 +15,5 @@ struct pushConstant
     float lightIntensity;
     int   lightType;
     uint   maxRecursion;
+    vec2 pad2;
 };

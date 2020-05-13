@@ -1,24 +1,24 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : enable
-#include "raycommon.glsl"
 #include "wavefront.glsl"
+#include "raycommon.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
-layout(location = 1) rayPayloadEXT bool isShadowed;
+layout(location = 1) rayPayloadEXT shadowCheck isShadowed;
 layout(location = 2) rayPayloadEXT hitPayload reflected;
 hitAttributeEXT vec3 attribs;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 
-layout(binding = 1, set = 1, scalar, std430) buffer Vertices { Vertex v[]; } vertices[];
+layout(binding = 1, set = 1, std140) buffer Vertices { Vertex v[]; } vertices[];
 layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
-layout(binding = 3, set = 1, scalar, std140) buffer Materials { Material mats[]; } materials;
+layout(binding = 3, set = 1, std140) buffer Materials { Material mats[]; } materials;
 
 
-layout(push_constant) uniform PushConstant { pushConstant pushC; } c;
+layout(push_constant, std140) uniform PushConstant { pushConstant pushC; } c;
 
 void main()
 {
@@ -72,16 +72,18 @@ void main()
 
             float cosTheta = dot(normal, L);
 
-            isShadowed = true;
+            isShadowed.isShadowed = true;
+//            isShadowed.pad = vec3(1,1,1);
 
             // Tracing shadow ray only if the light is visible from the surface
             if(cosTheta > 0) {
                 float tMin = 0.001;
-                float tMax = lightDistance - 0.001;
+                float tMax = lightDistance;
                 vec3 origin = worldPos;
                 vec3 rayDir = L;
                 uint flags =
                         gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+
                 traceRayEXT(topLevelAS,  // acceleration structure
                             flags,       // rayFlags
                             0xFF,        // cullMask
@@ -96,11 +98,12 @@ void main()
                 );
             }
 
-            if (isShadowed) {
+            if (isShadowed.isShadowed) {
                 prd.hitValue = vec3(0.0, 0.0, 0.0);
             } else {
-                prd.hitValue = cosTheta * lightIntensity * mat.diffuse;
+                prd.hitValue = mat.diffuse;
             }
+
             break;
         case 1: // Specular
             vec3 reflectedDir = reflect(gl_WorldRayDirectionEXT, normal);
@@ -126,9 +129,9 @@ void main()
             );
 
             prd.hitValue = mat.specular * reflected.hitValue;
-
             break;
     }
+
 
 
 }

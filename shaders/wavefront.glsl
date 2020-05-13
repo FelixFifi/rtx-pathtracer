@@ -1,14 +1,8 @@
-struct Vertex {
+struct Vertex
+{
     vec3 pos;
     vec3 normal;
-    vec2 uv;
-};
-
-struct RtPushConstant {
-    vec4 clearColor;
-    vec3 lightPosition;
-    float lightIntensity;
-    int lightType;
+    vec2 texCoord;
 };
 
 struct Material {
