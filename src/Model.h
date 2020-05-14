@@ -40,7 +40,7 @@ struct alignas(16) Material {
     alignas(16) glm::vec3 diffuse;
     alignas(16) glm::vec3 specular;
     float specularHighlight;
-    alignas(4) float transparency;
+    float transparency;
     float refractionIndex;
     int type;
 };

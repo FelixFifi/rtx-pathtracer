@@ -5,7 +5,7 @@ struct hitPayload
 };
 
 struct shadowCheck {
-    bool isShadowed;
+    int isShadowed;
 };
 
 struct pushConstant

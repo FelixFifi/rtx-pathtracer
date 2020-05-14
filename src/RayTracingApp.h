@@ -39,7 +39,7 @@ const std::string MODEL_PATH2 = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 
-static const int MAX_RECURSION = 4;
+static const int MAX_RECURSION = 10;
 
 struct CameraMatrices {
     glm::mat4 view;

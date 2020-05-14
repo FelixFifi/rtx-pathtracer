@@ -13,16 +13,16 @@ hitAttributeEXT vec3 attribs;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 
-layout(binding = 1, set = 1, std140) buffer Vertices { Vertex v[]; } vertices[];
+layout(binding = 1, set = 1, std430) buffer Vertices { Vertex v[]; } vertices[];
 layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
-layout(binding = 3, set = 1, std140) buffer Materials { Material mats[]; } materials;
+layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; } materials;
 
 
-layout(push_constant, std140) uniform PushConstant { pushConstant pushC; } c;
+layout(push_constant, std140) uniform PushConstant { pushConstant pushC; };
 
 void main()
 {
-    if (prd.recursionDepth >= c.pushC.maxRecursion) {
+    if (prd.recursionDepth >= pushC.maxRecursion) {
         prd.hitValue = vec3(1.0, 0.0, 0.0);
         return;
     }
@@ -54,26 +54,25 @@ void main()
         case 0: // Diffuse
             // Vector toward the light
             vec3  L;
-            float lightIntensity = c.pushC.lightIntensity;
+            float lightIntensity = pushC.lightIntensity;
             float lightDistance  = 100000.0;
 
             // Point light
-            if(c.pushC.lightType == 0)
+            if(pushC.lightType == 0)
             {
-                vec3 lDir      = c.pushC.lightPosition - worldPos;
-                lightDistance  = length(lDir);
-                lightIntensity = c.pushC.lightIntensity / (lightDistance * lightDistance);
+                vec3 lDir      = pushC.lightPosition - worldPos;
+                lightDistance  = length(pushC.lightPosition - worldPos);
+                lightIntensity = pushC.lightIntensity / (lightDistance * lightDistance);
                 L              = normalize(lDir);
             }
             else // Directional light
             {
-                L = normalize(c.pushC.lightPosition - vec3(0));
+                L = normalize(pushC.lightPosition - vec3(0));
             }
 
             float cosTheta = dot(normal, L);
 
-            isShadowed.isShadowed = true;
-//            isShadowed.pad = vec3(1,1,1);
+            isShadowed.isShadowed = 1;
 
             // Tracing shadow ray only if the light is visible from the surface
             if(cosTheta > 0) {
@@ -98,10 +97,10 @@ void main()
                 );
             }
 
-            if (isShadowed.isShadowed) {
+            if (isShadowed.isShadowed == 1) {
                 prd.hitValue = vec3(0.0, 0.0, 0.0);
             } else {
-                prd.hitValue = mat.diffuse;
+                prd.hitValue = mat.diffuse * lightIntensity;
             }
 
             break;
@@ -125,7 +124,7 @@ void main()
                         tMin,        // ray min range
                         reflectedDir,      // ray direction
                         tMax,        // ray max range
-                        2            // payload (location = 2)
+                        2           // payload (location = 2)
             );
 
             prd.hitValue = mat.specular * reflected.hitValue;
