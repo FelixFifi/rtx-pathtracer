@@ -34,8 +34,8 @@
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string MODEL_FLOOR = "objs/floor.obj";
-const std::string MODEL_PATH1 = "objs/teapot.obj";
-const std::string MODEL_PATH2 = "objs/cube.obj";
+const std::string MODEL_TEAPOT = "objs/teapot.obj";
+const std::string MODEL_GLASS_TEAPOT = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 
@@ -70,6 +70,10 @@ private:
 
     std::vector<std::unique_ptr<Model>> models;
     std::vector<Material> materials;
+
+    float rotation = 0.0f;
+    float height = 10.0f;
+    bool autoRotate = true;
 
     // Vulkan
     vk::Buffer uniformBuffer;

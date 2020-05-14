@@ -50,6 +50,8 @@ void Model::loadModel(const std::string &objFilePath, const std::string &materia
         material.diffuse = {tiny_material.diffuse[0], tiny_material.diffuse[1], tiny_material.diffuse[2]};
         material.specular = {tiny_material.specular[0], tiny_material.specular[1], tiny_material.specular[2]};
         material.specularHighlight = tiny_material.shininess;
+        material.refractionIndex = tiny_material.ior;
+        material.refractionIndexInv = 1.0f / tiny_material.ior;
 
         switch (tiny_material.illum) {
             case 0:

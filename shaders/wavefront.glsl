@@ -11,5 +11,6 @@ struct Material {
     float specularHighlight;
     float transparency;
     float refractionIndex;
+    float refractionIndexInv;
     int type;
 };

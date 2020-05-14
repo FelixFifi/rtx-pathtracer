@@ -8,7 +8,7 @@
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 layout(location = 1) rayPayloadEXT shadowCheck isShadowed;
-layout(location = 2) rayPayloadEXT hitPayload reflected;
+layout(location = 2) rayPayloadEXT hitPayload recursion;
 hitAttributeEXT vec3 attribs;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
@@ -18,7 +18,33 @@ layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
 layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; } materials;
 
 
-layout(push_constant, std140) uniform PushConstant { pushConstant pushC; };
+layout(push_constant) uniform PushConstant { pushConstant pushC; };
+
+// https://thebookofshaders.com/10/
+float random (vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))*
+                 43758.5453123);
+}
+
+// Rendering Vorlesung - Nori src/common.cpp
+float fresnel(in float eta, in float cosThetaI) {
+    float sinThetaSqr = eta * eta * (1- cosThetaI * cosThetaI);
+
+    if (sinThetaSqr > 1.0f) {
+        return 1.0f; // Total internal reflection
+    }
+
+    float cosThetaT = sqrt(1.0f - sinThetaSqr);
+
+    float Rs = (eta * cosThetaI - cosThetaT)
+               / (eta * cosThetaI + cosThetaT);
+    float Rp = (cosThetaI - eta * cosThetaT)
+               / (cosThetaI + eta * cosThetaT);
+
+    return (Rs * Rs + Rp * Rp) / 2.0f;
+}
+
 
 void main()
 {
@@ -85,7 +111,7 @@ void main()
 
                 traceRayEXT(topLevelAS,  // acceleration structure
                             flags,       // rayFlags
-                            0xFF,        // cullMask
+                            0x02,        // cullMask - Ignore transparent for now
                             0,           // sbtRecordOffset
                             0,           // sbtRecordStride
                             1,           // missIndex
@@ -105,6 +131,7 @@ void main()
 
             break;
         case 1: // Specular
+        {
             vec3 reflectedDir = reflect(gl_WorldRayDirectionEXT, normal);
 
             float tMin = 0.001;
@@ -112,7 +139,7 @@ void main()
             vec3 origin = worldPos;
             uint flags = gl_RayFlagsOpaqueEXT;
 
-            reflected.recursionDepth = prd.recursionDepth + 1;
+            recursion.recursionDepth = prd.recursionDepth + 1;
 
             traceRayEXT(topLevelAS,  // acceleration structure
                         flags,       // rayFlags
@@ -127,8 +154,79 @@ void main()
                         2           // payload (location = 2)
             );
 
-            prd.hitValue = mat.specular * reflected.hitValue;
+            prd.hitValue = mat.specular * recursion.hitValue;
             break;
+        }
+
+        case 2: // Transparent
+        {
+            float eta = mat.refractionIndexInv;
+            bool frontFace = dot(normal, gl_WorldRayDirectionEXT) < 0.0;
+
+            if (!frontFace) {
+                eta = mat.refractionIndex;
+                normal = -normal;
+            }
+
+            float cosTheta = - dot(gl_WorldRayDirectionEXT, normal);
+
+            float fresnel = fresnel(eta, cosTheta);
+
+            vec3 rayDir = reflect(gl_WorldRayDirectionEXT, normal);
+
+            {
+                float tMin = 0.001;
+                float tMax = 10000.0;
+                vec3 origin = worldPos;
+                uint flags = gl_RayFlagsOpaqueEXT;
+
+                recursion.recursionDepth = prd.recursionDepth + 1;
+
+                traceRayEXT(topLevelAS,  // acceleration structure
+                            flags,       // rayFlags
+                            0xFF,        // cullMask
+                            0,           // sbtRecordOffset
+                            0,           // sbtRecordStride
+                            0,           // missIndex
+                            origin,      // ray origin
+                            tMin,        // ray min range
+                            rayDir,      // ray direction
+                            tMax,        // ray max range
+                            2           // payload (location = 2)
+                );
+            }
+            vec3 hitValueReflect = recursion.hitValue;
+
+            rayDir = refract(gl_WorldRayDirectionEXT, normal, eta);
+
+            if (fresnel < 1.0f)
+            {
+                float tMin = 0.001;
+                float tMax = 10000.0;
+                vec3 origin = worldPos;
+                uint flags = gl_RayFlagsOpaqueEXT;
+
+                recursion.recursionDepth = prd.recursionDepth + 1;
+
+                traceRayEXT(topLevelAS,  // acceleration structure
+                            flags,       // rayFlags
+                            0xFF,        // cullMask
+                            0,           // sbtRecordOffset
+                            0,           // sbtRecordStride
+                            0,           // missIndex
+                            origin,      // ray origin
+                            tMin,        // ray min range
+                            rayDir,      // ray direction
+                            tMax,        // ray max range
+                            2           // payload (location = 2)
+                );
+            }
+
+            vec3 hitValueRefract = recursion.hitValue;
+
+            prd.hitValue = mat.specular * mix(hitValueRefract, hitValueReflect, fresnel); // Mix reflection and refraction
+            break;
+        }
     }
 
 

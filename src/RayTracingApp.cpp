@@ -35,38 +35,27 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 void RayTracingApp::loadModels() {
     // Currently only one hardcoded
     models.emplace_back(std::make_unique<Model>(MODEL_FLOOR, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH2, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_PATH1, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
+    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
 
     materials.reserve(models.size());
     for (const auto &model : models) {
@@ -203,7 +192,18 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraMatrices ubo = {};
-    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(time), 30 * glm::cos(time), 10.0f + 10.0f * glm::sin(time / 3.0f)),
+
+    float alpha;
+    float z;
+    if (autoRotate) {
+        alpha = time;
+        z = 10.0f + 10.0f * glm::sin(alpha / 3.0f);
+    } else {
+        alpha = rotation;
+        z = height;
+    }
+
+    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(alpha), 30 * glm::cos(alpha), z),
                            glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
@@ -303,7 +303,8 @@ void RayTracingApp::createTopLevelAS() {
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
-        rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable; // TODO
+        rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
+        rayInst.mask = (models[i]->material.type != eTransparent ? 2u : 0u) | 1u; // Only non transparent object have bit 2 set
         tlas.emplace_back(rayInst);
     }
 
@@ -457,6 +458,10 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
     ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
     ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
+    ImGui::Checkbox("Auto rotate", &autoRotate);
+    ImGui::InputFloat("Rotation", &rotation, glm::pi<float>() / 32.0f, glm::pi<float>() / 8.0f);
+    ImGui::InputFloat("Height", &height, 0.5f, 2.0f);
+
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
 

@@ -15,5 +15,4 @@ struct pushConstant
     float lightIntensity;
     int   lightType;
     uint   maxRecursion;
-    vec2 pad2;
 };

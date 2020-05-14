@@ -42,7 +42,8 @@ struct alignas(16) Material {
     float specularHighlight;
     float transparency;
     float refractionIndex;
-    int type;
+    float refractionIndexInv;
+    EMatType type;
 };
 
 namespace std {
