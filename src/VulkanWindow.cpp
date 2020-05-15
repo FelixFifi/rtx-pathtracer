@@ -234,18 +234,21 @@ void VulkanWindow::mainLoop() {
 }
 
 bool VulkanWindow::sdlEventHandler() {
-    bool quit = false;
     static SDL_Event sdlEvent;
     while (SDL_PollEvent(&sdlEvent)) {
         //If user closes the window
         if (sdlEvent.type == SDL_QUIT) {
-            quit = true;
+            return true;
         }
 
         if (sdlEvent.type == SDL_WINDOWEVENT) {
             if (sdlEvent.window.event == SDL_WINDOWEVENT_RESIZED) {
                 framebufferResized = true;
             }
+        }
+
+        if (eventCallback) {
+           eventCallback(sdlEvent);
         }
 
         ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
@@ -259,7 +262,7 @@ bool VulkanWindow::sdlEventHandler() {
 //                quit = true;
 //            }
     }
-    return quit;
+    return false;
 }
 
 
@@ -812,5 +815,9 @@ const std::shared_ptr<VulkanOps> &VulkanWindow::getVulkanOps() const {
 
 const QueueFamilyIndices &VulkanWindow::getQueueFamilyIndices() const {
     return queueFamilyIndices;
+}
+
+void VulkanWindow::setEventCallback(const fEventCallback &eventCallback) {
+    VulkanWindow::eventCallback = eventCallback;
 }
 

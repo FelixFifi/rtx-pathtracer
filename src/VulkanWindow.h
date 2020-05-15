@@ -48,11 +48,13 @@ const bool enableValidationLayers = true;
 
 typedef std::function<void(uint32_t imageIndex)> fDrawCallback;
 typedef std::function<void()> fRecreateSwapchainCallback;
+typedef std::function<void(const SDL_Event &event)> fEventCallback;
 
 class VulkanWindow {
 private:
     fDrawCallback drawCallback;
     fRecreateSwapchainCallback recreateSwapchainCallback;
+    fEventCallback eventCallback;
 
     SDL_Window *window = nullptr;
 
@@ -117,6 +119,8 @@ public:
     const vk::CommandPool &getCommandPool() const;
 
     const std::vector<vk::CommandBuffer> &getCommandBuffers() const;
+
+    void setEventCallback(const fEventCallback &eventCallback);
 
 private:
     void initWindow(int width, int height);

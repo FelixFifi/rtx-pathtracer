@@ -4,7 +4,6 @@
 
 #include <imgui/imgui.h>
 #include "RayTracingApp.h"
-#include "Model.h"
 
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
@@ -12,6 +11,10 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
     postProcessing = PostProcessing({width, height}, vulkanWindow);
+
+    cameraController = CameraController(glm::vec3(-20, 0, 15), 360.0f / width);
+    fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
+    vulkanWindow.setEventCallback(eventCallback);
 
     fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };;
     postProcessing.addImGuiCallback(callbackImGui);
@@ -188,26 +191,24 @@ void RayTracingApp::createDescriptorSets() {
 void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
     CameraMatrices ubo = {};
-
-    float alpha;
-    float z;
-    if (autoRotate) {
-        alpha = time;
-        z = 10.0f + 10.0f * glm::sin(alpha / 3.0f);
-    } else {
-        alpha = rotation;
-        z = height;
-    }
-
-    ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(alpha), 30 * glm::cos(alpha), z),
-                           glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
     ubo.proj[1][1] *= -1;
+
+
+    if (autoRotate) {
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        float alpha = time;
+        float z = 10.0f + 10.0f * glm::sin(alpha / 3.0f);
+
+        ubo.view = glm::lookAt(glm::vec3(30 * glm::sin(alpha), 30 * glm::cos(alpha), z),
+                               glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    } else {
+        ubo.view = cameraController.getViewMatrix();
+    }
 
     ubo.projInverse = glm::inverse(ubo.proj);
     ubo.viewInverse = glm::inverse(ubo.view);
@@ -299,12 +300,14 @@ void RayTracingApp::createTopLevelAS() {
     for (int i = 0; i < static_cast<int>(models.size()); ++i) {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
         rayInst.transform =
-                i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>((i - 1) * 30.0f, 0.0f, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
+                i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>(
+                        (i - 1) * 30.0f, 0.0f, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
         rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
-        rayInst.mask = (models[i]->material.type != eTransparent ? 2u : 0u) | 1u; // Only non transparent object have bit 2 set
+        rayInst.mask =
+                (models[i]->material.type != eTransparent ? 2u : 0u) | 1u; // Only non transparent object have bit 2 set
         tlas.emplace_back(rayInst);
     }
 
@@ -459,8 +462,6 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
     ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
     ImGui::Checkbox("Auto rotate", &autoRotate);
-    ImGui::InputFloat("Rotation", &rotation, glm::pi<float>() / 32.0f, glm::pi<float>() / 8.0f);
-    ImGui::InputFloat("Height", &height, 0.5f, 2.0f);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);

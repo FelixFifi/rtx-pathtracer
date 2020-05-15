@@ -31,6 +31,7 @@
 #include "PostProcessing.h"
 #include "VulkanWindow.h"
 #include "Model.h"
+#include "CameraController.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string MODEL_FLOOR = "objs/floor.obj";
@@ -71,9 +72,9 @@ private:
     std::vector<std::unique_ptr<Model>> models;
     std::vector<Material> materials;
 
-    float rotation = 0.0f;
-    float height = 10.0f;
-    bool autoRotate = true;
+    bool autoRotate = false;
+
+    CameraController cameraController;
 
     // Vulkan
     vk::Buffer uniformBuffer;
