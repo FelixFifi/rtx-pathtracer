@@ -488,11 +488,17 @@ void RayTracingApp::createRtShaderBindingTable() {
 void RayTracingApp::imGuiWindowSetup() {
     ImGui::Begin("Raytrace Window");
 
-    ImGui::InputInt("LightType", &rtPushConstants.lightType);
-    ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
-    ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
-    ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
+    hasInputChanged = false;
+
+    hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
+    hasInputChanged |= ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
+    hasInputChanged |= ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
+    hasInputChanged |= ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
     ImGui::Checkbox("Auto rotate", &autoRotate);
+    ImGui::Spacing();
+    ImGui::Checkbox("Accumulate results", &accumulateResults);
+    hasInputChanged |= ImGui::InputInt("Samples per pixel", &rtPushConstants.samplesPerPixel, 20, 100);
+    hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
@@ -502,7 +508,9 @@ void RayTracingApp::imGuiWindowSetup() {
 }
 
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
-    if (!cameraController.hasCameraChanged()){
+    rtPushConstants.noiseUVOffset = {glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f)};
+
+    if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged()){
         rtPushConstants.previousFrames += 1;
     } else {
         rtPushConstants.previousFrames = 0;

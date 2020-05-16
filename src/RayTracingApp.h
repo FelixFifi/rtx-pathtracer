@@ -42,7 +42,7 @@ const std::string TEXTURE_PATH = "textures/chalet.jpg";
 const int RANDOM_SIZE = 2048;
 
 
-static const int MAX_RECURSION = 10;
+static const int MAX_RECURSION = 1;
 
 struct CameraMatrices {
     glm::mat4 view;
@@ -63,9 +63,11 @@ public:
         glm::vec4 clearColor =  { 0.8, 0.8, 1, 0 };
         glm::vec3 lightPosition = {20,20,20};
         float lightIntensity = 500;
+        glm::vec2 noiseUVOffset;
         int lightType = 0;
-        uint maxRecursion = MAX_RECURSION;
         uint previousFrames = -1;
+        int maxDepth = 10;
+        int samplesPerPixel = 10;
     } rtPushConstants;
 
 private:
@@ -76,6 +78,8 @@ private:
     std::vector<Material> materials;
 
     bool autoRotate = false;
+    bool accumulateResults = true;
+    bool hasInputChanged = false;
 
     CameraController cameraController;
 

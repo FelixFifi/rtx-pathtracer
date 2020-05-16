@@ -23,7 +23,9 @@ struct pushConstant
     vec4  clearColor;
     vec3  lightPosition;
     float lightIntensity;
+    vec2 noiseUVOffset;
     int   lightType;
-    uint   maxRecursion;
     uint previousFrames;
+    int maxDepth;
+    int samplesPerPixel;
 };
