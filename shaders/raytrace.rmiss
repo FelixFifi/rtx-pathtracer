@@ -1,19 +1,16 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+#include "raycommon.glsl"
 
-layout(location = 0) rayPayloadInEXT vec3 hitValue;
+layout(location = 0) rayPayloadInEXT hitInfo info;
 
-layout(push_constant) uniform Constants
-        {
-        vec4  clearColor;
-        vec3  lightPosition;
-        float lightIntensity;
-        int   lightType;
-        }
-pushC;
+layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
 void main()
 {
-    float a = ((gl_WorldRayDirectionEXT.z + 1.0) / 2.0);
-    hitValue = a * vec3(0.8, 0.8, 0.8) + (1.0 - a) * pushC.clearColor.xyz;
+    info.normal = -gl_WorldRayDirectionEXT;
+    info.t = -1.0;
+    info.isLight = true;
+    info.lightIntensity = pushC.lightIntensity;
 }

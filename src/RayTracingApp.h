@@ -39,6 +39,8 @@ const std::string MODEL_TEAPOT = "objs/teapot.obj";
 const std::string MODEL_GLASS_TEAPOT = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
+const int RANDOM_SIZE = 2048;
+
 
 static const int MAX_RECURSION = 10;
 
@@ -86,6 +88,11 @@ private:
 
     vk::Buffer materialBuffer;
     vk::DeviceMemory materialBufferMemory;
+
+    vk::Image noiseImage;
+    vk::DeviceMemory noiseImageMemory;
+    vk::ImageView noiseImageView;
+    vk::Sampler noiseImageSampler;
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;
@@ -499,6 +506,8 @@ private:
     void updateUniformBuffer(uint32_t currentImage);
 
     void imGuiWindowSetup();
+
+    void createNoiseTexture();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

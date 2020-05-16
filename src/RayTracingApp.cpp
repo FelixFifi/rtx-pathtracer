@@ -3,6 +3,7 @@
 //
 
 #include <imgui/imgui.h>
+#include <glm/gtc/random.hpp>
 #include "RayTracingApp.h"
 
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
@@ -27,12 +28,29 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     loadModels();
 
+    createNoiseTexture();
+
+
     createUniformBuffers();
     createDecriptorSetLayout();
     createDescriptorPool();
     createDescriptorSets();
 
     initRayTracing();
+}
+
+void RayTracingApp::createNoiseTexture() {
+    std::vector<glm::vec4> noise(RANDOM_SIZE * RANDOM_SIZE);
+
+    for (int i = 0; i < RANDOM_SIZE * RANDOM_SIZE; ++i) {
+        noise[i] = {glm::linearRand(0.0f, 1.0f),
+                    glm::linearRand(0.0f, 1.0f),
+                    glm::linearRand(0.0f, 1.0f),
+                    glm::linearRand(0.0f, 1.0f)};
+    }
+
+    vulkanOps->createNoiseTextureFromData(noise, RANDOM_SIZE, RANDOM_SIZE, noiseImage, noiseImageMemory, noiseImageView,
+                                          noiseImageSampler);
 }
 
 void RayTracingApp::loadModels() {
@@ -114,11 +132,14 @@ void RayTracingApp::createDecriptorSetLayout() {
 
 
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
-                                                         vk::ShaderStageFlagBits::eClosestHitKHR);
+                                                         vk::ShaderStageFlagBits::eRaygenKHR);
+
+    vk::DescriptorSetLayoutBinding noiseSamplerBinding(4, vk::DescriptorType::eCombinedImageSampler, 1,
+                                                         vk::ShaderStageFlagBits::eRaygenKHR);
 
 
-    std::array<vk::DescriptorSetLayoutBinding, 4> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
-                                                              indexBufferBinding, materialBufferBinding};
+    std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
+                                                              indexBufferBinding, materialBufferBinding, noiseSamplerBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -126,12 +147,13 @@ void RayTracingApp::createDecriptorSetLayout() {
 }
 
 void RayTracingApp::createDescriptorPool() {
-    std::array<vk::DescriptorPoolSize, 4> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 5> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -167,9 +189,10 @@ void RayTracingApp::createDescriptorSets() {
         }
 
         vk::DescriptorBufferInfo materialBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
+        vk::DescriptorImageInfo noiseImageInfo(noiseImageSampler, noiseImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
 
 
-        std::array<vk::WriteDescriptorSet, 4> descriptorWrites = {};
+        std::array<vk::WriteDescriptorSet, 5> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
@@ -183,6 +206,9 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[3] = vk::WriteDescriptorSet(descriptorSet, 3, 0, 1,
                                                      vk::DescriptorType::eStorageBuffer, nullptr,
                                                      &materialBufferInfo, nullptr);
+        descriptorWrites[4] = vk::WriteDescriptorSet(descriptorSet, 4, 0, 1,
+                                                     vk::DescriptorType::eCombinedImageSampler, &noiseImageInfo,
+                                                     nullptr, nullptr);
 
         device.updateDescriptorSets(descriptorWrites, nullptr);
     }
@@ -504,6 +530,11 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 }
 
 void RayTracingApp::cleanup() {
+    device.destroy(noiseImageSampler);
+    device.destroy(noiseImageView);
+    device.destroyImage(noiseImage);
+    device.free(noiseImageMemory);
+
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);
     device.free(materialBufferMemory);

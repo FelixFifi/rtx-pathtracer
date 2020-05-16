@@ -4,6 +4,16 @@ struct hitPayload
     uint recursionDepth;
 };
 
+struct hitInfo
+{
+    vec3 worldPos;
+    vec3 normal;
+    uint matIndex;
+    float t;
+    bool isLight; // TODO: extract to light material and check via matIndex
+    float lightIntensity;
+};
+
 struct shadowCheck {
     int isShadowed;
 };

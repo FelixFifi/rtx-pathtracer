@@ -6,6 +6,7 @@
 #define RTX_RAYTRACER_VULKANOPS_H
 
 #include "VulkanLoader.h"
+#include <glm/vec4.hpp>
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -105,6 +106,10 @@ public:
     vk::ShaderModule createShaderModule(const std::vector<char> &code);
 
     const vk::Device &getDevice() const;
+
+    void
+    createNoiseTextureFromData(const std::vector<glm::vec4> &noise, int texWidth, int texHeight, vk::Image &outImage,
+                               vk::DeviceMemory &outMemory, vk::ImageView &outImageView, vk::Sampler &outSampler);
 };
 
 #endif //RTX_RAYTRACER_VULKANOPS_H
