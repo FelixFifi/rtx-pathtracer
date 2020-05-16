@@ -65,6 +65,7 @@ public:
         float lightIntensity = 500;
         int lightType = 0;
         uint maxRecursion = MAX_RECURSION;
+        uint previousFrames = -1;
     } rtPushConstants;
 
 private:

@@ -25,4 +25,5 @@ struct pushConstant
     float lightIntensity;
     int   lightType;
     uint   maxRecursion;
+    uint previousFrames;
 };

@@ -12,8 +12,15 @@
 #include <SDL.h>
 
 class CameraController {
+private:
+    bool cameraChanged;
 public:
     glm::vec3 pos;
+
+    void setPos(const glm::vec3 &pos);
+
+    void setOrientation(const glm::quat &orientation);
+
     glm::quat orientation;
 
     float speed = 0.5f;
@@ -31,6 +38,9 @@ public:
     glm::vec3 getForward();
     glm::vec3 getRight();
     glm::vec3 getUp();
+    bool hasCameraChanged() const;
+
+    void resetStatus();
 };
 
 

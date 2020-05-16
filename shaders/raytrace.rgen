@@ -49,7 +49,7 @@ void main()
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0 - 1.0;
 
-    noiseUV = inUV;
+    noiseUV = inUV + pushC.previousFrames * noiseStride;
 
     const uint  rayFlags = gl_RayFlagsOpaqueEXT;
     const float tMin     = 0.001;
@@ -115,6 +115,14 @@ void main()
         result += sampleResult / NUM_SAMPLES;
     }
 
+    ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(result, 1.0));
+    // if the camera hasn't changed, then accumulate results
+    if (pushC.previousFrames > 0) {
+        vec4 previous = imageLoad(image, imageUV);
+        vec4 combined = mix(previous, vec4(result, 1.0), 1.0f / (pushC.previousFrames + 1));
+        imageStore(image, imageUV, combined);
+    } else {
+        imageStore(image, imageUV, vec4(result, 1.0));
+    }
 }

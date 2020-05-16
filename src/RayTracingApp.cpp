@@ -104,6 +104,8 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     raytrace(cmdBuf);
     vulkanOps->endSingleTimeCommands(cmdBuf);
 
+    cameraController.resetStatus();
+
     // TODO: Fences
     device.waitIdle();
 
@@ -500,6 +502,11 @@ void RayTracingApp::imGuiWindowSetup() {
 }
 
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
+    if (!cameraController.hasCameraChanged()){
+        rtPushConstants.previousFrames += 1;
+    } else {
+        rtPushConstants.previousFrames = 0;
+    }
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,

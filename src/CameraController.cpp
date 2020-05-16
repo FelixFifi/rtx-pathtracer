@@ -10,6 +10,7 @@
 CameraController::CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir, glm::vec3 viewDirection)
         : pos(pos), mouseSensitivity(mouseSensitivity) {
     orientation = glm::conjugate(glm::quatLookAt(viewDirection, upDir));
+    resetStatus();
 }
 
 void CameraController::eventCallbackSDL(const SDL_Event &event) {
@@ -22,29 +23,30 @@ void CameraController::eventCallbackSDL(const SDL_Event &event) {
 
                 glm::quat qYaw = glm::angleAxis(yaw, orientation * glm::vec3(0.0f, 0.0f, 1.0f));
                 glm::quat qPitch = glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-                orientation = qPitch * (qYaw * orientation);
+
+                setOrientation(qPitch * (qYaw * orientation));
             }
             break;
         case SDL_EventType::SDL_KEYDOWN:
             switch (event.key.keysym.sym) {
                 case SDLK_w:
-                    pos += speed * getForward();
+                    setPos(pos + speed * getForward());
                     break;
                 case SDLK_a:
-                    pos -= speed * getRight();
+                    setPos(pos - speed * getRight());
                     break;
                 case SDLK_s:
-                    pos -= speed * getForward();
+                    setPos(pos - speed * getForward());
                     break;
                 case SDLK_d:
-                    pos += speed * getRight();
+                    setPos(pos + speed * getRight());
                     break;
                 case SDLK_SPACE:
                 case SDLK_LSHIFT:
-                    pos += speed * getUp();
+                    setPos(pos + speed * getUp());
                     break;
                 case SDLK_LCTRL:
-                    pos -= speed * getUp();
+                    setPos(pos - speed * getUp());
                     break;
             }
 
@@ -73,4 +75,22 @@ glm::vec3 CameraController::getUp() {
 glm::mat4 CameraController::getViewMatrix() {
 
     return glm::translate(glm::mat4_cast(orientation), -pos);
+}
+
+void CameraController::resetStatus() {
+    cameraChanged = false;
+}
+
+bool CameraController::hasCameraChanged() const {
+    return cameraChanged;
+}
+
+void CameraController::setPos(const glm::vec3 &pos) {
+    CameraController::pos = pos;
+    cameraChanged = true;
+}
+
+void CameraController::setOrientation(const glm::quat &orientation) {
+    CameraController::orientation = orientation;
+    cameraChanged = true;
 }
