@@ -40,4 +40,5 @@ void main()
     info.normal = normal;
     info.matIndex = objId;
     info.t = gl_HitTEXT;
+    info.isLight = false;
 }

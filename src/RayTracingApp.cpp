@@ -42,11 +42,14 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 void RayTracingApp::createNoiseTexture() {
     std::vector<glm::vec4> noise(RANDOM_SIZE * RANDOM_SIZE);
 
+    float noiseMin = -1.0f;
+    float noiseMax = 1.0f;
+
     for (int i = 0; i < RANDOM_SIZE * RANDOM_SIZE; ++i) {
-        noise[i] = {glm::linearRand(0.0f, 1.0f),
-                    glm::linearRand(0.0f, 1.0f),
-                    glm::linearRand(0.0f, 1.0f),
-                    glm::linearRand(0.0f, 1.0f)};
+        noise[i] = {glm::linearRand(noiseMin, noiseMax),
+                    glm::linearRand(noiseMin, noiseMax),
+                    glm::linearRand(noiseMin, noiseMax),
+                    glm::linearRand(noiseMin, noiseMax)};
     }
 
     vulkanOps->createNoiseTextureFromData(noise, RANDOM_SIZE, RANDOM_SIZE, noiseImage, noiseImageMemory, noiseImageView,

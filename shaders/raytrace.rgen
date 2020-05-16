@@ -21,210 +21,100 @@ layout(binding = 0, set = 1) uniform CameraMatrices {
 
 layout(location = 0) rayPayloadEXT hitInfo info;
 
+vec2 noiseUV;
+const vec2 noiseStride = vec2(0.01111, 0.02222);
+const float NUM_SAMPLES = 1.0;
+
+// https://math.stackexchange.com/a/1163278
+vec3 randomOnUnitSphere() {
+    vec3 res;
+    do {
+        vec4 random = texture(noiseSampler, noiseUV);
+        noiseUV += noiseStride;
+
+        res = random.xyz;
+
+    } while (length(res) > 1);
+
+    res = normalize(res);
+    return res;
+}
+
 void main()
 {
-//    vec3 attenuation = vec3(1.0, 1.0, 1.0);
-//    vec3 result = vec3(0.0, 0.0, 0.0);
-//
+    vec3 result = vec3(0.0, 0.0, 0.0);
+
+
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
-//    vec2 d = inUV * 2.0 - 1.0;
-//
-//    vec4 origin    = cam.viewInverse * vec4(0, 0, 0, 1);
-//    vec4 target    = cam.projInverse * vec4(d.x, d.y, 1, 1);
-//    vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0);
-//
-//
-//    const uint  rayFlags = gl_RayFlagsOpaqueEXT;
-//    const float tMin     = 0.001;
-//    const float tMax     = 10000.0;
-//    for (int i = 0; i < pushC.maxRecursion; ++i) {
-//        traceRayEXT(topLevelAS,     // acceleration structure
-//                    rayFlags,       // rayFlags
-//                    0xFF,           // cullMask
-//                    0,              // sbtRecordOffset
-//                    0,              // sbtRecordStride
-//                    0,              // missIndex
-//                    origin.xyz,     // ray origin
-//                    tMin,           // ray min range
-//                    direction.xyz,  // ray direction
-//                    tMax,           // ray max range
-//                    0               // payload (location = 0)
-//        );
-//
-//        if (info.isLight) {
-//            result += attenuation * info.intensity;
-//            break;
-//        }
-//
-//        Material mat = mats[info.matIndex];
-//
-//        switch (mat.type) {
-//            case 0: // Diffuse
-//                attenuation *= mat.diffuse;
-//
-//
-//
-//            // Vector toward the light
-//                vec3  L;
-//                float lightIntensity = pushC.lightIntensity;
-//                float lightDistance  = 100000.0;
-//
-//                // Point light
-//                if(pushC.lightType == 0)
-//                {
-//                    vec3 lDir      = pushC.lightPosition - worldPos;
-//                    lightDistance  = length(pushC.lightPosition - worldPos);
-//                    lightIntensity = pushC.lightIntensity / (lightDistance * lightDistance);
-//                    L              = normalize(lDir);
-//                }
-//                else // Directional light
-//                {
-//                    L = normalize(pushC.lightPosition - vec3(0));
-//                }
-//
-//                float cosTheta = dot(normal, L);
-//
-//                isShadowed.isShadowed = 1;
-//
-//                // Tracing shadow ray only if the light is visible from the surface
-//                if(cosTheta > 0) {
-//                    float tMin = 0.001;
-//                    float tMax = lightDistance;
-//                    vec3 origin = worldPos;
-//                    vec3 rayDir = L;
-//                    uint flags =
-//                            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-//
-//                    traceRayEXT(topLevelAS,  // acceleration structure
-//                                flags,       // rayFlags
-//                                0x02,        // cullMask - Ignore transparent for now
-//                                0,           // sbtRecordOffset
-//                                0,           // sbtRecordStride
-//                                1,           // missIndex
-//                                origin,      // ray origin
-//                                tMin,        // ray min range
-//                                rayDir,      // ray direction
-//                                tMax,        // ray max range
-//                                1            // payload (location = 1)
-//                    );
-//                }
-//
-//                if (isShadowed.isShadowed == 1) {
-//                    prd.hitValue = vec3(0.0, 0.0, 0.0);
-//                } else {
-//                    prd.hitValue = mat.diffuse * lightIntensity;
-//                }
-//
-//                break;
-//            case 1: // Specular
-//            {
-//                vec3 reflectedDir = reflect(gl_WorldRayDirectionEXT, normal);
-//
-//                float tMin = 0.001;
-//                float tMax = 10000.0;
-//                vec3 origin = worldPos;
-//                uint flags = gl_RayFlagsOpaqueEXT;
-//
-//                recursion.recursionDepth = prd.recursionDepth + 1;
-//
-//                traceRayEXT(topLevelAS,  // acceleration structure
-//                            flags,       // rayFlags
-//                            0xFF,        // cullMask
-//                            0,           // sbtRecordOffset
-//                            0,           // sbtRecordStride
-//                            0,           // missIndex
-//                            origin,      // ray origin
-//                            tMin,        // ray min range
-//                            reflectedDir,      // ray direction
-//                            tMax,        // ray max range
-//                            2           // payload (location = 2)
-//                );
-//
-//                prd.hitValue = mat.specular * recursion.hitValue;
-//                break;
-//            }
-//
-//            case 2: // Transparent
-//            {
-//                float eta = mat.refractionIndexInv;
-//                bool frontFace = dot(normal, gl_WorldRayDirectionEXT) < 0.0;
-//
-//                if (!frontFace) {
-//                    eta = mat.refractionIndex;
-//                    normal = -normal;
-//                }
-//
-//                float cosTheta = - dot(gl_WorldRayDirectionEXT, normal);
-//
-//                float fresnel = fresnel(eta, cosTheta);
-//
-//                vec3 rayDir = reflect(gl_WorldRayDirectionEXT, normal);
-//
-//                {
-//                    float tMin = 0.001;
-//                    float tMax = 10000.0;
-//                    vec3 origin = worldPos;
-//                    uint flags = gl_RayFlagsOpaqueEXT;
-//
-//                    recursion.recursionDepth = prd.recursionDepth + 1;
-//
-//                    traceRayEXT(topLevelAS,  // acceleration structure
-//                                flags,       // rayFlags
-//                                0xFF,        // cullMask
-//                                0,           // sbtRecordOffset
-//                                0,           // sbtRecordStride
-//                                0,           // missIndex
-//                                origin,      // ray origin
-//                                tMin,        // ray min range
-//                                rayDir,      // ray direction
-//                                tMax,        // ray max range
-//                                2           // payload (location = 2)
-//                    );
-//                }
-//                vec3 hitValueReflect = recursion.hitValue;
-//
-//                rayDir = refract(gl_WorldRayDirectionEXT, normal, eta);
-//
-//                if (fresnel < 1.0f)
-//                {
-//                    float tMin = 0.001;
-//                    float tMax = 10000.0;
-//                    vec3 origin = worldPos;
-//                    uint flags = gl_RayFlagsOpaqueEXT;
-//
-//                    recursion.recursionDepth = prd.recursionDepth + 1;
-//
-//                    traceRayEXT(topLevelAS,  // acceleration structure
-//                                flags,       // rayFlags
-//                                0xFF,        // cullMask
-//                                0,           // sbtRecordOffset
-//                                0,           // sbtRecordStride
-//                                0,           // missIndex
-//                                origin,      // ray origin
-//                                tMin,        // ray min range
-//                                rayDir,      // ray direction
-//                                tMax,        // ray max range
-//                                2           // payload (location = 2)
-//                    );
-//                }
-//
-//                vec3 hitValueRefract = recursion.hitValue;
-//
-//                prd.hitValue = mat.specular * mix(hitValueRefract, hitValueReflect, fresnel); // Mix reflection and refraction
-//                break;
-//            }
-//        }
-//
-//
-//
-//    }
+    vec2 d = inUV * 2.0 - 1.0;
+
+    noiseUV = inUV;
+
+    const uint  rayFlags = gl_RayFlagsOpaqueEXT;
+    const float tMin     = 0.001;
+    const float tMax     = 10000.0;
+
+    for (int iSample = 0; iSample < NUM_SAMPLES; ++iSample) {
+        vec3 sampleResult = vec3(0.0, 0.0, 0.0);
+        vec3 attenuation = vec3(1.0, 1.0, 1.0);
 
 
+        vec3 origin    = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
+        vec4 target    = cam.projInverse * vec4(d.x, d.y, 1, 1);
+        vec3 direction = (cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz;
+
+        for (int iDepth = 0; iDepth < pushC.maxRecursion; ++iDepth) {
+            traceRayEXT(topLevelAS,     // acceleration structure
+                        rayFlags,       // rayFlags
+                        0xFF,           // cullMask
+                        0,              // sbtRecordOffset
+                        0,              // sbtRecordStride
+                        0,              // missIndex
+                        origin.xyz,     // ray origin
+                        tMin,           // ray min range
+                        direction.xyz,  // ray direction
+                        tMax,           // ray max range
+                        0               // payload (location = 0)
+            );
+
+            if (info.isLight) {
+                sampleResult += attenuation * info.lightColor;
+                break;
+            }
+
+            origin = info.worldPos;
+
+            Material mat = mats[info.matIndex];
+
+            switch (mat.type) {
+                case 0: // Diffuse
+                    attenuation *= mat.diffuse;
+
+                    direction = info.normal + randomOnUnitSphere();
+                    direction = normalize(direction);
+
+                    break;
+                case 1: // Specular
+                {
+                    attenuation *= mat.specular;
+
+                    direction = reflect(direction, info.normal);
+                    break;
+                }
+
+                case 2: // Transparent
+                {
+                    direction = direction;
+
+                    break;
+                }
+            }
+        }
+
+        result += sampleResult / NUM_SAMPLES;
+    }
 
 
-
-
-
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), texture(noiseSampler, inUV));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(result, 1.0));
 }

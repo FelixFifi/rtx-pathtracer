@@ -12,5 +12,5 @@ void main()
     info.normal = -gl_WorldRayDirectionEXT;
     info.t = -1.0;
     info.isLight = true;
-    info.lightIntensity = pushC.lightIntensity;
+    info.lightColor = pushC.clearColor.xyz;
 }

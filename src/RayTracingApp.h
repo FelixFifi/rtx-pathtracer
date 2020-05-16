@@ -60,7 +60,7 @@ public:
     void cleanup();
 
     struct alignas(16) RtPushConstant {
-        glm::vec4 clearColor =  { 0.3, 0.3, 1, 0 };
+        glm::vec4 clearColor =  { 0.8, 0.8, 1, 0 };
         glm::vec3 lightPosition = {20,20,20};
         float lightIntensity = 500;
         int lightType = 0;
