@@ -25,12 +25,17 @@ vec2 noiseUV;
 const vec2 noiseStride = vec2(0.01111, 0.02222);
 const float NUM_SAMPLES = 1.0;
 
+vec4 getRandom() {
+    vec4 res = texture(noiseSampler, noiseUV);
+    noiseUV += noiseStride;
+    return res;
+}
+
 // https://math.stackexchange.com/a/1163278
 vec3 randomOnUnitSphere() {
     vec3 res;
     do {
-        vec4 random = texture(noiseSampler, noiseUV);
-        noiseUV += noiseStride;
+        vec4 random = getRandom();
 
         res = random.xyz;
 
@@ -38,6 +43,24 @@ vec3 randomOnUnitSphere() {
 
     res = normalize(res);
     return res;
+}
+
+// Rendering Vorlesung - Nori src/common.cpp
+float fresnel(in float eta, in float cosThetaI) {
+    float sinThetaSqr = eta * eta * (1- cosThetaI * cosThetaI);
+
+    if (sinThetaSqr > 1.0f) {
+        return 1.0f; // Total internal reflection
+    }
+
+    float cosThetaT = sqrt(1.0f - sinThetaSqr);
+
+    float Rs = (eta * cosThetaI - cosThetaT)
+               / (eta * cosThetaI + cosThetaT);
+    float Rp = (cosThetaI - eta * cosThetaT)
+               / (cosThetaI + eta * cosThetaT);
+
+    return (Rs * Rs + Rp * Rp) / 2.0f;
 }
 
 void main()
@@ -85,6 +108,12 @@ void main()
 
             origin = info.worldPos;
 
+            bool frontFace = true;
+            if (dot(direction, info.normal) > 0.0) {
+                info.normal = -info.normal;
+                frontFace = false;
+            }
+
             Material mat = mats[info.matIndex];
 
             switch (mat.type) {
@@ -105,7 +134,23 @@ void main()
 
                 case 2: // Transparent
                 {
-                    direction = direction;
+                    attenuation *= mat.specular;
+
+                    float eta = mat.refractionIndexInv;
+
+                    if (!frontFace) {
+                        eta = mat.refractionIndex;
+                    }
+                    float cosTheta = - dot(direction, info.normal);
+                    float fresnel = fresnel(eta, cosTheta);
+
+                    if (getRandom().x > fresnel) {
+                        // Refract
+                        direction = refract(direction, info.normal, eta);
+                    } else {
+                        // Reflect
+                        direction = reflect(direction, info.normal);
+                    }
 
                     break;
                 }
