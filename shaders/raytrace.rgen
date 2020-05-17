@@ -124,6 +124,12 @@ void main()
 
             Material mat = mats[info.matIndex];
 
+            if (mat.type == 3) {
+                // Light
+                sampleResult += attenuation * mat.lightColor;
+                break;
+            }
+
             switch (mat.type) {
                 case 0: // Diffuse
                     attenuation *= mat.diffuse;

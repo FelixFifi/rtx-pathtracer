@@ -47,6 +47,7 @@ void ModelLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
     for (const auto &tinyMaterial : tinyMaterials) {
         Material material{};
 
+        material.lightColor = {tinyMaterial.ambient[0], tinyMaterial.ambient[1], tinyMaterial.ambient[2]};
         material.diffuse = {tinyMaterial.diffuse[0], tinyMaterial.diffuse[1], tinyMaterial.diffuse[2]};
         material.specular = {tinyMaterial.specular[0], tinyMaterial.specular[1], tinyMaterial.specular[2]};
         material.specularHighlight = tinyMaterial.shininess;
@@ -64,6 +65,9 @@ void ModelLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
                 break;
             case 4:
                 material.type = eTransparent;
+                break;
+            case 11:
+                material.type = eLight;
                 break;
             default:
                 throw std::runtime_error("Unknown illum mode");

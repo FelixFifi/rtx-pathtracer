@@ -12,6 +12,6 @@ void main()
     info.normal = -gl_WorldRayDirectionEXT;
     info.t = -1.0;
     info.isLight = true;
-    info.lightColor = mix(pushC.clearColor.xyz, vec3(1.0, 1.0, 1.0), gl_WorldRayDirectionEXT.z);
+    info.lightColor = mix(pushC.skyColor1.xyz, pushC.skyColor2.xyz, gl_WorldRayDirectionEXT.z);
     info.matIndex = -1;
 }

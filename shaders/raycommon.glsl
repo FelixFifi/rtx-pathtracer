@@ -14,7 +14,8 @@ struct shadowCheck {
 
 struct pushConstant
 {
-    vec4  clearColor;
+    vec4  skyColor1;
+    vec4  skyColor2;
     vec3  lightPosition;
     float lightIntensity;
     vec2 noiseUVOffset;

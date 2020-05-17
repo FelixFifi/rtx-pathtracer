@@ -34,10 +34,12 @@ struct Vertex {
 enum EMatType {
     eDiffuse = 0,
     eSpecular = 1,
-    eTransparent = 2
+    eTransparent = 2,
+    eLight = 3
 };
 
 struct alignas(16) Material {
+    alignas(16) glm::vec3 lightColor;
     alignas(16) glm::vec3 diffuse;
     alignas(16) glm::vec3 specular;
     float specularHighlight;

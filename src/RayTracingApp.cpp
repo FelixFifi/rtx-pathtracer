@@ -62,6 +62,9 @@ void RayTracingApp::loadModels() {
             MODEL_FLOOR,
             MODEL_TEAPOT,
             MODEL_TEAPOT,
+            MODEL_LIGHT_BOX,
+            MODEL_LIGHT_BOX,
+            MODEL_LIGHT_BOX,
             MODEL_GLASS_CUBE,
             MODEL_TEAPOT,
             MODEL_TEAPOT,
@@ -392,7 +395,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
     hasInputChanged |= ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
     hasInputChanged |= ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
-    hasInputChanged |= ImGui::InputFloat4("Miss Color", &rtPushConstants.clearColor.x, "%.2f");
+    hasInputChanged |= ImGui::InputFloat4("SkyColor1", &rtPushConstants.skyColor1.x, "%.2f");
+    hasInputChanged |= ImGui::InputFloat4("SkyColor2", &rtPushConstants.skyColor2.x, "%.2f");
     ImGui::Checkbox("Auto rotate", &autoRotate);
     ImGui::Spacing();
     ImGui::Checkbox("Accumulate results", &accumulateResults);

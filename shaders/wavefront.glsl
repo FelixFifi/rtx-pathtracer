@@ -7,6 +7,7 @@ struct Vertex
 };
 
 struct Material {
+    vec3 lightColor;
     vec3 diffuse;
     vec3 specular;
     float specularHighlight;

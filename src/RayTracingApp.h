@@ -38,6 +38,7 @@ const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string MODEL_FLOOR = "objs/floor.obj";
 const std::string MODEL_TEAPOT = "objs/teapot.obj";
 const std::string MODEL_GLASS_CUBE = "objs/cube.obj";
+const std::string MODEL_LIGHT_BOX = "objs/lightBox.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 const int RANDOM_SIZE = 2048;
@@ -61,7 +62,8 @@ public:
     void cleanup();
 
     struct alignas(16) RtPushConstant {
-        glm::vec4 clearColor =  { 0.8, 0.8, 1, 0 };
+        glm::vec4 skyColor1 =  {0.3, 0.3, 0.4, 0 };
+        glm::vec4 skyColor2 =  {0.2, 0.2, 0.2, 0 };
         glm::vec3 lightPosition = {20,20,20};
         float lightIntensity = 500;
         glm::vec2 noiseUVOffset;
