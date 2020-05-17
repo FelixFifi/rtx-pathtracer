@@ -1,0 +1,13 @@
+newmtl light
+  Ka 0.0000 1.0000 0
+  illum 11
+
+  Ns 10.0000
+  Ni 1.5000
+  d 1.0000
+  Tr 0.0000
+  Tf 1.0000 1.0000 1.0000
+  Ks 0.0000 0.0000 0.0000
+  Ke 0.0000 0.0000 0.0000
+  map_Ka cube.png
+  map_Kd cube.png
