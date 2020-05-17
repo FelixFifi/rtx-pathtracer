@@ -332,7 +332,7 @@ void RayTracingApp::createTopLevelAS() {
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
         rayInst.transform =
                 i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>(
-                        (i - 1) * 30.0f, 0.0f, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
+                        glm::linearRand(-30.0f, 30.0f) * 3.0f, glm::linearRand(-30.0f, 30.0f) * 3, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
         rayInst.instanceId = i;
         rayInst.blasId = i;
         rayInst.hitGroupId = 0; // Same hit group for all
