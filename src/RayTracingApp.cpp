@@ -57,39 +57,43 @@ void RayTracingApp::createNoiseTexture() {
 }
 
 void RayTracingApp::loadModels() {
-    // Currently only one hardcoded
-    models.emplace_back(std::make_unique<Model>(MODEL_FLOOR, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_GLASS_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
-    models.emplace_back(std::make_unique<Model>(MODEL_TEAPOT, MATERIAL_BASE_DIR, vulkanOps));
 
-    materials.reserve(models.size());
-    for (const auto &model : models) {
-        materials.push_back(model->material);
-    }
+    std::vector<std::string> modelPaths{
+            MODEL_FLOOR,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE,
+            MODEL_TEAPOT,
+            MODEL_TEAPOT,
+            MODEL_GLASS_CUBE
+    };
 
-
-    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
-    vulkanOps->createBufferFromData(materials, usage,
-                                    vk::MemoryPropertyFlagBits::eDeviceLocal, materialBuffer, materialBufferMemory);
+    uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
+    modelLoader = ModelLoader(modelPaths, MATERIAL_BASE_DIR, vulkanOps, physicalDevice, graphicsQueueIndex);
 }
 
 void RayTracingApp::run() {
@@ -129,22 +133,14 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               1, vk::ShaderStageFlagBits::eRaygenKHR,
                                                               nullptr);
 
-    vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                       vk::ShaderStageFlagBits::eClosestHitKHR);
-
-    vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                      vk::ShaderStageFlagBits::eClosestHitKHR);
-
-
-    vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
-                                                         vk::ShaderStageFlagBits::eRaygenKHR);
-
     vk::DescriptorSetLayoutBinding noiseSamplerBinding(4, vk::DescriptorType::eCombinedImageSampler, 1,
-                                                         vk::ShaderStageFlagBits::eRaygenKHR);
+                                                       vk::ShaderStageFlagBits::eRaygenKHR);
 
 
-    std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {uniformBufferLayoutBinding, vertexBufferBinding,
-                                                              indexBufferBinding, materialBufferBinding, noiseSamplerBinding};
+    auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {uniformBufferLayoutBinding, vertexIndexMaterialBindings[0],
+                                                              vertexIndexMaterialBindings[1], vertexIndexMaterialBindings[2],
+                                                              noiseSamplerBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -152,12 +148,14 @@ void RayTracingApp::createDecriptorSetLayout() {
 }
 
 void RayTracingApp::createDescriptorPool() {
+    auto vertexIndexMaterialPoolSizes = modelLoader.getDescriptorPoolSizes();
+
     std::array<vk::DescriptorPoolSize, 5> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
+            vertexIndexMaterialPoolSizes[0],
+            vertexIndexMaterialPoolSizes[1],
+            vertexIndexMaterialPoolSizes[2],
             vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
     }; // TODO: One per frame
 
@@ -177,40 +175,25 @@ void RayTracingApp::createDescriptorSets() {
 
     for (size_t i = 0; i < 1; i++) {
         vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
+        vk::DescriptorImageInfo noiseImageInfo(noiseImageSampler, noiseImageView,
+                                               vk::ImageLayout::eShaderReadOnlyOptimal);
 
 
-        unsigned long modelCount = models.size();
         std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
         std::vector<vk::DescriptorBufferInfo> indexBufferInfos;
-        vertexBufferInfos.reserve(modelCount);
-        indexBufferInfos.reserve(modelCount);
+        vk::DescriptorBufferInfo materialBufferInfo;
 
-        for (const auto &model: models) {
-            vk::DescriptorBufferInfo vertexBufferInfo(model->vertexBuffer, 0, VK_WHOLE_SIZE);
-            vk::DescriptorBufferInfo indexBufferInfo(model->indexBuffer, 0, VK_WHOLE_SIZE);
-
-            vertexBufferInfos.push_back(vertexBufferInfo);
-            indexBufferInfos.push_back(indexBufferInfo);
-        }
-
-        vk::DescriptorBufferInfo materialBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
-        vk::DescriptorImageInfo noiseImageInfo(noiseImageSampler, noiseImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
-
+        auto vertexIndexBufferWrites = modelLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
+                                                                          indexBufferInfos, materialBufferInfo);
 
         std::array<vk::WriteDescriptorSet, 5> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
                                                      &bufferInfo, nullptr);
-        descriptorWrites[1] = vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
-                                                     vk::DescriptorType::eStorageBuffer, nullptr,
-                                                     vertexBufferInfos.data(), nullptr);
-        descriptorWrites[2] = vk::WriteDescriptorSet(descriptorSet, 2, 0, modelCount,
-                                                     vk::DescriptorType::eStorageBuffer, nullptr,
-                                                     indexBufferInfos.data(), nullptr);
-        descriptorWrites[3] = vk::WriteDescriptorSet(descriptorSet, 3, 0, 1,
-                                                     vk::DescriptorType::eStorageBuffer, nullptr,
-                                                     &materialBufferInfo, nullptr);
+        descriptorWrites[1] = vertexIndexBufferWrites[0];
+        descriptorWrites[2] = vertexIndexBufferWrites[1];
+        descriptorWrites[3] = vertexIndexBufferWrites[2];
         descriptorWrites[4] = vk::WriteDescriptorSet(descriptorSet, 4, 0, 1,
                                                      vk::DescriptorType::eCombinedImageSampler, &noiseImageInfo,
                                                      nullptr, nullptr);
@@ -255,94 +238,10 @@ void RayTracingApp::initRayTracing() {
     auto properties = physicalDevice.getProperties2<vk::PhysicalDeviceProperties2, vk::PhysicalDeviceRayTracingPropertiesKHR>();
     rtProperties = properties.get<vk::PhysicalDeviceRayTracingPropertiesKHR>();
 
-    QueueFamilyIndices queueFamilyIndices = vulkanWindow.getQueueFamilyIndices();
-    rtBuilder.setup(device, physicalDevice, queueFamilyIndices.graphicsFamily.value());
-
-    createBottomLevelAS();
-    createTopLevelAS();
     createRtDescriptorSet();
     updateRtDescriptorSet(0);
     createRtPipeline();
     createRtShaderBindingTable();
-}
-
-nvvkpp::RaytracingBuilderKHR::Blas RayTracingApp::modelToBlas(const std::unique_ptr<Model> &model) {
-    // Setting up the creation info of acceleration structure
-    vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
-    asCreate.setGeometryType(vk::GeometryTypeKHR::eTriangles);
-    asCreate.setIndexType(vk::IndexType::eUint32);
-    asCreate.setVertexFormat(vk::Format::eR32G32B32Sfloat);
-    asCreate.setMaxPrimitiveCount(model->indices.size() / 3);  // Nb triangles
-    asCreate.setMaxVertexCount(model->vertices.size());
-    asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
-
-    // Building part
-    auto infoVB = vk::BufferDeviceAddressInfo(model->vertexBuffer);
-    auto infoIB = vk::BufferDeviceAddressInfo(model->indexBuffer);
-
-    vk::DeviceAddress vertexAddress = device.getBufferAddressKHR(&infoVB);
-    vk::DeviceAddress indexAddress = device.getBufferAddressKHR(&infoIB);
-
-    vk::AccelerationStructureGeometryTrianglesDataKHR triangles;
-    triangles.setVertexFormat(asCreate.vertexFormat);
-    triangles.setVertexData(vertexAddress);
-    triangles.setVertexStride(sizeof(Vertex));
-    triangles.setIndexType(asCreate.indexType);
-    triangles.setIndexData(indexAddress);
-    triangles.setTransformData({});
-
-    // Setting up the build info of the acceleration
-    vk::AccelerationStructureGeometryKHR asGeom;
-    asGeom.setGeometryType(asCreate.geometryType);
-    asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
-    asGeom.geometry.setTriangles(triangles);
-
-    // The primitive itself
-    vk::AccelerationStructureBuildOffsetInfoKHR offset;
-    offset.setFirstVertex(0);
-    offset.setPrimitiveCount(asCreate.maxPrimitiveCount);
-    offset.setPrimitiveOffset(0);
-    offset.setTransformOffset(0);
-
-    // Our blas is only one geometry, but could be made of many geometries
-    nvvkpp::RaytracingBuilderKHR::Blas blas{};
-    blas.asGeometry.emplace_back(asGeom);
-    blas.asCreateGeometryInfo.emplace_back(asCreate);
-    blas.asBuildOffsetInfo.emplace_back(offset);
-
-    return blas;
-}
-
-void RayTracingApp::createBottomLevelAS() {
-    std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
-    allBlas.reserve(models.size());
-
-    for (const auto &model : models) {
-        allBlas.push_back(modelToBlas(model));
-    }
-
-    rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
-}
-
-void RayTracingApp::createTopLevelAS() {
-    std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
-    tlas.reserve(models.size());
-
-    for (int i = 0; i < static_cast<int>(models.size()); ++i) {
-        nvvkpp::RaytracingBuilderKHR::Instance rayInst;
-        rayInst.transform =
-                i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>(
-                        glm::linearRand(-30.0f, 30.0f) * 3.0f, glm::linearRand(-30.0f, 30.0f) * 3, 0.0f).rotate(glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
-        rayInst.instanceId = i;
-        rayInst.blasId = i;
-        rayInst.hitGroupId = 0; // Same hit group for all
-        rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
-        rayInst.mask =
-                (models[i]->material.type != eTransparent ? 2u : 0u) | 1u; // Only non transparent object have bit 2 set
-        tlas.emplace_back(rayInst);
-    }
-
-    rtBuilder.buildTlas(tlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
 void RayTracingApp::createRtDescriptorSet() {
@@ -360,7 +259,7 @@ void RayTracingApp::createRtDescriptorSet() {
 
     vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
     descASInfo.setAccelerationStructureCount(1);
-    descASInfo.setPAccelerationStructures(&rtBuilder.getAccelerationStructure());
+    descASInfo.setPAccelerationStructures(&modelLoader.getAccelerationStructure());
     vk::DescriptorImageInfo imageInfo{
             {}, postProcessing.getOffscreenImageView(), vk::ImageLayout::eGeneral}; // TODO: Update each frame
 
@@ -510,7 +409,7 @@ void RayTracingApp::imGuiWindowSetup() {
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     rtPushConstants.noiseUVOffset = {glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f)};
 
-    if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged()){
+    if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged()) {
         rtPushConstants.previousFrames += 1;
     } else {
         rtPushConstants.previousFrames = 0;
@@ -548,6 +447,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 }
 
 void RayTracingApp::cleanup() {
+
     device.destroy(noiseImageSampler);
     device.destroy(noiseImageView);
     device.destroyImage(noiseImage);
@@ -555,24 +455,18 @@ void RayTracingApp::cleanup() {
 
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);
-    device.free(materialBufferMemory);
-    device.destroy(materialBuffer);
 
     device.destroy(descriptorPool);
     device.destroy(descriptorSetLayout);
-
-    for (auto &model: models) {
-        model->cleanup();
-    }
 
     device.destroy(rtSBTBuffer);
     device.free(rtSBTBufferMemory);
     device.destroy(rtPipeline);
     device.destroy(rtPipelineLayout);
 
-    rtBuilder.destroy();
     device.destroy(rtDescPool);
     device.destroy(rtDescSetLayout);
+    modelLoader.cleanup();
 
     postProcessing.cleanup();
     vulkanWindow.cleanup();

@@ -23,10 +23,11 @@
 struct Vertex {
     alignas(16) glm::vec3 pos;
     alignas(16) glm::vec3 normal;
-    glm::vec2 texCoord;
+    alignas(8) glm::vec2 texCoord;
+    int materialIndex;
 
     bool operator==(const Vertex &other) const {
-        return pos == other.pos && normal == other.normal && texCoord == other.texCoord;
+        return pos == other.pos && normal == other.normal && texCoord == other.texCoord && materialIndex == other.materialIndex;
     }
 };
 
@@ -54,6 +55,7 @@ namespace std {
             res = res * 31 + hash<glm::vec3>()(vertex.pos);
             res = res * 31 + hash<glm::vec3>()(vertex.normal);
             res = res * 31 + hash<glm::vec2>()(vertex.texCoord);
+            res = res * 31 + hash<int>()(vertex.materialIndex);
             return res;
         }
     };
@@ -61,7 +63,7 @@ namespace std {
 
 class Model {
 public:
-    Model(const std::string &objFilePath, const std::string &materialBaseDir,
+    Model(std::vector<Vertex> vertices, std::vector<uint32_t> indices,
           const std::shared_ptr<VulkanOps> &vulkanOps);
 
     void cleanup();
@@ -76,14 +78,7 @@ public:
     vk::DeviceMemory vertexBufferMemory;
     vk::Buffer indexBuffer;
     vk::DeviceMemory indexBufferMemory;
-
-    bool hasMaterial = false;
-    Material material;
-
-
-
 private:
-    void loadModel(const std::string &objFilePath, const std::string &materialBaseDir);
     void createBuffers(const std::shared_ptr<VulkanOps> &vulkanOps);
 
 };

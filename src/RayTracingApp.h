@@ -32,11 +32,12 @@
 #include "VulkanWindow.h"
 #include "Model.h"
 #include "CameraController.h"
+#include "ModelLoader.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string MODEL_FLOOR = "objs/floor.obj";
 const std::string MODEL_TEAPOT = "objs/teapot.obj";
-const std::string MODEL_GLASS_TEAPOT = "objs/cube.obj";
+const std::string MODEL_GLASS_CUBE = "objs/cube.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 const int RANDOM_SIZE = 2048;
@@ -74,8 +75,7 @@ private:
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
 
-    std::vector<std::unique_ptr<Model>> models;
-    std::vector<Material> materials;
+    ModelLoader modelLoader;
 
     bool autoRotate = false;
     bool accumulateResults = true;
@@ -90,9 +90,6 @@ private:
     vk::DescriptorSetLayout descriptorSetLayout;
     vk::DescriptorPool descriptorPool;
     vk::DescriptorSet descriptorSet;
-
-    vk::Buffer materialBuffer;
-    vk::DeviceMemory materialBufferMemory;
 
     vk::Image noiseImage;
     vk::DeviceMemory noiseImageMemory;
@@ -110,7 +107,6 @@ private:
 
     // Ray tracing
     vk::PhysicalDeviceRayTracingPropertiesKHR rtProperties;
-    nvvkpp::RaytracingBuilderKHR rtBuilder;
 
     std::vector<vk::DescriptorSetLayoutBinding> rtDescSetLayoutBind;
     vk::DescriptorPool rtDescPool;

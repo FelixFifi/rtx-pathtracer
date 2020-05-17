@@ -9,7 +9,7 @@
 layout(location = 0) rayPayloadInEXT hitInfo info;
 hitAttributeEXT vec3 attribs;
 
-layout(binding = 1, set = 1, std430) buffer Vertices { Vertex v[]; } vertices[];
+layout(binding = 1, set = 1, std140) buffer Vertices { Vertex v[]; } vertices[];
 layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
 
 void main()
@@ -38,7 +38,7 @@ void main()
 
     info.worldPos = worldPos;
     info.normal = normal;
-    info.matIndex = objId;
+    info.matIndex = v1.materialIndex;
     info.t = gl_HitTEXT;
     info.isLight = false;
 }

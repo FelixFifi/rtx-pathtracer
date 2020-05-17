@@ -28,6 +28,6 @@ add_executable(rtx_raytracer
         src/Model.cpp
         ${IMGUI_CPP}
         src/CameraController.cpp
-        )
+        src/ModelLoader.cpp)
 
 target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS})

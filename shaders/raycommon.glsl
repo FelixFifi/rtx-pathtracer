@@ -1,14 +1,8 @@
-struct hitPayload
-{
-    vec3 hitValue;
-    uint recursionDepth;
-};
-
 struct hitInfo
 {
     vec3 worldPos;
     vec3 normal;
-    uint matIndex;
+    int matIndex;
     float t;
     bool isLight; // TODO: extract to light material and check via matIndex
     vec3 lightColor;
