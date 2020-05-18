@@ -66,7 +66,7 @@ public:
         glm::vec4 skyColor2 =  {0, 0, 0, 0 };
         glm::vec3 lightPosition = {20,20,20};
         float lightIntensity = 500;
-        glm::vec2 noiseUVOffset;
+        glm::vec2 uvOffset;
         int lightType = 0;
         uint previousFrames = -1;
         int maxDepth = 10;

@@ -18,7 +18,7 @@ struct pushConstant
     vec4  skyColor2;
     vec3  lightPosition;
     float lightIntensity;
-    vec2 noiseUVOffset;
+    vec2 uvOffset;
     int   lightType;
     uint previousFrames;
     int maxDepth;

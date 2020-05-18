@@ -90,10 +90,10 @@ void main()
 
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    const vec2 inUV = (pixelCenter + pushC.uvOffset / 2.0) / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0 - 1.0;
 
-    noiseUV = inUV + pushC.noiseUVOffset;
+    noiseUV = inUV + pushC.uvOffset;
 
     const uint  rayFlags = gl_RayFlagsOpaqueEXT;
     const float tMin     = 0.001;
