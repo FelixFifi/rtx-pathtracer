@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "raycommon.glsl"
 #include "wavefront.glsl"
+#define M_PI 3.1415926535897932384626433832795
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
@@ -46,6 +47,22 @@ vec3 randomOnUnitSphere() {
     } while (length(res) > 1);
 
     res = normalize(res);
+    return res;
+}
+
+vec3 randomInHemisphere(vec3 normal) {
+    vec3 res;
+    do {
+        vec4 random = getRandom();
+
+        res = random.xyz;
+    } while (length(res) > 1);
+
+    res = normalize(res);
+
+    if (dot(normal, res) < 0) {
+        res = res - normal * 2 * dot(normal, res);
+    }
     return res;
 }
 
@@ -109,6 +126,7 @@ void main()
                         0               // payload (location = 0)
             );
 
+            // Directional light
             if (info.isLight) {
                 sampleResult += attenuation * info.lightColor;
                 break;
@@ -122,6 +140,8 @@ void main()
                 frontFace = false;
             }
 
+            float cosTheta = dot(-info.normal, direction);
+
             Material mat = mats[info.matIndex];
 
             if (mat.type == 3) {
@@ -132,11 +152,9 @@ void main()
 
             switch (mat.type) {
                 case 0: // Diffuse
-                    attenuation *= mat.diffuse;
+                    attenuation *= mat.diffuse * cosTheta * M_PI;
 
-                    direction = info.normal + randomOnUnitSphere();
-                    direction = normalize(direction);
-
+                    direction = randomInHemisphere(info.normal);
                     break;
                 case 1: // Specular
                 {

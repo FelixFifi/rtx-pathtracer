@@ -92,6 +92,13 @@ void RayTracingApp::sceneSwitcher(int num) {
     if (rtDescSet) {
         updateRtDescriptorSet(0);
     }
+
+    if (rtPipeline) {
+        cleanupRtPipeline();
+        initRayTracing();
+    }
+
+    hasInputChanged = true;
 }
 
 void RayTracingApp::recreateDescriptorSets() {
@@ -470,6 +477,15 @@ void RayTracingApp::cleanup() {
 
     cleanupDescriptorSets();
 
+    cleanupRtPipeline();
+
+    modelLoader.cleanup();
+
+    postProcessing.cleanup();
+    vulkanWindow.cleanup();
+}
+
+void RayTracingApp::cleanupRtPipeline() {
     device.destroy(rtSBTBuffer);
     device.free(rtSBTBufferMemory);
     device.destroy(rtPipeline);
@@ -477,8 +493,6 @@ void RayTracingApp::cleanup() {
 
     device.destroy(rtDescPool);
     device.destroy(rtDescSetLayout);
-    modelLoader.cleanup();
 
-    postProcessing.cleanup();
-    vulkanWindow.cleanup();
+    rtDescSetLayoutBind.clear();
 }
