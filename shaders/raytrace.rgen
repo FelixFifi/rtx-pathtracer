@@ -23,7 +23,7 @@ layout(binding = 0, set = 1) uniform CameraMatrices {
 layout(location = 0) rayPayloadEXT hitInfo info;
 
 vec2 noiseUV;
-const vec2 noiseStride = vec2(0.0129898,0.78233);
+const vec2 noiseStride = vec2(0.00129898,0.0078233);
 
 // Random vec4 [-1, 1]
 vec4 getRandom() {
@@ -90,10 +90,8 @@ void main()
 
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 inUV = (pixelCenter + pushC.uvOffset / 2.0) / vec2(gl_LaunchSizeEXT.xy);
-    vec2 d = inUV * 2.0 - 1.0;
 
-    noiseUV = inUV + pushC.uvOffset;
+    noiseUV = pixelCenter / gl_LaunchSizeEXT.xy + pushC.uvOffset;
 
     const uint  rayFlags = gl_RayFlagsOpaqueEXT;
     const float tMin     = 0.001;
@@ -107,6 +105,8 @@ void main()
         vec3 sampleResult = vec3(0.0, 0.0, 0.0);
         vec3 attenuation = vec3(1.0, 1.0, 1.0);
 
+        vec2 inUV = (pixelCenter + getRandom().xy / 2.0) / vec2(gl_LaunchSizeEXT.xy);
+        vec2 d = inUV * 2.0 - 1.0;
 
         vec3 origin    = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
         vec4 target    = cam.projInverse * vec4(d.x, d.y, 1, 1);
