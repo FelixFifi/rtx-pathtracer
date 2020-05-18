@@ -127,9 +127,10 @@ private:
     void recreateSwapchainCallback();
 
     void loadModels();
+    void cleanupDescriptorSets();
+    void recreateDescriptorSets();
 
-
-/*
+    /*
     void initVulkan() {
         setupDispatchLoader();
         createInstance();
@@ -511,6 +512,8 @@ private:
     void imGuiWindowSetup();
 
     void createNoiseTexture();
+
+    void sceneSwitcher(int num);
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

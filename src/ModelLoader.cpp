@@ -392,3 +392,7 @@ void ModelLoader::cleanup() {
 
     rtBuilder.destroy();
 }
+
+size_t ModelLoader::getModelCount() {
+    return models.size();
+}

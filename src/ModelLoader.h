@@ -58,7 +58,6 @@ public:
                 const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
                 vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
 
-    void loadModel(const std::string &objFilePath);
 
     std::array<vk::DescriptorSetLayoutBinding, 4> getDescriptorSetLayouts();
 
@@ -72,9 +71,12 @@ public:
 
     const vk::AccelerationStructureKHR & getAccelerationStructure();
 
+    size_t getModelCount();
+
     void cleanup();
 private:
 
+    void loadModel(const std::string &objFilePath);
     void addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,
                   int materialIndexOffset);
 

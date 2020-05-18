@@ -16,6 +16,8 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     cameraController = CameraController(glm::vec3(-20, 0, 15), 360.0f / width);
     fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
     vulkanWindow.setEventCallback(eventCallback);
+    fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcher(key); };
+    vulkanWindow.setNumberKeyEventCallback(numberKeyCallback);
 
     fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };;
     postProcessing.addImGuiCallback(callbackImGui);
@@ -26,15 +28,10 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
+    createNoiseTexture();
+    createUniformBuffers();
     loadModels();
 
-    createNoiseTexture();
-
-
-    createUniformBuffers();
-    createDecriptorSetLayout();
-    createDescriptorPool();
-    createDescriptorSets();
 
     initRayTracing();
 }
@@ -57,9 +54,7 @@ void RayTracingApp::createNoiseTexture() {
 }
 
 void RayTracingApp::loadModels() {
-    uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = ModelLoader("scenes/test.json", "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
-                              vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
+    sceneSwitcher(0);
 
 }
 
@@ -81,6 +76,37 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     device.waitIdle();
 
     postProcessing.drawCallback(imageIndex);
+}
+
+void RayTracingApp::sceneSwitcher(int num) {
+    if (modelLoader.getModelCount() > 0) {
+        modelLoader.cleanup();
+    }
+
+    uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
+    modelLoader = ModelLoader("scenes/test.json", "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
+                              vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
+
+    recreateDescriptorSets();
+
+    if (rtDescSet) {
+        updateRtDescriptorSet(0);
+    }
+}
+
+void RayTracingApp::recreateDescriptorSets() {
+    if (descriptorPool) {
+        cleanupDescriptorSets();
+    }
+
+    createDecriptorSetLayout();
+    createDescriptorPool();
+    createDescriptorSets();
+}
+
+void RayTracingApp::cleanupDescriptorSets() {
+    device.destroy(descriptorPool);
+    device.destroy(descriptorSetLayout);
 }
 
 void RayTracingApp::recreateSwapchainCallback() {
@@ -249,11 +275,22 @@ void RayTracingApp::createRtDescriptorSet() {
 void RayTracingApp::updateRtDescriptorSet(uint32_t currentImage) {
     using vkDT = vk::DescriptorType;
 
+    vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
+    descASInfo.setAccelerationStructureCount(1);
+    descASInfo.setPAccelerationStructures(&modelLoader.getAccelerationStructure());
+
     // (1) Output buffer
     vk::DescriptorImageInfo imageInfo{
             {}, postProcessing.getOffscreenImageView(), vk::ImageLayout::eGeneral};
     vk::WriteDescriptorSet wds{rtDescSet, 1, 0, 1, vkDT::eStorageImage, &imageInfo};
-    device.updateDescriptorSets(wds, nullptr);
+
+
+    std::array<vk::WriteDescriptorSet, 2> writes;
+    writes[0] = vk::WriteDescriptorSet(rtDescSet, 0, 0, 1, vk::DescriptorType::eAccelerationStructureKHR);
+    writes[0].setPNext(&descASInfo);
+
+    writes[1] = vk::WriteDescriptorSet(rtDescSet, 1, 0, 1, vk::DescriptorType::eStorageImage, &imageInfo);
+    device.updateDescriptorSets(writes, nullptr);
 }
 
 void RayTracingApp::createRtPipeline() {
@@ -431,8 +468,7 @@ void RayTracingApp::cleanup() {
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);
 
-    device.destroy(descriptorPool);
-    device.destroy(descriptorSetLayout);
+    cleanupDescriptorSets();
 
     device.destroy(rtSBTBuffer);
     device.free(rtSBTBufferMemory);

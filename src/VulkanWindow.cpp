@@ -251,6 +251,42 @@ bool VulkanWindow::sdlEventHandler() {
            eventCallback(sdlEvent);
         }
 
+        if (numberKeyEventCallback && sdlEvent.type == SDL_KEYDOWN) {
+            switch (sdlEvent.key.keysym.sym) {
+                case SDLK_0:
+                    numberKeyEventCallback(0);
+                    break;
+                case SDLK_1:
+                    numberKeyEventCallback(1);
+                    break;
+                case SDLK_2:
+                    numberKeyEventCallback(2);
+                    break;
+                case SDLK_3:
+                    numberKeyEventCallback(3);
+                    break;
+                case SDLK_4:
+                    numberKeyEventCallback(4);
+                    break;
+                case SDLK_5:
+                    numberKeyEventCallback(5);
+                    break;
+                case SDLK_6:
+                    numberKeyEventCallback(6);
+                    break;
+                case SDLK_7:
+                    numberKeyEventCallback(7);
+                    break;
+                case SDLK_8:
+                    numberKeyEventCallback(8);
+                    break;
+                case SDLK_9:
+                    numberKeyEventCallback(9);
+                    break;
+            }
+        }
+
+
         ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
 
 //            //If user presses any key
@@ -819,5 +855,9 @@ const QueueFamilyIndices &VulkanWindow::getQueueFamilyIndices() const {
 
 void VulkanWindow::setEventCallback(const fEventCallback &eventCallback) {
     VulkanWindow::eventCallback = eventCallback;
+}
+
+void VulkanWindow::setNumberKeyEventCallback(const fNumberKeyEventCallback &numberKeyEventCallback) {
+    VulkanWindow::numberKeyEventCallback = numberKeyEventCallback;
 }
 
