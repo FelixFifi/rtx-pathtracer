@@ -5,23 +5,45 @@
 #include "ModelLoader.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+
+#include "tiny_obj_loader.h"
+
 #include <glm/gtc/random.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <filesystem>
+
+#include "json.hpp"
+
+using json = nlohmann::json;
 
 ModelLoader::ModelLoader(const std::vector<std::string> &objPaths, const std::string &materialBaseDir,
                          std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
                          uint32_t graphicsQueueIndex)
         : materialBaseDir(materialBaseDir), vulkanOps(vulkanOps), device(vulkanOps->getDevice()) {
 
-    rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
-
     for (const auto &objPath : objPaths) {
         loadModel(objPath);
     }
 
+    createVulkanObjects(physicalDevice, graphicsQueueIndex);
+}
+
+void ModelLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
+    rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createMaterialBuffer();
+    createInstanceInfoBuffer();
     createBottomLevelAS();
     createTopLevelAS();
+}
+
+ModelLoader::ModelLoader(const std::string &filepath, const std::string &objectBaseDir,
+                         const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
+                         vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex)
+        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), vulkanOps(vulkanOps),
+          device(vulkanOps->getDevice()) {
+    parseSceneFile(filepath);
+
+    createVulkanObjects(physicalDevice, graphicsQueueIndex);
 }
 
 void ModelLoader::loadModel(const std::string &objFilePath) {
@@ -124,13 +146,90 @@ void ModelLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
     models.emplace_back(vertices, indices, vulkanOps);
 }
 
+void ModelLoader::parseSceneFile(const std::string &filepath) {// read a JSON file
+    std::ifstream inFile(filepath);
+    json j;
+    inFile >> j;
+
+    std::map<std::string, int> nameIndexMapping;
+
+    std::vector<json> jModels = j["models"];
+
+    for (auto jModel : jModels) {
+        std::string name = jModel.items().begin().key();
+        auto path = jModel[name].get<std::string>();
+
+        loadModel(std::filesystem::path(objectBaseDir) / path);
+        nameIndexMapping[name] = models.size() - 1;
+    }
+
+    std::vector<json> jInstances = j["instances"];
+
+    for (auto jInstance : jInstances) {
+        std::string name = jInstance.items().begin().key();
+
+        Instance instance{};
+        instance.iModel = nameIndexMapping[name];
+
+        glm::mat4 transform(1.0f);
+        // Normals have to be transformed differently
+        // Scale needs to be inverted
+        glm::mat4 normalTransform(1.0f);
+
+        std::unordered_map<std::string, json> properties = jInstance[name];
+
+
+        if (properties.contains("translate")) {
+            std::vector<float> translate = properties["translate"];
+            transform = glm::translate(transform, {translate[0], translate[1], translate[2]});
+        }
+
+        if (properties.contains("rotate")) {
+            std::vector<float> rotate = properties["rotate"];
+            transform = glm::rotate(transform, glm::radians(rotate[0]), {1, 0, 0});
+            transform = glm::rotate(transform, glm::radians(rotate[1]), {0, 1, 0});
+            transform = glm::rotate(transform, glm::radians(rotate[2]), {0, 0, 1});
+
+            normalTransform = glm::rotate(normalTransform, glm::radians(rotate[0]), {1, 0, 0});
+            normalTransform = glm::rotate(normalTransform, glm::radians(rotate[1]), {0, 1, 0});
+            normalTransform = glm::rotate(normalTransform, glm::radians(rotate[2]), {0, 0, 1});
+        }
+
+        if (properties.contains("scale")) {
+            std::vector<float> scale = properties["scale"];
+            transform = glm::scale(transform, {scale[0], scale[1], scale[2]});
+            normalTransform = glm::scale(normalTransform, {1.0f / scale[0], 1.0f / scale[1], 1.0f / scale[2]});
+        }
+
+        instance.transform = transform;
+        instance.normalTransform = normalTransform;
+
+        instances.push_back(instance);
+    }
+}
+
 void ModelLoader::createMaterialBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, materialBuffer, materialBufferMemory);
 }
 
-std::array<vk::DescriptorSetLayoutBinding, 3> ModelLoader::getDescriptorSetLayouts() {
+void ModelLoader::createInstanceInfoBuffer() {
+    std::vector<InstanceInfo> instanceInfos;
+    instanceInfos.reserve(instances.size());
+
+    for (const auto &instance : instances) {
+        InstanceInfo info{instance.normalTransform, instance.iModel};
+        instanceInfos.emplace_back(info);
+    }
+
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
+    vulkanOps->createBufferFromData(instanceInfos, usage,
+                                    vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
+                                    instanceInfoBufferMemory);
+}
+
+std::array<vk::DescriptorSetLayoutBinding, 4> ModelLoader::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
                                                        vk::ShaderStageFlagBits::eClosestHitKHR);
 
@@ -139,14 +238,17 @@ std::array<vk::DescriptorSetLayoutBinding, 3> ModelLoader::getDescriptorSetLayou
 
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
                                                          vk::ShaderStageFlagBits::eRaygenKHR);
+    vk::DescriptorSetLayoutBinding instanceInfoBufferBinding(4, vk::DescriptorType::eStorageBuffer, 1,
+                                                         vk::ShaderStageFlagBits::eClosestHitKHR);
 
-    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding};
+    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding};
 }
 
-std::array<vk::DescriptorPoolSize, 3> ModelLoader::getDescriptorPoolSizes() {
+std::array<vk::DescriptorPoolSize, 4> ModelLoader::getDescriptorPoolSizes() {
     return {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
     };
 }
@@ -159,10 +261,11 @@ std::array<vk::DescriptorPoolSize, 3> ModelLoader::getDescriptorPoolSizes() {
  * @param outMaterialBufferInfo Necessary as their memory location is used in the write descriptor sets
  * @return
  */
-std::array<vk::WriteDescriptorSet, 3> ModelLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                                                                          std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
-                                                                          std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
-                                                                          vk::DescriptorBufferInfo &outMaterialBufferInfo) {
+std::array<vk::WriteDescriptorSet, 4> ModelLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
+                                                  std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
+                                                  std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
+                                                  vk::DescriptorBufferInfo &outMaterialBufferInfo,
+                                                  vk::DescriptorBufferInfo &outInstanceInfoBufferInfo) {
     unsigned long modelCount = models.size();
     outVertexBufferInfos.reserve(modelCount);
     outIndexBufferInfos.reserve(modelCount);
@@ -176,6 +279,7 @@ std::array<vk::WriteDescriptorSet, 3> ModelLoader::getWriteDescriptorSets(const 
     }
 
     outMaterialBufferInfo = vk::DescriptorBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
+    outInstanceInfoBufferInfo = vk::DescriptorBufferInfo(instanceInfoBuffer, 0, VK_WHOLE_SIZE);
 
     return {
             vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
@@ -186,7 +290,10 @@ std::array<vk::WriteDescriptorSet, 3> ModelLoader::getWriteDescriptorSets(const 
                                    outIndexBufferInfos.data(), nullptr),
             vk::WriteDescriptorSet(descriptorSet, 3, 0, 1,
                                    vk::DescriptorType::eStorageBuffer, nullptr,
-                                   &outMaterialBufferInfo, nullptr)
+                                   &outMaterialBufferInfo, nullptr),
+            vk::WriteDescriptorSet(descriptorSet, 4, 0, 1,
+                                   vk::DescriptorType::eStorageBuffer, nullptr,
+                                   &outInstanceInfoBufferInfo, nullptr)
     };
 }
 
@@ -252,14 +359,13 @@ void ModelLoader::createTopLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
     tlas.reserve(models.size());
 
-    for (int i = 0; i < static_cast<int>(models.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(instances.size()); ++i) {
+        Instance instance = instances[i];
+
         nvvkpp::RaytracingBuilderKHR::Instance rayInst;
-        rayInst.transform =
-                i <= 1 ? nvmath::rotation_mat4_z(glm::pi<float>() * 0.5f) : nvmath::translation_mat4<nvmath::nv_scalar>(
-                        glm::linearRand(-30.0f, 30.0f) * 3.0f, glm::linearRand(-30.0f, 30.0f) * 3, 0.0f).rotate(
-                        glm::pi<float>() * 0.5f, {0.0f, 0.0f, 1.0f});
+        rayInst.transform = glm::value_ptr(instance.transform);
         rayInst.instanceId = i;
-        rayInst.blasId = i;
+        rayInst.blasId = instance.iModel;
         rayInst.hitGroupId = 0; // Same hit group for all
         rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
         rayInst.mask = 0xFF;
@@ -269,7 +375,7 @@ void ModelLoader::createTopLevelAS() {
     rtBuilder.buildTlas(tlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
-const vk::AccelerationStructureKHR & ModelLoader::getAccelerationStructure() {
+const vk::AccelerationStructureKHR &ModelLoader::getAccelerationStructure() {
     return rtBuilder.getAccelerationStructure();
 }
 
@@ -277,6 +383,8 @@ void ModelLoader::cleanup() {
 
     device.free(materialBufferMemory);
     device.destroy(materialBuffer);
+    device.free(instanceInfoBufferMemory);
+    device.destroy(instanceInfoBuffer);
 
     for (auto &model: models) {
         model.cleanup();

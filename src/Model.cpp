@@ -4,7 +4,6 @@
 
 #include "Model.h"
 #include "VulkanOps.h"
-#include <tiny_obj_loader.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 

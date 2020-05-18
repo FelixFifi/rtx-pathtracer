@@ -57,46 +57,10 @@ void RayTracingApp::createNoiseTexture() {
 }
 
 void RayTracingApp::loadModels() {
-
-    std::vector<std::string> modelPaths{
-            MODEL_FLOOR,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_LIGHT_BOX,
-            MODEL_LIGHT_BOX,
-            MODEL_LIGHT_BOX,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE,
-            MODEL_TEAPOT,
-            MODEL_TEAPOT,
-            MODEL_GLASS_CUBE
-    };
-
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = ModelLoader(modelPaths, MATERIAL_BASE_DIR, vulkanOps, physicalDevice, graphicsQueueIndex);
+    modelLoader = ModelLoader("scenes/test.json", "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
+                              vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
+
 }
 
 void RayTracingApp::run() {
@@ -136,13 +100,16 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               1, vk::ShaderStageFlagBits::eRaygenKHR,
                                                               nullptr);
 
-    vk::DescriptorSetLayoutBinding noiseSamplerBinding(4, vk::DescriptorType::eCombinedImageSampler, 1,
+    vk::DescriptorSetLayoutBinding noiseSamplerBinding(5, vk::DescriptorType::eCombinedImageSampler, 1,
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
 
 
     auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {uniformBufferLayoutBinding, vertexIndexMaterialBindings[0],
-                                                              vertexIndexMaterialBindings[1], vertexIndexMaterialBindings[2],
+    std::array<vk::DescriptorSetLayoutBinding, 6> bindings = {uniformBufferLayoutBinding,
+                                                              vertexIndexMaterialBindings[0],
+                                                              vertexIndexMaterialBindings[1],
+                                                              vertexIndexMaterialBindings[2],
+                                                              vertexIndexMaterialBindings[3],
                                                               noiseSamplerBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -153,12 +120,13 @@ void RayTracingApp::createDecriptorSetLayout() {
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = modelLoader.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 5> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 6> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
             vertexIndexMaterialPoolSizes[1],
             vertexIndexMaterialPoolSizes[2],
+            vertexIndexMaterialPoolSizes[3],
             vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
     }; // TODO: One per frame
 
@@ -185,11 +153,13 @@ void RayTracingApp::createDescriptorSets() {
         std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
         std::vector<vk::DescriptorBufferInfo> indexBufferInfos;
         vk::DescriptorBufferInfo materialBufferInfo;
+        vk::DescriptorBufferInfo instanceInfoBufferInfo;
 
         auto vertexIndexBufferWrites = modelLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
-                                                                          indexBufferInfos, materialBufferInfo);
+                                                                          indexBufferInfos, materialBufferInfo,
+                                                                          instanceInfoBufferInfo);
 
-        std::array<vk::WriteDescriptorSet, 5> descriptorWrites = {};
+        std::array<vk::WriteDescriptorSet, 6> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
@@ -197,7 +167,8 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[1] = vertexIndexBufferWrites[0];
         descriptorWrites[2] = vertexIndexBufferWrites[1];
         descriptorWrites[3] = vertexIndexBufferWrites[2];
-        descriptorWrites[4] = vk::WriteDescriptorSet(descriptorSet, 4, 0, 1,
+        descriptorWrites[4] = vertexIndexBufferWrites[3];
+        descriptorWrites[5] = vk::WriteDescriptorSet(descriptorSet, 5, 0, 1,
                                                      vk::DescriptorType::eCombinedImageSampler, &noiseImageInfo,
                                                      nullptr, nullptr);
 

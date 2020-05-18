@@ -1,0 +1,16 @@
+{
+  "models": [
+    {"cube": "cube.obj"},
+    {"floor": "floor.obj"},
+    {"teapot": "teapot.obj"}
+  ],
+  "instances": [
+    {"floor" :  {}},
+    {"cube": {"translate": [1, 2, 15], "rotate": [0, 0, 90]}},
+    {"cube": {"translate": [30, 2, 25], "rotate": [0, 90, 0]}},
+    {"cube": {"translate": [1, 30, 35], "rotate": [0, 45, 0]}},
+    {"cube": {"translate": [30, 30, 45], "rotate": [0, 0, 0]}},
+    {"teapot": {"translate": [100, 2, 10], "rotate": [0, 90, 45], "scale": [3, 0.5, 1]}},
+    {"teapot": {"translate": [8, 42, 30], "rotate": [0, 180, 0]}}
+  ]
+}

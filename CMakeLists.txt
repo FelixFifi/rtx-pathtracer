@@ -6,15 +6,15 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
 
-include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} "../nvidia_shared_sources" "vendor")
+include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} "../nvidia_shared_sources" "external")
 
 set(IMGUI_CPP
-        vendor/imgui/imgui.cpp
-        vendor/imgui/imgui_demo.cpp
-        vendor/imgui/imgui_draw.cpp
-        vendor/imgui/imgui_impl_sdl.cpp
-        vendor/imgui/imgui_impl_vulkan.cpp
-        vendor/imgui/imgui_widgets.cpp
+        external/imgui/imgui.cpp
+        external/imgui/imgui_demo.cpp
+        external/imgui/imgui_draw.cpp
+        external/imgui/imgui_impl_sdl.cpp
+        external/imgui/imgui_impl_vulkan.cpp
+        external/imgui/imgui_widgets.cpp
         )
 
 link_directories(${Vulkan_LIBRARY} ${SDL2_LIBRARIES})

@@ -16,3 +16,8 @@ struct Material {
     float refractionIndexInv;
     int type;
 };
+
+struct InstanceInfo {
+    mat4 normalTransform;
+    int modelIndex;
+};
