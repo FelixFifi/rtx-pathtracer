@@ -428,7 +428,7 @@ void RayTracingApp::imGuiWindowSetup() {
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     rtPushConstants.uvOffset = {glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f)};
 
-    if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged()) {
+    if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged() && !autoRotate) {
         rtPushConstants.previousFrames += 1;
     } else {
         rtPushConstants.previousFrames = 0;

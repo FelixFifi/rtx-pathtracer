@@ -23,7 +23,7 @@ layout(binding = 0, set = 1) uniform CameraMatrices {
 layout(location = 0) rayPayloadEXT hitInfo info;
 
 vec2 noiseUV;
-const vec2 noiseStride = vec2(0.00129898,0.0078233);
+const vec2 noiseStride = vec2(0.0129898,0.020478233);
 
 // Random vec4 [-1, 1]
 vec4 getRandom() {

@@ -165,7 +165,7 @@ VulkanOps::createNoiseTextureFromData(const std::vector<glm::vec4> &noise, int t
     outImageView = createImageView(outImage, format, vk::ImageAspectFlagBits::eColor);
 
     vk::SamplerCreateInfo samplerInfo({}, vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
-                                      vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+                                      vk::SamplerAddressMode::eMirroredRepeat, vk::SamplerAddressMode::eMirroredRepeat,
                                       vk::SamplerAddressMode::eRepeat, 0.0f, false, 0, false,
                                       vk::CompareOp::eAlways, 0.0f, 0.0f, vk::BorderColor::eIntOpaqueBlack, false);
     outSampler = device.createSampler(samplerInfo);
