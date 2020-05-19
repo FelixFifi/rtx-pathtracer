@@ -4,6 +4,7 @@
 
 #include <imgui/imgui.h>
 #include <glm/gtc/random.hpp>
+#include <random>
 #include "RayTracingApp.h"
 
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
@@ -42,11 +43,14 @@ void RayTracingApp::createNoiseTexture() {
     float noiseMin = -1.0f;
     float noiseMax = 1.0f;
 
+    std::mt19937 generator;
+    std::uniform_real_distribution<float> dis(noiseMin, noiseMax);
+
     for (int i = 0; i < RANDOM_SIZE * RANDOM_SIZE; ++i) {
-        noise[i] = {glm::linearRand(noiseMin, noiseMax),
-                    glm::linearRand(noiseMin, noiseMax),
-                    glm::linearRand(noiseMin, noiseMax),
-                    glm::linearRand(noiseMin, noiseMax)};
+        noise[i] = {dis(generator),
+                    dis(generator),
+                    dis(generator),
+                    dis(generator)};
     }
 
     vulkanOps->createNoiseTextureFromData(noise, RANDOM_SIZE, RANDOM_SIZE, noiseImage, noiseImageMemory, noiseImageView,
