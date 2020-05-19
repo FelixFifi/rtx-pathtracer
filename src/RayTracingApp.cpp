@@ -420,8 +420,6 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged = false;
 
     hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
-    hasInputChanged |= ImGui::InputFloat3("LightPosition", &rtPushConstants.lightPosition.x, "%.2f");
-    hasInputChanged |= ImGui::InputFloat("LightIntensity", &rtPushConstants.lightIntensity);
     hasInputChanged |= ImGui::InputFloat4("SkyColor1", &rtPushConstants.skyColor1.x, "%.2f");
     hasInputChanged |= ImGui::InputFloat4("SkyColor2", &rtPushConstants.skyColor2.x, "%.2f");
     ImGui::Checkbox("Auto rotate", &autoRotate);
@@ -429,6 +427,7 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::Checkbox("Accumulate results", &accumulateResults);
     hasInputChanged |= ImGui::InputInt("Samples per pixel", &rtPushConstants.samplesPerPixel, 20, 100);
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
+    hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);

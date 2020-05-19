@@ -60,16 +60,15 @@ public:
 
     void cleanup();
 
-    struct alignas(16) RtPushConstant {
+    struct RtPushConstant {
         glm::vec4 skyColor1 = {0, 0, 0, 0};
         glm::vec4 skyColor2 = {0, 0, 0, 0};
-        glm::vec3 lightPosition = {20, 20, 20};
-        float lightIntensity = 500;
         glm::vec2 uvOffset;
         int lightType = 0;
         uint previousFrames = -1;
         int maxDepth = 10;
         int samplesPerPixel = 10;
+        int enableRR = 0; // GLSL has 4 byte bool
     } rtPushConstants;
 
 private:

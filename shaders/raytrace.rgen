@@ -187,6 +187,16 @@ void main()
                     break;
                 }
             }
+
+            if (pushC.enableRR) {
+                float p = max(attenuation.x, max(attenuation.y, attenuation.z));
+                // Russian roulette
+                if (getRandomPositive().x > p) {
+                    break;
+                } else {
+                    attenuation *= 1.0 / p;
+                }
+            }
         }
 
         result += sampleResult / samplesPerPixel;
