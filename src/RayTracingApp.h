@@ -35,11 +35,10 @@
 #include "ModelLoader.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
-const std::string MODEL_FLOOR = "objs/floor.obj";
-const std::string MODEL_TEAPOT = "objs/teapot.obj";
-const std::string MODEL_GLASS_CUBE = "objs/cube.obj";
-const std::string MODEL_LIGHT_BOX = "objs/lightBox.obj";
-const std::string TEXTURE_PATH = "textures/chalet.jpg";
+const std::vector<std::string> SCENES{
+        "scenes/test.json",
+        "scenes/cornell.json"
+};
 
 const int RANDOM_SIZE = 2048;
 
@@ -62,9 +61,9 @@ public:
     void cleanup();
 
     struct alignas(16) RtPushConstant {
-        glm::vec4 skyColor1 =  {0, 0, 0, 0 };
-        glm::vec4 skyColor2 =  {0, 0, 0, 0 };
-        glm::vec3 lightPosition = {20,20,20};
+        glm::vec4 skyColor1 = {0, 0, 0, 0};
+        glm::vec4 skyColor2 = {0, 0, 0, 0};
+        glm::vec3 lightPosition = {20, 20, 20};
         float lightIntensity = 500;
         glm::vec2 uvOffset;
         int lightType = 0;
@@ -127,7 +126,9 @@ private:
     void recreateSwapchainCallback();
 
     void loadModels();
+
     void cleanupDescriptorSets();
+
     void recreateDescriptorSets();
 
     void initRayTracing();
@@ -145,7 +146,9 @@ private:
     void createUniformBuffers();
 
     void createDecriptorSetLayout();
+
     void createDescriptorPool();
+
     void createDescriptorSets();
 
     void updateUniformBuffer(uint32_t currentImage);

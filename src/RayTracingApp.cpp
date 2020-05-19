@@ -58,8 +58,7 @@ void RayTracingApp::createNoiseTexture() {
 }
 
 void RayTracingApp::loadModels() {
-    sceneSwitcher(0);
-
+    sceneSwitcher(1);
 }
 
 void RayTracingApp::run() {
@@ -83,12 +82,21 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 }
 
 void RayTracingApp::sceneSwitcher(int num) {
+    // 0 should load the 10th scene
+    if (num == 0) {
+        num = 10;
+    }
+
+    // Don't load out of bounds
+    int sceneCount = SCENES.size();
+    int sceneIndex = std::min(num - 1, sceneCount - 1);
+
     if (modelLoader.getModelCount() > 0) {
         modelLoader.cleanup();
     }
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = ModelLoader("scenes/test.json", "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
+    modelLoader = ModelLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
                               vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
 
     recreateDescriptorSets();
