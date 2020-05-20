@@ -21,3 +21,8 @@ struct InstanceInfo {
     mat4 normalTransform;
     int modelIndex;
 };
+
+struct Light {
+    vec3 color;
+    vec3 pos;
+};

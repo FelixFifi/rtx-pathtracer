@@ -81,6 +81,40 @@ public:
         device.freeMemory(stagingBufferMemory);
     }
 
+    template<class T, class U>
+    void createBufferFrom2Data(const std::vector<T> &data1ToCopy, const std::vector<U> &dataToCopy2, vk::BufferUsageFlags &usage,
+                               const vk::MemoryPropertyFlags &memoryProperties, vk::Buffer &outBuffer,
+                               vk::DeviceMemory &outMemory) {
+        usage = usage | vk::BufferUsageFlagBits::eTransferDst;
+
+        size_t data1Size = sizeof(data1ToCopy[0]) * data1ToCopy.size();
+        size_t data2Size = sizeof(dataToCopy2[0]) * dataToCopy2.size();
+        vk::DeviceSize bufferSize = data1Size + data2Size;
+
+        vk::Buffer stagingBuffer;
+        vk::DeviceMemory stagingBufferMemory;
+
+        VulkanOps::createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                                stagingBuffer, stagingBufferMemory);
+
+        void *data;
+        data = device.mapMemory(stagingBufferMemory, 0, bufferSize);
+
+        memcpy(data, data1ToCopy.data(), data1Size);
+        memcpy((static_cast<char*>(data) + data1Size), dataToCopy2.data(), data2Size);
+        device.unmapMemory(stagingBufferMemory);
+
+
+        VulkanOps::createBuffer(bufferSize, usage,
+                                memoryProperties, outBuffer, outMemory);
+
+        VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize);
+
+        device.destroy(stagingBuffer);
+        device.freeMemory(stagingBufferMemory);
+    }
+
     void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
 
     void createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,

@@ -251,7 +251,7 @@ bool VulkanWindow::sdlEventHandler() {
            eventCallback(sdlEvent);
         }
 
-        if (numberKeyEventCallback && sdlEvent.type == SDL_KEYDOWN) {
+        if (numberKeyEventCallback && sdlEvent.type == SDL_KEYDOWN && sdlEvent.key.keysym.mod & KMOD_CTRL ) {
             switch (sdlEvent.key.keysym.sym) {
                 case SDLK_0:
                     numberKeyEventCallback(0);

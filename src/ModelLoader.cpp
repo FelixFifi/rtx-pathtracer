@@ -32,6 +32,7 @@ void ModelLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createMaterialBuffer();
     createInstanceInfoBuffer();
+    createLightsBuffer();
     createBottomLevelAS();
     createTopLevelAS();
 }
@@ -153,16 +154,32 @@ void ModelLoader::parseSceneFile(const std::string &filepath) {// read a JSON fi
 
     std::map<std::string, int> nameIndexMapping;
 
-    std::vector<json> jModels = j["models"];
+    parseModels(j, nameIndexMapping);
 
-    for (auto jModel : jModels) {
-        std::string name = jModel.items().begin().key();
-        auto path = jModel[name].get<std::string>();
+    parseInstances(j, nameIndexMapping);
 
-        loadModel(std::filesystem::path(objectBaseDir) / path);
-        nameIndexMapping[name] = models.size() - 1;
+    parseLights(j);
+
+}
+
+void ModelLoader::parseLights(const json &j) {
+    if (j.contains("lights")) {
+        std::vector<json> jLights = j["lights"];
+
+        for (auto jLight : jLights) {
+            Light light{};
+            std::vector<float> color = jLight["color"];
+            light.color = {color[0], color[1], color[2]};
+
+            std::vector<float> pos = jLight["position"];
+            light.pos = {pos[0], pos[1], pos[2]};
+
+            lights.push_back(light);
+        }
     }
+}
 
+void ModelLoader::parseInstances(const json &j, std::map<std::string, int> &nameIndexMapping) {
     std::vector<json> jInstances = j["instances"];
 
     for (auto jInstance : jInstances) {
@@ -208,6 +225,18 @@ void ModelLoader::parseSceneFile(const std::string &filepath) {// read a JSON fi
     }
 }
 
+void ModelLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapping) {
+    std::vector<json> jModels = j["models"];
+
+    for (auto jModel : jModels) {
+        std::string name = jModel.items().begin().key();
+        auto path = jModel[name].get<std::string>();
+
+        loadModel(std::filesystem::path(objectBaseDir) / path);
+        nameIndexMapping[name] = models.size() - 1;
+    }
+}
+
 void ModelLoader::createMaterialBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
@@ -229,7 +258,16 @@ void ModelLoader::createInstanceInfoBuffer() {
                                     instanceInfoBufferMemory);
 }
 
-std::array<vk::DescriptorSetLayoutBinding, 4> ModelLoader::getDescriptorSetLayouts() {
+void ModelLoader::createLightsBuffer() {
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
+
+    // Light count is padded with 0s to satisfy struct alignment
+    std::vector<int> lightCount{static_cast<int>(lights.size()), 0, 0, 0};
+    vulkanOps->createBufferFrom2Data(lightCount, lights, usage,
+                                    vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
+}
+
+std::array<vk::DescriptorSetLayoutBinding, 5> ModelLoader::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
                                                        vk::ShaderStageFlagBits::eClosestHitKHR);
 
@@ -239,15 +277,18 @@ std::array<vk::DescriptorSetLayoutBinding, 4> ModelLoader::getDescriptorSetLayou
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
                                                          vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding instanceInfoBufferBinding(4, vk::DescriptorType::eStorageBuffer, 1,
-                                                         vk::ShaderStageFlagBits::eClosestHitKHR);
+                                                             vk::ShaderStageFlagBits::eClosestHitKHR);
+    vk::DescriptorSetLayoutBinding lightsBufferBinding(5, vk::DescriptorType::eStorageBuffer, 1,
+                                                             vk::ShaderStageFlagBits::eRaygenKHR);
 
-    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding};
+    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding, lightsBufferBinding};
 }
 
-std::array<vk::DescriptorPoolSize, 4> ModelLoader::getDescriptorPoolSizes() {
+std::array<vk::DescriptorPoolSize, 5> ModelLoader::getDescriptorPoolSizes() {
     return {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
     };
@@ -261,11 +302,12 @@ std::array<vk::DescriptorPoolSize, 4> ModelLoader::getDescriptorPoolSizes() {
  * @param outMaterialBufferInfo Necessary as their memory location is used in the write descriptor sets
  * @return
  */
-std::array<vk::WriteDescriptorSet, 4> ModelLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                                                  std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
-                                                  std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
-                                                  vk::DescriptorBufferInfo &outMaterialBufferInfo,
-                                                  vk::DescriptorBufferInfo &outInstanceInfoBufferInfo) {
+std::array<vk::WriteDescriptorSet, 5> ModelLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
+                                                                          std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
+                                                                          std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
+                                                                          vk::DescriptorBufferInfo &outMaterialBufferInfo,
+                                                                          vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
+                                                                          vk::DescriptorBufferInfo &outLightsBufferInfo) {
     unsigned long modelCount = models.size();
     outVertexBufferInfos.reserve(modelCount);
     outIndexBufferInfos.reserve(modelCount);
@@ -280,6 +322,7 @@ std::array<vk::WriteDescriptorSet, 4> ModelLoader::getWriteDescriptorSets(const 
 
     outMaterialBufferInfo = vk::DescriptorBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
     outInstanceInfoBufferInfo = vk::DescriptorBufferInfo(instanceInfoBuffer, 0, VK_WHOLE_SIZE);
+    outLightsBufferInfo = vk::DescriptorBufferInfo(lightsBuffer, 0, VK_WHOLE_SIZE);
 
     return {
             vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
@@ -293,7 +336,10 @@ std::array<vk::WriteDescriptorSet, 4> ModelLoader::getWriteDescriptorSets(const 
                                    &outMaterialBufferInfo, nullptr),
             vk::WriteDescriptorSet(descriptorSet, 4, 0, 1,
                                    vk::DescriptorType::eStorageBuffer, nullptr,
-                                   &outInstanceInfoBufferInfo, nullptr)
+                                   &outInstanceInfoBufferInfo, nullptr),
+            vk::WriteDescriptorSet(descriptorSet, 5, 0, 1,
+                                   vk::DescriptorType::eStorageBuffer, nullptr,
+                                   &outLightsBufferInfo, nullptr)
     };
 }
 
@@ -385,6 +431,8 @@ void ModelLoader::cleanup() {
     device.destroy(materialBuffer);
     device.free(instanceInfoBufferMemory);
     device.destroy(instanceInfoBuffer);
+    device.free(lightsBufferMemory);
+    device.destroy(lightsBuffer);
 
     for (auto &model: models) {
         model.cleanup();

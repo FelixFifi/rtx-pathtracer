@@ -17,6 +17,7 @@ static const int VERTICES_PER_FACE = 3;
 #include <nvvkpp/utilities_vkpp.hpp>
 #include <nvvkpp/descriptorsets_vkpp.hpp>
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
+#include <json.hpp>
 #include "Model.h"
 
 struct Instance {
@@ -30,6 +31,11 @@ struct alignas(16) InstanceInfo {
     int iModel;
 };
 
+struct alignas(16) Light {
+    alignas(16) glm::vec3 color;
+    alignas(16) glm::vec3 pos;
+};
+
 class ModelLoader {
 private:
     std::string objectBaseDir;
@@ -38,6 +44,7 @@ private:
     std::vector<Instance> instances;
     std::vector<Model> models;
     std::vector<Material> materials;
+    std::vector<Light> lights;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 
@@ -47,6 +54,8 @@ private:
 
     vk::Buffer instanceInfoBuffer;
     vk::DeviceMemory instanceInfoBufferMemory;
+    vk::Buffer lightsBuffer;
+    vk::DeviceMemory lightsBufferMemory;
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
 public:
@@ -59,15 +68,16 @@ public:
                 vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
 
 
-    std::array<vk::DescriptorSetLayoutBinding, 4> getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, 5> getDescriptorSetLayouts();
 
-    std::array<vk::DescriptorPoolSize, 4> getDescriptorPoolSizes();
+    std::array<vk::DescriptorPoolSize, 5> getDescriptorPoolSizes();
 
-    std::array<vk::WriteDescriptorSet, 4> getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                                         std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
-                                         std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
-                                         vk::DescriptorBufferInfo &outMaterialBufferInfo,
-                                         vk::DescriptorBufferInfo &outInstanceInfoBufferInfo);
+    std::array<vk::WriteDescriptorSet, 5> getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
+                                                                 std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
+                                                                 std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
+                                                                 vk::DescriptorBufferInfo &outMaterialBufferInfo,
+                                                                 vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
+                                                                 vk::DescriptorBufferInfo &outLightsBufferInfo);
 
     const vk::AccelerationStructureKHR & getAccelerationStructure();
 
@@ -94,6 +104,14 @@ private:
     void createInstanceInfoBuffer();
 
     void createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
+
+    void parseModels(nlohmann::basic_json<> &j, std::map<std::string, int> &nameIndexMapping);
+
+    void parseInstances(const nlohmann::basic_json<> &j, std::map<std::string, int> &nameIndexMapping);
+
+    void createLightsBuffer();
+
+    void parseLights(const nlohmann::basic_json<> &j);
 };
 
 

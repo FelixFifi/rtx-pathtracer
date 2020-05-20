@@ -37,13 +37,16 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::vector<std::string> SCENES{
         "scenes/test.json",
-        "scenes/cornell.json"
+        "scenes/cornell.json",
+        "scenes/large.json"
 };
 
 const int RANDOM_SIZE = 2048;
 
 
-static const int MAX_RECURSION = 1;
+static const int MAX_RECURSION = 2;
+
+static const int NOISE_BINDING = 6;
 
 struct CameraMatrices {
     glm::mat4 view;
