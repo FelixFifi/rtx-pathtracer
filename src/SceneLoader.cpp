@@ -2,7 +2,7 @@
 // Created by felixfifi on 17.05.20.
 //
 
-#include "ModelLoader.h"
+#include "SceneLoader.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 
@@ -13,31 +13,21 @@
 #include <filesystem>
 
 #include "json.hpp"
+#include "WeightedSampler.h"
 
 using json = nlohmann::json;
 
-ModelLoader::ModelLoader(const std::vector<std::string> &objPaths, const std::string &materialBaseDir,
-                         std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
-                         uint32_t graphicsQueueIndex)
-        : materialBaseDir(materialBaseDir), vulkanOps(vulkanOps), device(vulkanOps->getDevice()) {
-
-    for (const auto &objPath : objPaths) {
-        loadModel(objPath);
-    }
-
-    createVulkanObjects(physicalDevice, graphicsQueueIndex);
-}
-
-void ModelLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
+void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createMaterialBuffer();
     createInstanceInfoBuffer();
     createLightsBuffer();
+    createLightSamplersBuffer();
     createBottomLevelAS();
     createTopLevelAS();
 }
 
-ModelLoader::ModelLoader(const std::string &filepath, const std::string &objectBaseDir,
+SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
                          const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
                          vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex)
         : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), vulkanOps(vulkanOps),
@@ -47,7 +37,7 @@ ModelLoader::ModelLoader(const std::string &filepath, const std::string &objectB
     createVulkanObjects(physicalDevice, graphicsQueueIndex);
 }
 
-void ModelLoader::loadModel(const std::string &objFilePath) {
+void SceneLoader::loadModel(const std::string &objFilePath) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> tinyMaterials;
@@ -66,7 +56,7 @@ void ModelLoader::loadModel(const std::string &objFilePath) {
 
 }
 
-void ModelLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMaterials) {
+void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMaterials) {
     for (const auto &tinyMaterial : tinyMaterials) {
         Material material{};
 
@@ -100,16 +90,21 @@ void ModelLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
     }
 }
 
-void ModelLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,
+void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,
                            int materialIndexOffset) {
     std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<int> emissiveFaces;
 
-    for (const auto &shape : shapes) {
+
+    for (const auto &shape : shapes) { // TODO: separate obj by shape instead of joing all
         unsigned long numFaces = shape.mesh.indices.size() / VERTICES_PER_FACE;
         for (int iFace = 0; iFace < numFaces; ++iFace) {
+
+            // Material offsets are per file, but we accumulate materials over multiple files
+            int materialIndex = materialIndexOffset + shape.mesh.material_ids[iFace];
             for (int i = 0; i < VERTICES_PER_FACE; i++) {
                 const auto &index = shape.mesh.indices[VERTICES_PER_FACE * iFace + i];
                 Vertex vertex = {};
@@ -131,8 +126,7 @@ void ModelLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
                         1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                 };
 
-                // Material offsets are per file, but we accumulate materials over multiple files
-                vertex.materialIndex = materialIndexOffset + shape.mesh.material_ids[iFace];
+                vertex.materialIndex = materialIndex;
 
                 if (uniqueVertices.count(vertex) == 0) {
                     uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
@@ -141,13 +135,19 @@ void ModelLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
 
                 indices.push_back(uniqueVertices[vertex]);
             }
+
+            if (materials[materialIndex].type == eLight) {
+                emissiveFaces.push_back(iFace);
+            }
+
         }
     }
 
     models.emplace_back(vertices, indices, vulkanOps);
+    emissiveFacesPerModel.push_back(emissiveFaces);
 }
 
-void ModelLoader::parseSceneFile(const std::string &filepath) {// read a JSON file
+void SceneLoader::parseSceneFile(const std::string &filepath) {// read a JSON file
     std::ifstream inFile(filepath);
     json j;
     inFile >> j;
@@ -158,16 +158,21 @@ void ModelLoader::parseSceneFile(const std::string &filepath) {// read a JSON fi
 
     parseInstances(j, nameIndexMapping);
 
-    parseLights(j);
+    parsePointLights(j);
 
 }
 
-void ModelLoader::parseLights(const json &j) {
+/**
+ * Has to come after instances, because the area lights have to be added first
+ * @param j
+ */
+void SceneLoader::parsePointLights(const json &j) {
     if (j.contains("lights")) {
         std::vector<json> jLights = j["lights"];
 
         for (auto jLight : jLights) {
             Light light{};
+            light.isPointLight = true;
             std::vector<float> color = jLight["color"];
             light.color = {color[0], color[1], color[2]};
 
@@ -179,7 +184,7 @@ void ModelLoader::parseLights(const json &j) {
     }
 }
 
-void ModelLoader::parseInstances(const json &j, std::map<std::string, int> &nameIndexMapping) {
+void SceneLoader::parseInstances(const json &j, std::map<std::string, int> &nameIndexMapping) {
     std::vector<json> jInstances = j["instances"];
 
     for (auto jInstance : jInstances) {
@@ -187,6 +192,14 @@ void ModelLoader::parseInstances(const json &j, std::map<std::string, int> &name
 
         Instance instance{};
         instance.iModel = nameIndexMapping[name];
+
+        // if any of the model faces are emissive -> add light struct
+        if (!emissiveFacesPerModel[instance.iModel].empty()) {
+            Light light{};
+            light.isPointLight = false;
+            light.instanceIndex = instances.size();
+            lights.push_back(light);
+        }
 
         glm::mat4 transform(1.0f);
         // Normals have to be transformed differently
@@ -225,7 +238,7 @@ void ModelLoader::parseInstances(const json &j, std::map<std::string, int> &name
     }
 }
 
-void ModelLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapping) {
+void SceneLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapping) {
     std::vector<json> jModels = j["models"];
 
     for (auto jModel : jModels) {
@@ -237,57 +250,107 @@ void ModelLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapp
     }
 }
 
-void ModelLoader::createMaterialBuffer() {
+void SceneLoader::createMaterialBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, materialBuffer, materialBufferMemory);
 }
 
-void ModelLoader::createInstanceInfoBuffer() {
-    std::vector<InstanceInfo> instanceInfos;
-    instanceInfos.reserve(instances.size());
-
-    for (const auto &instance : instances) {
-        InstanceInfo info{instance.normalTransform, instance.iModel};
-        instanceInfos.emplace_back(info);
-    }
-
+void SceneLoader::createInstanceInfoBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
-    vulkanOps->createBufferFromData(instanceInfos, usage,
+    vulkanOps->createBufferFromData(instances, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
                                     instanceInfoBufferMemory);
 }
 
-void ModelLoader::createLightsBuffer() {
+void SceneLoader::createLightsBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
 
     // Light count is padded with 0s to satisfy struct alignment
     std::vector<int> lightCount{static_cast<int>(lights.size()), 0, 0, 0};
     vulkanOps->createBufferFrom2Data(lightCount, lights, usage,
-                                    vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
+                                     vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
 }
 
-std::array<vk::DescriptorSetLayoutBinding, 5> ModelLoader::getDescriptorSetLayouts() {
+/**
+ * Creates buffer that hold samplers to choose a random light, and if it is an area light, to choose a random face.
+ * These random numbers should be weighted by the total power and face area.
+ */
+void SceneLoader::createLightSamplersBuffer() {
+
+    std::vector<float> powers;
+    powers.reserve(lights.size());
+    for (const auto &light : lights) {
+        powers.push_back(1.0f); // TODO: Calculate per light power for weighting
+    }
+
+    WeightedSampler lightSampler(powers);
+
+    std::vector<int> randomLightIndex(SIZE_LIGHT_RANDOM);
+    for (int i = 0; i < SIZE_LIGHT_RANDOM; ++i) {
+        randomLightIndex[i] = lightSampler.sample();
+    }
+
+    std::vector<int> randomTriIndicesPerLight;
+    for (const auto &light : lights) {
+        // Area lights are before all point lights
+        if (light.isPointLight) {
+            break;
+        }
+
+        Instance &instance = instances[light.instanceIndex];
+        int iModel = instance.iModel;
+        Model model = models[iModel];
+        std::vector<float> areas(emissiveFacesPerModel[iModel].size());
+
+        for (int iEmissiveFace = 0; iEmissiveFace < emissiveFacesPerModel[iModel].size(); ++iEmissiveFace) {
+            areas[iEmissiveFace] = model.getFaceArea(emissiveFacesPerModel[iModel][iEmissiveFace], instance.transform);
+        }
+
+        WeightedSampler faceSampler(areas);
+
+        std::vector<int> randomTriIndices(SIZE_TRI_RANDOM);
+        for (int i = 0; i < SIZE_TRI_RANDOM; ++i) {
+            randomTriIndices[i] = emissiveFacesPerModel[iModel][faceSampler.sample()];
+        }
+
+        randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(), randomTriIndices.end());
+    }
+
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
+
+
+    vulkanOps->createBufferFrom2Data(randomLightIndex, randomTriIndicesPerLight, usage,
+                                     vk::MemoryPropertyFlagBits::eDeviceLocal, lightsSamplersBuffer,
+                                     lightsSamplerBufferMemory);
+}
+
+std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                       vk::ShaderStageFlagBits::eClosestHitKHR);
-
+                                                       vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                       vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                      vk::ShaderStageFlagBits::eClosestHitKHR);
-
+                                                      vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                      vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
                                                          vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding instanceInfoBufferBinding(4, vk::DescriptorType::eStorageBuffer, 1,
-                                                             vk::ShaderStageFlagBits::eClosestHitKHR);
-    vk::DescriptorSetLayoutBinding lightsBufferBinding(5, vk::DescriptorType::eStorageBuffer, 1,
+                                                             vk::ShaderStageFlagBits::eClosestHitKHR |
                                                              vk::ShaderStageFlagBits::eRaygenKHR);
+    vk::DescriptorSetLayoutBinding lightsBufferBinding(5, vk::DescriptorType::eStorageBuffer, 1,
+                                                       vk::ShaderStageFlagBits::eRaygenKHR);
+    vk::DescriptorSetLayoutBinding lightSamplersBufferBinding(6, vk::DescriptorType::eStorageBuffer, 1,
+                                                              vk::ShaderStageFlagBits::eRaygenKHR);
 
-    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding, lightsBufferBinding};
+    return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
+            lightsBufferBinding, lightSamplersBufferBinding};
 }
 
-std::array<vk::DescriptorPoolSize, 5> ModelLoader::getDescriptorPoolSizes() {
+std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoolSizes() {
     return {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
@@ -302,12 +365,14 @@ std::array<vk::DescriptorPoolSize, 5> ModelLoader::getDescriptorPoolSizes() {
  * @param outMaterialBufferInfo Necessary as their memory location is used in the write descriptor sets
  * @return
  */
-std::array<vk::WriteDescriptorSet, 5> ModelLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                                                                          std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
-                                                                          std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
-                                                                          vk::DescriptorBufferInfo &outMaterialBufferInfo,
-                                                                          vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
-                                                                          vk::DescriptorBufferInfo &outLightsBufferInfo) {
+std::array<vk::WriteDescriptorSet, BINDINGS_COUNT>
+SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
+                                    std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
+                                    std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
+                                    vk::DescriptorBufferInfo &outMaterialBufferInfo,
+                                    vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
+                                    vk::DescriptorBufferInfo &outLightsBufferInfo,
+                                    vk::DescriptorBufferInfo &outLightSamplersBufferInfo) {
     unsigned long modelCount = models.size();
     outVertexBufferInfos.reserve(modelCount);
     outIndexBufferInfos.reserve(modelCount);
@@ -323,6 +388,7 @@ std::array<vk::WriteDescriptorSet, 5> ModelLoader::getWriteDescriptorSets(const 
     outMaterialBufferInfo = vk::DescriptorBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
     outInstanceInfoBufferInfo = vk::DescriptorBufferInfo(instanceInfoBuffer, 0, VK_WHOLE_SIZE);
     outLightsBufferInfo = vk::DescriptorBufferInfo(lightsBuffer, 0, VK_WHOLE_SIZE);
+    outLightSamplersBufferInfo = vk::DescriptorBufferInfo(lightsSamplersBuffer, 0, VK_WHOLE_SIZE);
 
     return {
             vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
@@ -339,11 +405,14 @@ std::array<vk::WriteDescriptorSet, 5> ModelLoader::getWriteDescriptorSets(const 
                                    &outInstanceInfoBufferInfo, nullptr),
             vk::WriteDescriptorSet(descriptorSet, 5, 0, 1,
                                    vk::DescriptorType::eStorageBuffer, nullptr,
-                                   &outLightsBufferInfo, nullptr)
+                                   &outLightsBufferInfo, nullptr),
+            vk::WriteDescriptorSet(descriptorSet, 6, 0, 1,
+            vk::DescriptorType::eStorageBuffer, nullptr,
+            &outLightSamplersBufferInfo, nullptr)
     };
 }
 
-nvvkpp::RaytracingBuilderKHR::Blas ModelLoader::modelToBlas(const Model &model) {
+nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::modelToBlas(const Model &model) {
     // Setting up the creation info of acceleration structure
     vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
     asCreate.setGeometryType(vk::GeometryTypeKHR::eTriangles);
@@ -390,7 +459,7 @@ nvvkpp::RaytracingBuilderKHR::Blas ModelLoader::modelToBlas(const Model &model) 
     return blas;
 }
 
-void ModelLoader::createBottomLevelAS() {
+void SceneLoader::createBottomLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
     allBlas.reserve(models.size());
 
@@ -401,7 +470,7 @@ void ModelLoader::createBottomLevelAS() {
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
-void ModelLoader::createTopLevelAS() {
+void SceneLoader::createTopLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
     tlas.reserve(models.size());
 
@@ -421,11 +490,11 @@ void ModelLoader::createTopLevelAS() {
     rtBuilder.buildTlas(tlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
-const vk::AccelerationStructureKHR &ModelLoader::getAccelerationStructure() {
+const vk::AccelerationStructureKHR &SceneLoader::getAccelerationStructure() {
     return rtBuilder.getAccelerationStructure();
 }
 
-void ModelLoader::cleanup() {
+void SceneLoader::cleanup() {
 
     device.free(materialBufferMemory);
     device.destroy(materialBuffer);
@@ -433,6 +502,8 @@ void ModelLoader::cleanup() {
     device.destroy(instanceInfoBuffer);
     device.free(lightsBufferMemory);
     device.destroy(lightsBuffer);
+    device.free(lightsSamplerBufferMemory);
+    device.destroy(lightsSamplersBuffer);
 
     for (auto &model: models) {
         model.cleanup();
@@ -441,6 +512,6 @@ void ModelLoader::cleanup() {
     rtBuilder.destroy();
 }
 
-size_t ModelLoader::getModelCount() {
+size_t SceneLoader::getModelCount() {
     return models.size();
 }

@@ -2,10 +2,13 @@
 // Created by felixfifi on 17.05.20.
 //
 
-#ifndef RTX_RAYTRACER_MODELLOADER_H
-#define RTX_RAYTRACER_MODELLOADER_H
+#ifndef RTX_RAYTRACER_SCENELOADER_H
+#define RTX_RAYTRACER_SCENELOADER_H
 
 static const int VERTICES_PER_FACE = 3;
+static const int BINDINGS_COUNT = 6;
+#define SIZE_LIGHT_RANDOM 10000
+#define SIZE_TRI_RANDOM 10000
 
 #include "VulkanLoader.h"
 
@@ -20,23 +23,20 @@ static const int VERTICES_PER_FACE = 3;
 #include <json.hpp>
 #include "Model.h"
 
-struct Instance {
-    int iModel;
+struct alignas(16) Instance {
     glm::mat4 transform;
-    glm::mat4 normalTransform;
-};
-
-struct alignas(16) InstanceInfo {
     glm::mat4 normalTransform;
     int iModel;
 };
 
 struct alignas(16) Light {
-    alignas(16) glm::vec3 color;
-    alignas(16) glm::vec3 pos;
+    alignas(16) glm::vec3 color; // Does not need to be set for area lights. Is taken from material
+    alignas(16) glm::vec3 pos; // Only for point lights
+    int isPointLight; // Bool as integer, because glsl uses ints to represent booleans
+    uint instanceIndex;
 };
 
-class ModelLoader {
+class SceneLoader {
 private:
     std::string objectBaseDir;
     std::string materialBaseDir;
@@ -45,6 +45,7 @@ private:
     std::vector<Model> models;
     std::vector<Material> materials;
     std::vector<Light> lights;
+    std::vector<std::vector<int>> emissiveFacesPerModel;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 
@@ -56,28 +57,28 @@ private:
     vk::DeviceMemory instanceInfoBufferMemory;
     vk::Buffer lightsBuffer;
     vk::DeviceMemory lightsBufferMemory;
+    vk::Buffer lightsSamplersBuffer;
+    vk::DeviceMemory lightsSamplerBufferMemory;
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
 public:
-    ModelLoader() = default;
-    ModelLoader(const std::vector<std::string> &objPaths, const std::string &materialBaseDir,
-                std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
-                uint32_t graphicsQueueIndex);
-    ModelLoader(const std::string &filepath, const std::string &objectBaseDir,
+    SceneLoader() = default;
+    SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
                 const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
                 vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
 
 
-    std::array<vk::DescriptorSetLayoutBinding, 5> getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> getDescriptorSetLayouts();
 
-    std::array<vk::DescriptorPoolSize, 5> getDescriptorPoolSizes();
+    std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> getDescriptorPoolSizes();
 
-    std::array<vk::WriteDescriptorSet, 5> getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                                                                 std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
-                                                                 std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
-                                                                 vk::DescriptorBufferInfo &outMaterialBufferInfo,
-                                                                 vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
-                                                                 vk::DescriptorBufferInfo &outLightsBufferInfo);
+    std::array<vk::WriteDescriptorSet, BINDINGS_COUNT> getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
+                                                                              std::vector<vk::DescriptorBufferInfo> &outVertexBufferInfos,
+                                                                              std::vector<vk::DescriptorBufferInfo> &outIndexBufferInfos,
+                                                                              vk::DescriptorBufferInfo &outMaterialBufferInfo,
+                                                                              vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
+                                                                              vk::DescriptorBufferInfo &outLightsBufferInfo,
+                                                                              vk::DescriptorBufferInfo &outLightSamplersBufferInfo);
 
     const vk::AccelerationStructureKHR & getAccelerationStructure();
 
@@ -111,8 +112,10 @@ private:
 
     void createLightsBuffer();
 
-    void parseLights(const nlohmann::basic_json<> &j);
+    void parsePointLights(const nlohmann::basic_json<> &j);
+
+    void createLightSamplersBuffer();
 };
 
 
-#endif //RTX_RAYTRACER_MODELLOADER_H
+#endif //RTX_RAYTRACER_SCENELOADER_H

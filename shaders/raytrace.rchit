@@ -15,15 +15,15 @@ layout(binding = 4, set = 1, std140) buffer Instances { InstanceInfo instanceInf
 
 void main()
 {
-    int objId = instanceInfos[gl_InstanceID].modelIndex;
+    int iModel = instanceInfos[gl_InstanceID].modelIndex;
 
-    ivec3 ind = ivec3(indices[objId].i[3 * gl_PrimitiveID + 0],   //
-                      indices[objId].i[3 * gl_PrimitiveID + 1],   //
-                      indices[objId].i[3 * gl_PrimitiveID + 2]);  //
+    ivec3 ind = ivec3(indices[iModel].i[3 * gl_PrimitiveID + 0],   //
+                      indices[iModel].i[3 * gl_PrimitiveID + 1],   //
+                      indices[iModel].i[3 * gl_PrimitiveID + 2]);  //
     // Vertex of the triangle
-    Vertex v0 = vertices[objId].v[ind.x];
-    Vertex v1 = vertices[objId].v[ind.y];
-    Vertex v2 = vertices[objId].v[ind.z];
+    Vertex v0 = vertices[iModel].v[ind.x];
+    Vertex v1 = vertices[iModel].v[ind.y];
+    Vertex v2 = vertices[iModel].v[ind.z];
 
     const vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 

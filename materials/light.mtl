@@ -1,5 +1,5 @@
 newmtl light
-  Ka 50 50 50
+  Ka 1 1 1
   illum 11
 
   Ns 10.0000

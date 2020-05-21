@@ -14,8 +14,7 @@ set(IMGUI_CPP
         external/imgui/imgui_draw.cpp
         external/imgui/imgui_impl_sdl.cpp
         external/imgui/imgui_impl_vulkan.cpp
-        external/imgui/imgui_widgets.cpp
-        )
+        external/imgui/imgui_widgets.cpp)
 
 link_directories(${Vulkan_LIBRARY} ${SDL2_LIBRARIES})
 add_executable(rtx_raytracer
@@ -26,8 +25,9 @@ add_executable(rtx_raytracer
         src/VulkanLoader.cpp
         src/RayTracingApp.cpp
         src/Model.cpp
-        ${IMGUI_CPP}
         src/CameraController.cpp
-        src/ModelLoader.cpp)
+        src/SceneLoader.cpp
+        src/WeightedSampler.cpp
+        ${IMGUI_CPP})
 
 target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS})

@@ -32,7 +32,7 @@
 #include "VulkanWindow.h"
 #include "Model.h"
 #include "CameraController.h"
-#include "ModelLoader.h"
+#include "SceneLoader.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::vector<std::string> SCENES{
@@ -46,7 +46,7 @@ const int RANDOM_SIZE = 2048;
 
 static const int MAX_RECURSION = 2;
 
-static const int NOISE_BINDING = 6;
+static const int NOISE_BINDING = 7;
 
 struct CameraMatrices {
     glm::mat4 view;
@@ -72,13 +72,14 @@ public:
         int maxDepth = 10;
         int samplesPerPixel = 10;
         int enableRR = 0; // GLSL has 4 byte bool
+        int enableNEE = 1; // GLSL has 4 byte bool
     } rtPushConstants;
 
 private:
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
 
-    ModelLoader modelLoader;
+    SceneLoader modelLoader;
 
     bool autoRotate = false;
     bool accumulateResults = true;

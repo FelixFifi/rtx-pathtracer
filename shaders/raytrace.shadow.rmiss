@@ -6,5 +6,5 @@ layout(location = 0) rayPayloadInEXT shadowCheck shadowInfo;
 
 void main()
 {
-    shadowInfo.isShadowed = 0;
+    shadowInfo.isShadowed = false;
 }

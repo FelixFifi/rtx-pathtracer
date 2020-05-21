@@ -9,7 +9,7 @@ struct hitInfo
 };
 
 struct shadowCheck {
-    int isShadowed;
+    bool isShadowed;
 };
 
 struct pushConstant
@@ -22,4 +22,5 @@ struct pushConstant
     int maxDepth;
     int samplesPerPixel;
     bool enableRR;
+    bool enableNEE;
 };

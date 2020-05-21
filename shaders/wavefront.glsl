@@ -18,6 +18,7 @@ struct Material {
 };
 
 struct InstanceInfo {
+    mat4 transform;
     mat4 normalTransform;
     int modelIndex;
 };
@@ -25,4 +26,6 @@ struct InstanceInfo {
 struct Light {
     vec3 color;
     vec3 pos;
+    bool isPointLight;
+    uint instanceIndex;
 };

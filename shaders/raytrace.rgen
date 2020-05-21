@@ -1,18 +1,30 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : enable
 #include "raycommon.glsl"
 #include "wavefront.glsl"
 #define M_PI 3.1415926535897932384626433832795
+#define SIZE_LIGHT_RANDOM 10000
+#define SIZE_TRI_RANDOM 10000
+
+layout(push_constant) uniform PushConstant { pushConstant pushC; };
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 
-layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; };
-layout(binding = 5, set = 1, std140) buffer LightsBuffer { int lightCount; Light lights[]; };
-layout(binding = 6, set = 1) uniform sampler2D noiseSampler;
 
-layout(push_constant) uniform PushConstant { pushConstant pushC; };
+layout(binding = 1, set = 1, std140) buffer Vertices { Vertex v[]; } vertices[];
+layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
+layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; };
+layout(binding = 4, set = 1, std140) buffer Instances { InstanceInfo instanceInfos[]; };
+layout(binding = 5, set = 1, std140) buffer LightsBuffer { int lightCount; Light lights[]; };
+layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer {
+    int randomLigthIndex[SIZE_LIGHT_RANDOM]; // TODO: int -> struct {int , float probability}
+    int randomTriIndex[][SIZE_TRI_RANDOM]; // access index is the one returned from randomLightIndex, as point lights come after area lights
+};
+layout(binding = 7, set = 1) uniform sampler2D noiseSampler;
+
 
 layout(binding = 0, set = 1) uniform CameraMatrices {
         mat4 view;
@@ -27,19 +39,20 @@ layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
 vec2 noiseUV;
 const vec2 noiseStride = vec2(0.0129898, 0.078233);
 
-// Random vec4 [-1, 1]
+// Random vec4 [-1, 1)
 vec4 getRandom() {
     vec4 res = texture(noiseSampler, noiseUV);
     noiseUV += noiseStride;
     return res;
 }
 
+// Random vec4 [0, 1)
 vec4 getRandomPositive() {
     return (getRandom() + 1.0) / 2.0;
 }
 
 int getRandomInteger(int max) {
-    return min(max,  int(floor(getRandomPositive().x * (max + 1))));
+    return int(floor(getRandomPositive().x * (max + 1)));
 }
 
 // https://math.stackexchange.com/a/1163278
@@ -159,20 +172,61 @@ void main()
 
             switch (mat.type) {
                 case 0: // Diffuse
-                    if (lightCount > 0) {
+                    if (pushC.enableNEE && lightCount > 0) {
                         // factor 1/2 because of next event estimation
                         attenuation *= mat.diffuse * cosTheta * M_PI / 2.0;
 
                         // Next event estimation
-                        // Sample random point light
+                        // Sample random light
 
-                        int iLight = getRandomInteger(lightCount - 1);
+                        int iRandomLight = getRandomInteger(SIZE_LIGHT_RANDOM - 1);
+                        int iLight = randomLigthIndex[iRandomLight];
+                        Light light = lights[iLight];
 
-                        vec3 toLight = lights[iLight].pos - info.worldPos;
-                        float lightDistance = length(toLight);
-                        vec3 shadowDir = normalize(toLight);
+                        vec3 lightColor;
+                        vec3 shadowDir;
+                        float lightDistance;
+                        if (light.isPointLight) {
+                            vec3 toLight = light.pos - origin;
+                            lightDistance = length(toLight);
+                            shadowDir = normalize(toLight);
 
-                        shadowInfo.isShadowed = 1;
+                            lightColor = light.color / (lightDistance * lightDistance);
+                        } else {
+                            int iModel = instanceInfos[light.instanceIndex].modelIndex;
+                            mat4 transform = instanceInfos[light.instanceIndex].transform;
+
+                            int iRandomTri = getRandomInteger(SIZE_TRI_RANDOM - 1);
+                            int iTri = randomTriIndex[iRandomLight][iRandomTri];
+
+                            ivec3 ind = ivec3(indices[iModel].i[3 * iTri + 0],   //
+                                              indices[iModel].i[3 * iTri + 1],   //
+                                              indices[iModel].i[3 * iTri + 2]);  //
+
+                            // Vertex of the triangle
+                            Vertex v0 = vertices[iModel].v[ind.x];
+                            Vertex v1 = vertices[iModel].v[ind.y];
+                            Vertex v2 = vertices[iModel].v[ind.z];
+
+                            // Uniform random point on triangle
+                            vec2 random = getRandomPositive().xy;
+                            float sqrtx = sqrt(random.x);
+                            float sqrty = sqrt(random.y);
+                            vec3 barycentrics = vec3(1.0 - sqrtx, sqrtx * (1.0 - random.y), random.y * sqrtx);
+
+                            // Computing the coordinates of the hit position
+                            vec3 lightSampleWorldPos = v0.pos * barycentrics.x + v1.pos * barycentrics.y + v2.pos * barycentrics.z;
+                            // Transforming the position to world space
+                            lightSampleWorldPos = (transform * vec4(lightSampleWorldPos, 1.0)).xyz;
+
+                            lightColor = mats[v0.materialIndex].lightColor;
+
+                            vec3 toLight = lightSampleWorldPos - origin;
+                            lightDistance = length(toLight) - 0.0001;
+                            shadowDir = normalize(toLight);
+                        }
+
+                        shadowInfo.isShadowed = true;
                         if (dot(shadowDir, info.normal) > 0) {
                             traceRayEXT(topLevelAS,     // acceleration structure
                                         shadowRayFlags,       // rayFlags
@@ -183,12 +237,13 @@ void main()
                                         origin.xyz,     // ray origin
                                         tMin,           // ray min range
                                         shadowDir,  // ray direction
-                                        lightDistance,           // ray max range
+                                        lightDistance - 0.0001,           // ray max range
                                         1               // payload (location = 2)
                             );
                         }
-                        if (shadowInfo.isShadowed == 0) {
-                            sampleResult += attenuation * lights[iLight].color / (lightDistance * lightDistance);
+
+                        if (!shadowInfo.isShadowed) {
+                            sampleResult += attenuation * lightColor;
                         }
                     } else {
                         attenuation *= mat.diffuse * cosTheta * M_PI;

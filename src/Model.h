@@ -68,6 +68,8 @@ public:
     Model(std::vector<Vertex> vertices, std::vector<uint32_t> indices,
           const std::shared_ptr<VulkanOps> &vulkanOps);
 
+    float getFaceArea(int iFace, glm::mat4 transform = glm::mat4(1.0f));
+
     void cleanup();
 private:
     vk::Device device;
