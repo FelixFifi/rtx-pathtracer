@@ -28,3 +28,13 @@ WeightedSampler::WeightedSampler(const std::vector<float> &values) : values(valu
         total += value;
     }
 }
+
+std::vector<float> WeightedSampler::getProbabilities() {
+    std::vector<float> probs(values.size());
+
+    for (int iValue = 0; iValue < values.size(); ++iValue) {
+        probs[iValue] = values[iValue] / total;
+    }
+
+    return probs;
+}

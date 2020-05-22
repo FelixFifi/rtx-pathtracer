@@ -34,6 +34,13 @@ struct alignas(16) Light {
     alignas(16) glm::vec3 pos; // Only for point lights
     int isPointLight; // Bool as integer, because glsl uses ints to represent booleans
     uint instanceIndex;
+    float sampleProb;
+};
+
+struct FaceSample {
+    int index;
+    float sampleProb;
+    float faceArea;
 };
 
 class SceneLoader {
@@ -110,7 +117,7 @@ private:
 
     void parseInstances(const nlohmann::basic_json<> &j, std::map<std::string, int> &nameIndexMapping);
 
-    void createLightsBuffer();
+    void createLightsBuffers();
 
     void parsePointLights(const nlohmann::basic_json<> &j);
 

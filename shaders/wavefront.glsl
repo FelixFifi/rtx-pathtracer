@@ -28,4 +28,11 @@ struct Light {
     vec3 pos;
     bool isPointLight;
     uint instanceIndex;
+    float sampleProb;
+};
+
+struct FaceSample {
+    int index;
+    float sampleProb;
+    float faceArea;
 };

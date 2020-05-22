@@ -20,8 +20,8 @@ layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; };
 layout(binding = 4, set = 1, std140) buffer Instances { InstanceInfo instanceInfos[]; };
 layout(binding = 5, set = 1, std140) buffer LightsBuffer { int lightCount; Light lights[]; };
 layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer {
-    int randomLigthIndex[SIZE_LIGHT_RANDOM]; // TODO: int -> struct {int , float probability}
-    int randomTriIndex[][SIZE_TRI_RANDOM]; // access index is the one returned from randomLightIndex, as point lights come after area lights
+    int randomLigthIndex[SIZE_LIGHT_RANDOM];
+    FaceSample randomTriIndex[][SIZE_TRI_RANDOM]; // access index is the one returned from randomLightIndex, as point lights come after area lights
 };
 layout(binding = 7, set = 1) uniform sampler2D noiseSampler;
 
@@ -51,6 +51,7 @@ vec4 getRandomPositive() {
     return (getRandom() + 1.0) / 2.0;
 }
 
+// Random int [0, max]
 int getRandomInteger(int max) {
     return int(floor(getRandomPositive().x * (max + 1)));
 }
@@ -132,6 +133,8 @@ void main()
         vec4 target    = cam.projInverse * vec4(d.x, d.y, 1, 1);
         vec3 direction = (cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz;
 
+        bool addDirectLightHits = true;
+
         for (int iDepth = 0; iDepth < maxDepth; ++iDepth) {
             traceRayEXT(topLevelAS,     // acceleration structure
                         rayFlags,       // rayFlags
@@ -146,7 +149,7 @@ void main()
                         0               // payload (location = 0)
             );
 
-            // Directional light
+            // Directional light / skybox
             if (info.isLight) {
                 sampleResult += attenuation * info.lightColor;
                 break;
@@ -164,17 +167,16 @@ void main()
 
             Material mat = mats[info.matIndex];
 
-            if (mat.type == 3) {
-                // Light
-                sampleResult += attenuation * mat.lightColor;
-                break;
-            }
-
             switch (mat.type) {
+                case 3: // Light
+                    if (!pushC.enableNEE || addDirectLightHits) {
+                        sampleResult += attenuation * mat.lightColor;
+                    }
+                    // Then continue as diffuse
                 case 0: // Diffuse
                     if (pushC.enableNEE && lightCount > 0) {
                         // factor 1/2 because of next event estimation
-                        attenuation *= mat.diffuse * cosTheta * M_PI / 2.0;
+                        attenuation *= mat.diffuse * cosTheta * M_PI;
 
                         // Next event estimation
                         // Sample random light
@@ -186,18 +188,24 @@ void main()
                         vec3 lightColor;
                         vec3 shadowDir;
                         float lightDistance;
+                        float p;
                         if (light.isPointLight) {
                             vec3 toLight = light.pos - origin;
                             lightDistance = length(toLight);
                             shadowDir = normalize(toLight);
 
+                            p = light.sampleProb;
                             lightColor = light.color / (lightDistance * lightDistance);
                         } else {
                             int iModel = instanceInfos[light.instanceIndex].modelIndex;
                             mat4 transform = instanceInfos[light.instanceIndex].transform;
 
                             int iRandomTri = getRandomInteger(SIZE_TRI_RANDOM - 1);
-                            int iTri = randomTriIndex[iRandomLight][iRandomTri];
+                            FaceSample triSample = randomTriIndex[iLight][iRandomTri];
+
+                            int iTri = triSample.index;
+
+                            p = light.sampleProb * triSample.sampleProb;
 
                             ivec3 ind = ivec3(indices[iModel].i[3 * iTri + 0],   //
                                               indices[iModel].i[3 * iTri + 1],   //
@@ -238,24 +246,26 @@ void main()
                                         tMin,           // ray min range
                                         shadowDir,  // ray direction
                                         lightDistance - 0.0001,           // ray max range
-                                        1               // payload (location = 2)
+                                        1               // payload (location = 1)
                             );
                         }
 
                         if (!shadowInfo.isShadowed) {
-                            sampleResult += attenuation * lightColor;
+                            sampleResult += attenuation * lightColor / p / (lightDistance * lightDistance);
                         }
                     } else {
-                        attenuation *= mat.diffuse * cosTheta * M_PI;
+                        attenuation *= mat.diffuse * cosTheta * 2.0 * M_PI;
                     }
 
                     direction = randomInHemisphere(info.normal);
+                    addDirectLightHits = false;
                     break;
                 case 1: // Specular
                 {
                     attenuation *= mat.specular;
 
                     direction = reflect(direction, info.normal);
+                    addDirectLightHits = true;
                     break;
                 }
 
@@ -279,6 +289,7 @@ void main()
                         direction = reflect(direction, info.normal);
                     }
 
+                    addDirectLightHits = true;
                     break;
                 }
             }

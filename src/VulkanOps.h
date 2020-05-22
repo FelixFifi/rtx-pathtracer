@@ -82,12 +82,12 @@ public:
     }
 
     template<class T, class U>
-    void createBufferFrom2Data(const std::vector<T> &data1ToCopy, const std::vector<U> &dataToCopy2, vk::BufferUsageFlags &usage,
+    void createBufferFrom2Data(const std::vector<T> &dataToCopy1, const std::vector<U> &dataToCopy2, vk::BufferUsageFlags &usage,
                                const vk::MemoryPropertyFlags &memoryProperties, vk::Buffer &outBuffer,
                                vk::DeviceMemory &outMemory) {
         usage = usage | vk::BufferUsageFlagBits::eTransferDst;
 
-        size_t data1Size = sizeof(data1ToCopy[0]) * data1ToCopy.size();
+        size_t data1Size = sizeof(dataToCopy1[0]) * dataToCopy1.size();
         size_t data2Size = sizeof(dataToCopy2[0]) * dataToCopy2.size();
         vk::DeviceSize bufferSize = data1Size + data2Size;
 
@@ -101,7 +101,7 @@ public:
         void *data;
         data = device.mapMemory(stagingBufferMemory, 0, bufferSize);
 
-        memcpy(data, data1ToCopy.data(), data1Size);
+        memcpy(data, dataToCopy1.data(), data1Size);
         memcpy((static_cast<char*>(data) + data1Size), dataToCopy2.data(), data2Size);
         device.unmapMemory(stagingBufferMemory);
 

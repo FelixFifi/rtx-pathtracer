@@ -1,5 +1,6 @@
 newmtl light
-  Ka 1 1 1
+  Ka 100 100 100
+  Ks 0.3000 0.3000 0.3000
   illum 11
 
   Ns 10.0000
@@ -7,7 +8,6 @@ newmtl light
   d 1.0000
   Tr 0.0000
   Tf 1.0000 1.0000 1.0000
-  Ks 0.0000 0.0000 0.0000
   Ke 0.0000 0.0000 0.0000
   map_Ka cube.png
   map_Kd cube.png

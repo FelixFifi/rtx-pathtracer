@@ -16,6 +16,8 @@ public:
      * @return The index of the chosen object, weighted by values
      */
     int sample();
+
+    std::vector<float> getProbabilities();
 private:
     std::vector<float> values;
     float total;

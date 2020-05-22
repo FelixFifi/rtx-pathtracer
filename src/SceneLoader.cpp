@@ -21,8 +21,7 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createMaterialBuffer();
     createInstanceInfoBuffer();
-    createLightsBuffer();
-    createLightSamplersBuffer();
+    createLightsBuffers();
     createBottomLevelAS();
     createTopLevelAS();
 }
@@ -263,7 +262,9 @@ void SceneLoader::createInstanceInfoBuffer() {
                                     instanceInfoBufferMemory);
 }
 
-void SceneLoader::createLightsBuffer() {
+void SceneLoader::createLightsBuffers() {
+    createLightSamplersBuffer();
+
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
 
     // Light count is padded with 0s to satisfy struct alignment
@@ -286,12 +287,19 @@ void SceneLoader::createLightSamplersBuffer() {
 
     WeightedSampler lightSampler(powers);
 
+    // Set probabilities to sample a light
+    std::vector<float> probSampleLight = lightSampler.getProbabilities();
+
+    for (int iLight = 0; iLight < lights.size(); ++iLight) {
+        lights[iLight].sampleProb = probSampleLight[iLight];
+    }
+
     std::vector<int> randomLightIndex(SIZE_LIGHT_RANDOM);
     for (int i = 0; i < SIZE_LIGHT_RANDOM; ++i) {
         randomLightIndex[i] = lightSampler.sample();
     }
 
-    std::vector<int> randomTriIndicesPerLight;
+    std::vector<FaceSample> randomTriIndicesPerLight;
     for (const auto &light : lights) {
         // Area lights are before all point lights
         if (light.isPointLight) {
@@ -309,9 +317,17 @@ void SceneLoader::createLightSamplersBuffer() {
 
         WeightedSampler faceSampler(areas);
 
-        std::vector<int> randomTriIndices(SIZE_TRI_RANDOM);
+        std::vector<float> probSampleFace = faceSampler.getProbabilities();
+
+        std::vector<FaceSample> randomTriIndices(SIZE_TRI_RANDOM);
         for (int i = 0; i < SIZE_TRI_RANDOM; ++i) {
-            randomTriIndices[i] = emissiveFacesPerModel[iModel][faceSampler.sample()];
+            int sample = faceSampler.sample();
+
+            FaceSample faceSample{};
+            faceSample.index = emissiveFacesPerModel[iModel][sample];
+            faceSample.sampleProb = probSampleFace[sample];
+            faceSample.faceArea = areas[sample];
+            randomTriIndices[i] = faceSample;
         }
 
         randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(), randomTriIndices.end());
