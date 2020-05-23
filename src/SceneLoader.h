@@ -122,6 +122,10 @@ private:
     void parsePointLights(const nlohmann::basic_json<> &j);
 
     void createLightSamplersBuffer();
+
+    std::vector<int> getLightSamplingVector();
+
+    std::vector<FaceSample> getFaceSamplingVector();
 };
 
 

@@ -43,4 +43,5 @@ void main()
     info.matIndex = v0.materialIndex;
     info.t = gl_HitTEXT;
     info.isLight = false;
+    info.instanceIndex = gl_InstanceID;
 }

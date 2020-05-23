@@ -6,6 +6,7 @@ struct hitInfo
     float t;
     bool isLight; // TODO: extract to light material and check via matIndex
     vec3 lightColor;
+    uint instanceIndex;
 };
 
 struct shadowCheck {

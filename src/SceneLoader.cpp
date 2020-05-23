@@ -278,27 +278,18 @@ void SceneLoader::createLightsBuffers() {
  * These random numbers should be weighted by the total power and face area.
  */
 void SceneLoader::createLightSamplersBuffer() {
+    std::vector<int> randomLightIndex = getLightSamplingVector();
 
-    std::vector<float> powers;
-    powers.reserve(lights.size());
-    for (const auto &light : lights) {
-        powers.push_back(1.0f); // TODO: Calculate per light power for weighting
-    }
+    std::vector<FaceSample> randomTriIndicesPerLight = getFaceSamplingVector();
 
-    WeightedSampler lightSampler(powers);
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
 
-    // Set probabilities to sample a light
-    std::vector<float> probSampleLight = lightSampler.getProbabilities();
+    vulkanOps->createBufferFrom2Data(randomLightIndex, randomTriIndicesPerLight, usage,
+                                     vk::MemoryPropertyFlagBits::eDeviceLocal, lightsSamplersBuffer,
+                                     lightsSamplerBufferMemory);
+}
 
-    for (int iLight = 0; iLight < lights.size(); ++iLight) {
-        lights[iLight].sampleProb = probSampleLight[iLight];
-    }
-
-    std::vector<int> randomLightIndex(SIZE_LIGHT_RANDOM);
-    for (int i = 0; i < SIZE_LIGHT_RANDOM; ++i) {
-        randomLightIndex[i] = lightSampler.sample();
-    }
-
+std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
     std::vector<FaceSample> randomTriIndicesPerLight;
     for (const auto &light : lights) {
         // Area lights are before all point lights
@@ -332,13 +323,30 @@ void SceneLoader::createLightSamplersBuffer() {
 
         randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(), randomTriIndices.end());
     }
+    return randomTriIndicesPerLight;
+}
 
-    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
+std::vector<int> SceneLoader::getLightSamplingVector() {
+    std::vector<float> powers;
+    powers.reserve(lights.size());
+    for (const auto &light : lights) {
+        powers.push_back(1.0f); // TODO: Calculate per light power for weighting
+    }
 
+    WeightedSampler lightSampler(powers);
 
-    vulkanOps->createBufferFrom2Data(randomLightIndex, randomTriIndicesPerLight, usage,
-                                     vk::MemoryPropertyFlagBits::eDeviceLocal, lightsSamplersBuffer,
-                                     lightsSamplerBufferMemory);
+    // Set probabilities to sample a light
+    std::vector<float> probSampleLight = lightSampler.getProbabilities();
+
+    for (int iLight = 0; iLight < lights.size(); ++iLight) {
+        lights[iLight].sampleProb = probSampleLight[iLight];
+    }
+
+    std::vector<int> randomLightIndex(SIZE_LIGHT_RANDOM);
+    for (int i = 0; i < SIZE_LIGHT_RANDOM; ++i) {
+        randomLightIndex[i] = lightSampler.sample();
+    }
+    return randomLightIndex;
 }
 
 std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescriptorSetLayouts() {

@@ -406,7 +406,7 @@ void RayTracingApp::createRtPipeline() {
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
-    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 4 shaders: raygen, miss, chit, shadow miss
+    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 5 shaders: raygen, miss, chit, shadow miss, shadow anyhit
     auto groupHandleSize = static_cast<uint64_t>(rtProperties.shaderGroupHandleSize); // Size of a program identifier
 
     // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
