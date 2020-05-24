@@ -10,5 +10,3 @@ newmtl diffuseGreen
   Ka 0.0000 0.0000 0.0000
   Ks 0.0000 0.0000 0.0000
   Ke 0.0000 0.0000 0.0000
-  map_Ka cube.png
-  map_Kd cube.png

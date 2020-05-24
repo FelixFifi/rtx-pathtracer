@@ -12,6 +12,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <filesystem>
 
+#define STB_IMAGE_IMPLEMENTATION
+
+#include <stb_image.h>
+
 #include "json.hpp"
 #include "WeightedSampler.h"
 
@@ -27,9 +31,11 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
 }
 
 SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
-                         const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
-                         vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex)
-        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), vulkanOps(vulkanOps),
+                         const std::string &materialBaseDir, const std::string &textureBaseDir,
+                         std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
+                         uint32_t graphicsQueueIndex)
+        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
+          vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
     parseSceneFile(filepath);
 
@@ -85,8 +91,54 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
                 throw std::runtime_error("Unknown illum mode");
         }
 
+        if (!tinyMaterial.ambient_texname.empty()) {
+            material.textureId = addTexture(tinyMaterial);
+
+        }
+
         materials.push_back(material);
     }
+}
+
+int SceneLoader::addTexture(const tinyobj::material_t &tinyMaterial) {
+    std::filesystem::path path = textureBaseDir;
+    path /= tinyMaterial.ambient_texname;
+
+    int width, height, channels;
+    const int outputChannel = 4;
+    stbi_uc *data = stbi_load(path.c_str(), &width, &height, &channels, outputChannel);
+
+    if (!data) {
+        throw std::runtime_error("Could not load texture file " + path.string());
+    }
+
+    std::vector<stbi_uc> dataVector(data, data + sizeof(data[0]) * width * height * outputChannel);
+    free(data);
+
+    vk::Format format = vk::Format::eR8G8B8A8Srgb;
+
+    Texture texture{};
+
+    vulkanOps->createImageFromData(dataVector, width, height, format, texture.image, texture.imageMemory,
+                                   texture.imageView);
+
+    vk::SamplerCreateInfo samplerCreateInfo{{},
+                                            vk::Filter::eLinear,
+                                            vk::Filter::eLinear,
+                                            vk::SamplerMipmapMode::eNearest,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            {},
+                                            false,
+                                            0};
+
+    texture.sampler = device.createSampler(samplerCreateInfo);
+
+
+    textures.push_back(texture);
+
+    return textures.size() - 1;
 }
 
 void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,
@@ -321,7 +373,8 @@ std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
             randomTriIndices[i] = faceSample;
         }
 
-        randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(), randomTriIndices.end());
+        randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(),
+                                        randomTriIndices.end());
     }
     return randomTriIndicesPerLight;
 }
@@ -365,9 +418,11 @@ std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescr
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding lightSamplersBufferBinding(6, vk::DescriptorType::eStorageBuffer, 1,
                                                               vk::ShaderStageFlagBits::eRaygenKHR);
+    vk::DescriptorSetLayoutBinding texturesBinding(7, vk::DescriptorType::eCombinedImageSampler, textures.size(),
+                                                              vk::ShaderStageFlagBits::eRaygenKHR, nullptr);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
-            lightsBufferBinding, lightSamplersBufferBinding};
+            lightsBufferBinding, lightSamplersBufferBinding, texturesBinding};
 }
 
 std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoolSizes() {
@@ -377,7 +432,8 @@ std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoo
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, textures.size())
     };
 }
 
@@ -396,10 +452,16 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                     vk::DescriptorBufferInfo &outMaterialBufferInfo,
                                     vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
                                     vk::DescriptorBufferInfo &outLightsBufferInfo,
-                                    vk::DescriptorBufferInfo &outLightSamplersBufferInfo) {
+                                    vk::DescriptorBufferInfo &outLightSamplersBufferInfo,
+                                    std::vector<vk::DescriptorImageInfo> &outTexturesInfos) {
     unsigned long modelCount = models.size();
+
+    outVertexBufferInfos.clear();
+    outIndexBufferInfos.clear();
+    outTexturesInfos.clear();
     outVertexBufferInfos.reserve(modelCount);
     outIndexBufferInfos.reserve(modelCount);
+    outTexturesInfos.reserve(textures.size());
 
     for (const auto &model: models) {
         vk::DescriptorBufferInfo vertexBufferInfo(model.vertexBuffer, 0, VK_WHOLE_SIZE);
@@ -407,6 +469,11 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
 
         outVertexBufferInfos.push_back(vertexBufferInfo);
         outIndexBufferInfos.push_back(indexBufferInfo);
+    }
+
+    for (const auto &texture: textures) {
+        vk::DescriptorImageInfo textureInfo{texture.sampler, texture.imageView, vk::ImageLayout::eShaderReadOnlyOptimal};
+        outTexturesInfos.push_back(textureInfo);
     }
 
     outMaterialBufferInfo = vk::DescriptorBufferInfo(materialBuffer, 0, VK_WHOLE_SIZE);
@@ -431,8 +498,11 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                    vk::DescriptorType::eStorageBuffer, nullptr,
                                    &outLightsBufferInfo, nullptr),
             vk::WriteDescriptorSet(descriptorSet, 6, 0, 1,
-            vk::DescriptorType::eStorageBuffer, nullptr,
-            &outLightSamplersBufferInfo, nullptr)
+                                   vk::DescriptorType::eStorageBuffer, nullptr,
+                                   &outLightSamplersBufferInfo, nullptr),
+            vk::WriteDescriptorSet(descriptorSet, 7, 0, textures.size(),
+            vk::DescriptorType::eCombinedImageSampler, outTexturesInfos.data(),
+                                   nullptr, nullptr)
     };
 }
 
@@ -519,6 +589,10 @@ const vk::AccelerationStructureKHR &SceneLoader::getAccelerationStructure() {
 }
 
 void SceneLoader::cleanup() {
+
+    for (auto &texture: textures) {
+        texture.cleanup(device);
+    }
 
     device.free(materialBufferMemory);
     device.destroy(materialBuffer);

@@ -2,9 +2,10 @@ struct hitInfo
 {
     vec3 worldPos;
     vec3 normal;
+    vec2 textureUV;
     int matIndex;
     float t;
-    bool isLight; // TODO: extract to light material and check via matIndex
+    bool isLight; // TODO: Find more consistent handling of miss
     vec3 lightColor;
     uint instanceIndex;
 };

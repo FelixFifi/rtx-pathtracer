@@ -130,48 +130,21 @@ bool VulkanOps::hasStencilComponent(vk::Format format) {
 }
 
 void
-VulkanOps::createNoiseTextureFromData(const std::vector<glm::vec4> &noise, int texWidth, int texHeight, vk::Image &outImage,
-                                      vk::DeviceMemory &outMemory, vk::ImageView &outImageView, vk::Sampler &outSampler) {
+VulkanOps::createNoiseTextureFromData(const std::vector<glm::vec4> &noise, int texWidth, int texHeight,
+                                      vk::Image &outImage,
+                                      vk::DeviceMemory &outMemory, vk::ImageView &outImageView,
+                                      vk::Sampler &outSampler) {
     assert(noise.size() == texWidth * texHeight);
-    vk::DeviceSize imageSize = noise.size() * sizeof(glm::vec4);
-
-
-    vk::Buffer stagingBuffer;
-    vk::DeviceMemory stagingBufferMemory;
-    VulkanOps::createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
-                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                            stagingBuffer,
-                            stagingBufferMemory);
-
-    void *data;
-    data = device.mapMemory(stagingBufferMemory, 0, imageSize);
-    memcpy(data, noise.data(), static_cast<size_t>(imageSize));
-    device.unmapMemory(stagingBufferMemory);
-
-
     vk::Format format = vk::Format::eR32G32B32A32Sfloat;
-    createImage(texWidth, texHeight, format, vk::ImageTiling::eOptimal,
-                           vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-                vk::MemoryPropertyFlagBits::eDeviceLocal,
-                outImage, outMemory);
 
-    transitionImageLayout(outImage, format, vk::ImageLayout::eUndefined,
-                                     vk::ImageLayout::eTransferDstOptimal);
-    copyBufferToImage(stagingBuffer, outImage, static_cast<uint32_t>(texWidth),
-                                 static_cast<uint32_t>(texHeight));
-    transitionImageLayout(outImage, format, vk::ImageLayout::eTransferDstOptimal,
-                                     vk::ImageLayout::eShaderReadOnlyOptimal);
+    createImageFromData(noise, texWidth, texHeight, format, outImage, outMemory, outImageView);
 
-    outImageView = createImageView(outImage, format, vk::ImageAspectFlagBits::eColor);
 
     vk::SamplerCreateInfo samplerInfo({}, vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
                                       vk::SamplerAddressMode::eMirroredRepeat, vk::SamplerAddressMode::eMirroredRepeat,
                                       vk::SamplerAddressMode::eRepeat, 0.0f, false, 0, false,
                                       vk::CompareOp::eAlways, 0.0f, 0.0f, vk::BorderColor::eIntOpaqueBlack, false);
     outSampler = device.createSampler(samplerInfo);
-
-    device.destroy(stagingBuffer);
-    device.freeMemory(stagingBufferMemory);
 }
 
 void VulkanOps::copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) {

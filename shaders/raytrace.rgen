@@ -23,7 +23,9 @@ layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer {
     int randomLigthIndex[SIZE_LIGHT_RANDOM];
     FaceSample randomTriIndex[][SIZE_TRI_RANDOM]; // access index is the one returned from randomLightIndex, as point lights come after area lights
 };
-layout(binding = 7, set = 1) uniform sampler2D noiseSampler;
+
+layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
+layout(binding = 8, set = 1) uniform sampler2D noiseSampler;
 
 
 layout(binding = 0, set = 1) uniform CameraMatrices {
@@ -175,7 +177,13 @@ void main()
                     // Then continue as diffuse
                 case 0: // Diffuse
                     if (pushC.enableNEE && lightCount > 0) {
-                        throughput *= mat.diffuse * cosTheta * 2.0;
+
+                        if (mat.textureId != -1) {
+                            throughput *= texture(textureSamplers[mat.textureId], info.textureUV).xyz * mat.diffuse * cosTheta * 2.0;
+                        } else {
+                            throughput *= mat.diffuse * cosTheta * 2.0;
+                        }
+
 
                         // Next event estimation
                         // Sample random light

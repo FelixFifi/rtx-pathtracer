@@ -6,7 +6,7 @@
 #define RTX_RAYTRACER_SCENELOADER_H
 
 static const int VERTICES_PER_FACE = 3;
-static const int BINDINGS_COUNT = 6;
+static const int BINDINGS_COUNT = 7;
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
 
@@ -43,16 +43,32 @@ struct FaceSample {
     float faceArea;
 };
 
+struct Texture {
+    vk::Image image;
+    vk::DeviceMemory imageMemory;
+    vk::ImageView imageView;
+    vk::Sampler sampler;
+
+    void cleanup(const vk::Device &device) {
+        device.free(imageMemory);
+        device.destroy(sampler);
+        device.destroy(imageView);
+        device.destroy(image);
+    }
+};
+
 class SceneLoader {
 private:
     std::string objectBaseDir;
     std::string materialBaseDir;
+    std::string textureBaseDir;
 
     std::vector<Instance> instances;
     std::vector<Model> models;
     std::vector<Material> materials;
     std::vector<Light> lights;
     std::vector<std::vector<int>> emissiveFacesPerModel;
+    std::vector<Texture> textures;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 
@@ -71,8 +87,9 @@ private:
 public:
     SceneLoader() = default;
     SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
-                const std::string &materialBaseDir, std::shared_ptr<VulkanOps> vulkanOps,
-                vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
+                const std::string &materialBaseDir, const std::string &textureBaseDir,
+                std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
+                uint32_t graphicsQueueIndex);
 
 
     std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> getDescriptorSetLayouts();
@@ -85,7 +102,8 @@ public:
                                                                               vk::DescriptorBufferInfo &outMaterialBufferInfo,
                                                                               vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
                                                                               vk::DescriptorBufferInfo &outLightsBufferInfo,
-                                                                              vk::DescriptorBufferInfo &outLightSamplersBufferInfo);
+                                                                              vk::DescriptorBufferInfo &outLightSamplersBufferInfo,
+                                                                              std::vector<vk::DescriptorImageInfo> &outTexturesInfos);
 
     const vk::AccelerationStructureKHR & getAccelerationStructure();
 
@@ -126,6 +144,8 @@ private:
     std::vector<int> getLightSamplingVector();
 
     std::vector<FaceSample> getFaceSamplingVector();
+
+    int addTexture(const tinyobj::material_t &tinyMaterial);
 };
 
 

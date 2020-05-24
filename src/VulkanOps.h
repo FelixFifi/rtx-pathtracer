@@ -144,6 +144,43 @@ public:
     void
     createNoiseTextureFromData(const std::vector<glm::vec4> &noise, int texWidth, int texHeight, vk::Image &outImage,
                                vk::DeviceMemory &outMemory, vk::ImageView &outImageView, vk::Sampler &outSampler);
+
+    template<class T>
+    void createImageFromData(const std::vector<T> &dataToCopy, int texWidth, int texHeight, const vk::Format &format,
+                                        vk::Image &outImage, vk::DeviceMemory &outMemory, vk::ImageView &outImageView) {
+        vk::DeviceSize imageSize = dataToCopy.size() * sizeof(T);
+
+
+        vk::Buffer stagingBuffer;
+        vk::DeviceMemory stagingBufferMemory;
+        createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                     stagingBuffer,
+                     stagingBufferMemory);
+
+        void *data;
+        data = device.mapMemory(stagingBufferMemory, 0, imageSize);
+        memcpy(data, dataToCopy.data(), static_cast<size_t>(imageSize));
+        device.unmapMemory(stagingBufferMemory);
+
+
+        createImage(texWidth, texHeight, format, vk::ImageTiling::eOptimal,
+                    vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal,
+                    outImage, outMemory);
+
+        transitionImageLayout(outImage, format, vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eTransferDstOptimal);
+        copyBufferToImage(stagingBuffer, outImage, static_cast<uint32_t>(texWidth),
+                          static_cast<uint32_t>(texHeight));
+        transitionImageLayout(outImage, format, vk::ImageLayout::eTransferDstOptimal,
+                              vk::ImageLayout::eShaderReadOnlyOptimal);
+
+        device.destroy(stagingBuffer);
+        device.freeMemory(stagingBufferMemory);
+
+        outImageView = createImageView(outImage, format, vk::ImageAspectFlagBits::eColor);
+    }
 };
 
 #endif //RTX_RAYTRACER_VULKANOPS_H

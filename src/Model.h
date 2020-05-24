@@ -46,6 +46,7 @@ struct alignas(16) Material {
     float transparency;
     float refractionIndex;
     float refractionIndexInv;
+    int textureId = -1;
     EMatType type;
 };
 

@@ -5,10 +5,6 @@
 #include "Model.h"
 #include "VulkanOps.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-
-#include <stb_image.h>
-
 #include <utility>
 
 Model::Model(std::vector<Vertex> vertices, std::vector<uint32_t> indices,

@@ -96,7 +96,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     }
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, vulkanOps, physicalDevice,
+    modelLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps, physicalDevice,
                               vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
 
     recreateDescriptorSets();
@@ -150,13 +150,14 @@ void RayTracingApp::createDecriptorSetLayout() {
 
 
     auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 8> bindings = {uniformBufferLayoutBinding,
+    std::array<vk::DescriptorSetLayoutBinding, 9> bindings = {uniformBufferLayoutBinding,
                                                               vertexIndexMaterialBindings[0],
                                                               vertexIndexMaterialBindings[1],
                                                               vertexIndexMaterialBindings[2],
                                                               vertexIndexMaterialBindings[3],
                                                               vertexIndexMaterialBindings[4],
                                                               vertexIndexMaterialBindings[5],
+                                                              vertexIndexMaterialBindings[6],
                                                               noiseSamplerBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -167,7 +168,7 @@ void RayTracingApp::createDecriptorSetLayout() {
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = modelLoader.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 8> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 9> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -176,6 +177,7 @@ void RayTracingApp::createDescriptorPool() {
             vertexIndexMaterialPoolSizes[3],
             vertexIndexMaterialPoolSizes[4],
             vertexIndexMaterialPoolSizes[5],
+            vertexIndexMaterialPoolSizes[6],
             vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
     }; // TODO: One per frame
 
@@ -205,13 +207,14 @@ void RayTracingApp::createDescriptorSets() {
         vk::DescriptorBufferInfo instanceInfoBufferInfo;
         vk::DescriptorBufferInfo lightBufferInfo;
         vk::DescriptorBufferInfo lightSamplersBufferInfo;
+        std::vector<vk::DescriptorImageInfo> textureInfos;
 
         auto vertexIndexBufferWrites = modelLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                                           indexBufferInfos, materialBufferInfo,
                                                                           instanceInfoBufferInfo, lightBufferInfo,
-                                                                          lightSamplersBufferInfo);
+                                                                          lightSamplersBufferInfo, textureInfos);
 
-        std::array<vk::WriteDescriptorSet, 8> descriptorWrites = {};
+        std::array<vk::WriteDescriptorSet, 9> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
@@ -222,6 +225,7 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[4] = vertexIndexBufferWrites[3];
         descriptorWrites[5] = vertexIndexBufferWrites[4];
         descriptorWrites[6] = vertexIndexBufferWrites[5];
+        descriptorWrites[7] = vertexIndexBufferWrites[6];
         descriptorWrites[NOISE_BINDING] = vk::WriteDescriptorSet(descriptorSet, NOISE_BINDING, 0, 1,
                                                                  vk::DescriptorType::eCombinedImageSampler, &noiseImageInfo,
                                                                  nullptr, nullptr);

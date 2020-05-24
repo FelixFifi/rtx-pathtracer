@@ -38,8 +38,11 @@ void main()
     // Transforming the position to world space
     worldPos = (gl_ObjectToWorldEXT * vec4(worldPos, 1.0));
 
+    vec2 textureUV = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
+
     info.worldPos = worldPos;
     info.normal = normal;
+    info.textureUV = textureUV;
     info.matIndex = v0.materialIndex;
     info.t = gl_HitTEXT;
     info.isLight = false;

@@ -35,6 +35,7 @@
 #include "SceneLoader.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
+const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
         "scenes/test.json",
         "scenes/cornell.json",
@@ -46,7 +47,7 @@ const int RANDOM_SIZE = 2048;
 
 static const int MAX_RECURSION = 2;
 
-static const int NOISE_BINDING = 7;
+static const int NOISE_BINDING = 8;
 
 struct CameraMatrices {
     glm::mat4 view;
