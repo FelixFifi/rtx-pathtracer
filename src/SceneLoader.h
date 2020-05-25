@@ -69,6 +69,7 @@ private:
     std::vector<Light> lights;
     std::vector<std::vector<int>> emissiveFacesPerModel;
     std::vector<Texture> textures;
+    std::map<std::string, int> pathTextureIdMapping;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 

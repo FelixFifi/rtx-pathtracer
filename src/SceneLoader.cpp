@@ -102,7 +102,13 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
 
 int SceneLoader::addTexture(const tinyobj::material_t &tinyMaterial) {
     std::filesystem::path path = textureBaseDir;
-    path /= tinyMaterial.ambient_texname;
+    path /= tinyMaterial.diffuse_texname;
+
+
+    // Return existing texture id if it was already loaded
+    if (pathTextureIdMapping.contains(path.string())) {
+        return pathTextureIdMapping[path.string()];
+    }
 
     int width, height, channels;
     const int outputChannel = 4;
@@ -138,7 +144,10 @@ int SceneLoader::addTexture(const tinyobj::material_t &tinyMaterial) {
 
     textures.push_back(texture);
 
-    return textures.size() - 1;
+    int textureIndex = textures.size() - 1;
+
+    pathTextureIdMapping[path.string()] = textureIndex;
+    return textureIndex;
 }
 
 void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,

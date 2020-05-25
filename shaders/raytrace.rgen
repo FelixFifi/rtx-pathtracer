@@ -176,15 +176,12 @@ void main()
                     }
                     // Then continue as diffuse
                 case 0: // Diffuse
+                    if (mat.textureId != -1) {
+                        throughput *= texture(textureSamplers[mat.textureId], info.textureUV).xyz * mat.diffuse * cosTheta * 2.0;
+                    } else {
+                        throughput *= mat.diffuse * cosTheta * 2.0;
+                    }
                     if (pushC.enableNEE && lightCount > 0) {
-
-                        if (mat.textureId != -1) {
-                            throughput *= texture(textureSamplers[mat.textureId], info.textureUV).xyz * mat.diffuse * cosTheta * 2.0;
-                        } else {
-                            throughput *= mat.diffuse * cosTheta * 2.0;
-                        }
-
-
                         // Next event estimation
                         // Sample random light
 
@@ -277,8 +274,6 @@ void main()
                         if (!shadowInfo.isShadowed) {
                             sampleResult += throughput * lightColor / pdf;
                         }
-                    } else {
-                        throughput *= mat.diffuse * cosTheta * 2.0;
                     }
 
                     direction = randomInHemisphere(info.normal);
