@@ -1,27 +1,13 @@
 {
   "models": [
-    {"floor":  "floor.obj"},
-    {"cube": "cube.obj"},
-    {"glassCube": "cubeGlass.obj"},
-    {"lightBox": "lightBox.obj"},
-    {"glassSphere": "sphere.obj"},
-    {"teapot":  "teapot.obj"},
-    {"sponza":  "sponza.obj"}
+    {"sponza":  "sponza.obj"},
+    {"lightBox": "lightBox.obj"}
   ],
   "instances": [
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
     {"lightBox": {"translate": [0, 0, 30], "scale": [0.5, 0.5, 1]}},
-    {"lightBox": {"translate": [5, 30, 2], "scale": [0.2, 0.2, 5]}},
-    {"cube": {"translate": [0, -2, 0], "rotate": [0, 0, 45], "scale": [0.2, 0.2, 0.2]}},
-    {"cube": {"translate": [-1, 5, 0], "rotate": [0, 0, 20], "scale": [0.3, 0.3, 0.6]}},
-    {"glassCube": {"translate": [0, 20, 1], "rotate": [0, 0, 45], "scale": [0.5, 0.5, 0.7]}},
-    {"glassSphere": {"translate": [20, -10, 20], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
-    {"teapot": {"translate": [-20, 10, 0], "rotate": [0, 0, 45], "scale": [1, 1, 1]}},
-    {"glassCube": {"translate": [-45, 20, 1], "rotate": [0, 0, 20], "scale": [0.5, 0.5, 0.7]}},
-    {"glassSphere": {"translate": [15, 10, 20], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
-    {"teapot": {"translate": [-10, 40, 1], "rotate": [0, 0, 90], "scale": [1, 1, 1]}},
-    {"glassCube": {"translate": [-40, 0, 3], "rotate": [0, 15, 20], "scale": [0.5, 0.5, 0.7]}},
-    {"glassSphere": {"translate": [-20, -30, 15], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
-    {"teapot": {"translate": [20, -30, 20], "rotate": [0, 0, 45], "scale": [1, 1, 1]}},
-    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.01, 0.01, 0.01]}}
+    {"lightBox": {"translate": [0, 0, 60], "scale": [1, 1, 4]}}
+  ],
+  "lights": [
   ]
 }

@@ -75,9 +75,9 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
         switch (tinyMaterial.illum) {
             case 0:
             case 1:
+            case 2:
                 material.type = eDiffuse;
                 break;
-            case 2:
             case 3:
                 material.type = eSpecular;
                 break;
@@ -109,6 +109,10 @@ int SceneLoader::addTexture(const tinyobj::material_t &tinyMaterial) {
     if (pathTextureIdMapping.contains(path.string())) {
         return pathTextureIdMapping[path.string()];
     }
+
+    if (path.string().find('\\') != -1)
+    path = path.string().replace(path.string().find('\\'), 1, "/");
+    path = path.make_preferred().lexically_normal();
 
     int width, height, channels;
     const int outputChannel = 4;
