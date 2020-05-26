@@ -146,7 +146,7 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               nullptr);
 
     vk::DescriptorSetLayoutBinding noiseSamplerBinding(NOISE_BINDING, vk::DescriptorType::eCombinedImageSampler, 1,
-                                                       vk::ShaderStageFlagBits::eRaygenKHR);
+                                                       vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR);
 
 
     auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
@@ -329,11 +329,13 @@ void RayTracingApp::createRtPipeline() {
     auto raygenCode = readFile("shaders/raytrace.rgen.spv");
     auto missCode = readFile("shaders/raytrace.rmiss.spv");
     auto chitCode = readFile("shaders/raytrace.rchit.spv");
+    auto ahitCode = readFile("shaders/raytrace.rahit.spv");
     auto shadowMissCode = readFile("shaders/raytrace.shadow.rmiss.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
     vk::ShaderModule chitShaderModule = vulkanOps->createShaderModule(chitCode);
+    vk::ShaderModule ahitShaderModule = vulkanOps->createShaderModule(ahitCode);
     vk::ShaderModule shadowMissShaderModule = vulkanOps->createShaderModule(shadowMissCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
@@ -371,7 +373,11 @@ void RayTracingApp::createRtPipeline() {
                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
     stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, chitShaderModule, "main"});
     hg.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eAnyHitKHR, ahitShaderModule, "main"});
+    hg.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg);
+
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 
@@ -406,6 +412,7 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(raygenShaderModule);
     device.destroy(missShaderModule);
     device.destroy(chitShaderModule);
+    device.destroy(ahitShaderModule);
     device.destroy(shadowMissShaderModule);
 }
 

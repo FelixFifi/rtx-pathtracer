@@ -1,5 +1,5 @@
-newmtl light
-  Ke 100 100 100
+newmtl lightBright
+  Ke 1000 1000 1000
   Ks 0.3000 0.3000 0.3000
   illum 11
 

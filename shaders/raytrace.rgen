@@ -88,6 +88,21 @@ vec3 randomInHemisphere(vec3 normal) {
     return res;
 }
 
+vec3 randomInHemisphereCosine(vec3 normal) {
+    vec3 res;
+
+    vec4 random = getRandomPositive();
+
+    float a = 1 - 2 * random.x;
+    float b = sqrt(1- a * a);
+    float phi = 2 * M_PI * random.y;
+    res.x = normal.x + b * cos(phi);
+    res.y = normal.x + b * sin(phi);
+    res.z = normal.z + a;
+
+    return normalize(res);
+}
+
 // Rendering Vorlesung - Nori src/common.cpp
 float fresnel(in float eta, in float cosThetaI) {
     float sinThetaSqr = eta * eta * (1- cosThetaI * cosThetaI);
@@ -106,6 +121,31 @@ float fresnel(in float eta, in float cosThetaI) {
     return (Rs * Rs + Rp * Rp) / 2.0f;
 }
 
+vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 direction, in vec3 directionNew) {
+    vec3 res = vec3(0.0, 0.0, 0.0);
+
+    float dotNewNormal = dot(directionNew, normal);
+    if (dotNewNormal > 0) {
+        if (mat.textureIdDiffuse != -1) {
+            res += mat.diffuse  * dotNewNormal * texture(textureSamplers[mat.textureIdDiffuse], info.textureUV).xyz / M_PI;
+        } else {
+            res += mat.diffuse * dotNewNormal / M_PI;
+        }
+
+        float dotReflDir = dot(reflect(-directionNew, normal), direction);
+        if (dotReflDir > 0) {
+            if (mat.textureIdSpecular != -1) {
+                res += mat.specular * pow(dotReflDir, mat.specularHighlight) * texture(textureSamplers[mat.textureIdSpecular], info.textureUV).xyz / M_PI;
+            } else {
+                res += mat.specular * pow(dotReflDir, mat.specularHighlight) / M_PI;
+            }
+        }
+
+    }
+
+    return res;
+}
+
 void main()
 {
     vec3 result = vec3(0.0, 0.0, 0.0);
@@ -115,8 +155,8 @@ void main()
 
     noiseUV = pixelCenter / gl_LaunchSizeEXT.xy + pushC.uvOffset;
 
-    const uint  rayFlags = gl_RayFlagsOpaqueEXT;
-    const uint  shadowRayFlags = gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+    const uint  rayFlags = 0;
+    const uint  shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
     const float tMin     = 0.001;
     const float tMax     = 10000.0;
 
@@ -165,8 +205,6 @@ void main()
                 frontFace = false;
             }
 
-            float cosTheta = dot(-info.normal, direction);
-
             Material mat = mats[info.matIndex];
 
             switch (mat.type) {
@@ -176,11 +214,8 @@ void main()
                     }
                     // Then continue as diffuse
                 case 0: // Diffuse
-                    if (mat.textureId != -1) {
-                        throughput *= texture(textureSamplers[mat.textureId], info.textureUV).xyz * mat.diffuse * cosTheta * 2.0;
-                    } else {
-                        throughput *= mat.diffuse * cosTheta * 2.0;
-                    }
+                case 4: // Phong
+
                     if (pushC.enableNEE && lightCount > 0) {
                         // Next event estimation
                         // Sample random light
@@ -203,19 +238,21 @@ void main()
 
 
                         vec3 lightColor;
-                        vec3 shadowDir;
+                        vec3 lightDir;
                         float lightDistance;
                         float pdf;
+                        float cosThetaLight;
                         if (light.isPointLight) {
                             vec3 toLight = light.pos - origin;
                             lightDistance = length(toLight);
-                            shadowDir = normalize(toLight);
+                            lightDir = toLight / lightDistance;
 
                             pdf = light.sampleProb;
-                            lightColor = light.color / (lightDistance * lightDistance);
+                            lightColor = light.color /  (lightDistance * lightDistance);
                         } else {
                             int iModel = instanceInfos[light.instanceIndex].modelIndex;
                             mat4 transform = instanceInfos[light.instanceIndex].transform;
+                            mat4 normalTransform = instanceInfos[light.instanceIndex].normalTransform;
 
                             int iRandomTri = getRandomInteger(SIZE_TRI_RANDOM - 1);
                             FaceSample triSample = randomTriIndex[iLight][iRandomTri];
@@ -242,21 +279,21 @@ void main()
                             vec3 lightSampleNormal = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
                             // Transforming the position and normal to world space
                             lightSampleWorldPos = (transform * vec4(lightSampleWorldPos, 1.0)).xyz;
-                            lightSampleNormal= (transform * vec4(lightSampleNormal, 0.0)).xyz;
+                            lightSampleNormal= (normalTransform * vec4(lightSampleNormal, 0.0)).xyz;
 
                             vec3 toLight = lightSampleWorldPos - origin;
-                            lightDistance = length(toLight) - 0.0001;
-                            shadowDir = normalize(toLight);
+                            lightDistance = length(toLight);
+                            lightDir = toLight / lightDistance;
 
                             lightColor = mats[v0.materialIndex].lightColor;
 
-                            float cosThetaLight = dot(-shadowDir, lightSampleNormal);
+                            cosThetaLight = dot(-lightDir, lightSampleNormal);
 
                             pdf = light.sampleProb * triSample.sampleProb * lightDistance * lightDistance / cosThetaLight;
                         }
 
                         shadowInfo.isShadowed = true;
-                        if (dot(shadowDir, info.normal) > 0) {
+                        if (dot(lightDir, info.normal) > 0) {
                             traceRayEXT(topLevelAS,     // acceleration structure
                                         shadowRayFlags,       // rayFlags
                                         0xFF,           // cullMask
@@ -265,18 +302,24 @@ void main()
                                         1,              // missIndex of shadow miss
                                         origin.xyz,     // ray origin
                                         tMin,           // ray min range
-                                        shadowDir,  // ray direction
+                                        lightDir,  // ray direction
                                         lightDistance - 0.0001,           // ray max range
                                         1               // payload (location = 1)
                             );
                         }
 
                         if (!shadowInfo.isShadowed) {
-                            sampleResult += throughput * lightColor / pdf;
+                            sampleResult += throughput * phong(mat, info.textureUV, info.normal, -direction, lightDir) * lightColor / pdf;
                         }
                     }
 
-                    direction = randomInHemisphere(info.normal);
+
+                    vec3 newDirection = randomInHemisphere(info.normal);
+
+                    float p = 1 / (2 * M_PI);
+                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / p;
+
+                    direction = newDirection;
                     addDirectLightHits = false;
                     break;
                 case 1: // Specular

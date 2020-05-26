@@ -70,7 +70,7 @@ public:
         glm::vec2 uvOffset;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 10;
+        int maxDepth = 6;
         int samplesPerPixel = 10;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool

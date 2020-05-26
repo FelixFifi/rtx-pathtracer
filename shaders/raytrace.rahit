@@ -1,0 +1,57 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#include "wavefront.glsl"
+#include "raycommon.glsl"
+
+hitAttributeEXT vec3 attribs;
+
+layout(binding = 1, set = 1, std140) buffer Vertices { Vertex v[]; } vertices[];
+layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
+layout(binding = 4, set = 1, std140) buffer Instances { InstanceInfo instanceInfos[]; };
+layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; };
+layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
+layout(binding = 8, set = 1) uniform sampler2D noiseSampler;
+
+
+// Random vec4 [-1, 1)
+vec4 getRandom(vec2 noiseUV) {
+    vec4 res = texture(noiseSampler, noiseUV);
+    return res;
+}
+
+// Random vec4 [0, 1)
+vec4 getRandomPositive(vec2 noiseUV) {
+    return (getRandom(noiseUV) + 1.0) / 2.0;
+}
+
+void main()
+{
+    int iModel = instanceInfos[gl_InstanceID].modelIndex;
+
+    ivec3 ind = ivec3(indices[iModel].i[3 * gl_PrimitiveID + 0],   //
+                      indices[iModel].i[3 * gl_PrimitiveID + 1],   //
+                      indices[iModel].i[3 * gl_PrimitiveID + 2]);  //
+    // Vertex of the triangle
+    Vertex v0 = vertices[iModel].v[ind.x];
+    Vertex v1 = vertices[iModel].v[ind.y];
+    Vertex v2 = vertices[iModel].v[ind.z];
+
+    const vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
+
+    vec2 textureUV = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
+
+    // Pseudo random location on noise texture for random
+    vec2 noiseUV = textureUV * gl_WorldRayOriginEXT.xz * gl_HitTEXT;
+
+    Material mat = mats[v0.materialIndex];
+    if (mat.textureIdDiffuse != -1) {
+        float alpha = texture(textureSamplers[mat.textureIdDiffuse], textureUV).a;
+
+        if (getRandomPositive(noiseUV).z > alpha) {
+            ignoreIntersectionEXT();
+        }
+    }
+}

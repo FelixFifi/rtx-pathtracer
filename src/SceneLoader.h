@@ -23,6 +23,28 @@ static const int BINDINGS_COUNT = 7;
 #include <json.hpp>
 #include "Model.h"
 
+
+enum EMatType {
+    eDiffuse = 0,
+    eSpecular = 1,
+    eTransparent = 2,
+    eLight = 3,
+    ePhong = 4
+};
+
+struct alignas(16) Material {
+    alignas(16) glm::vec3 lightColor;
+    alignas(16) glm::vec3 diffuse;
+    alignas(16) glm::vec3 specular;
+    float specularHighlight;
+    float transparency;
+    float refractionIndex;
+    float refractionIndexInv;
+    int textureIdDiffuse = -1;
+    int textureIdSpecular = -1;
+    EMatType type;
+};
+
 struct alignas(16) Instance {
     glm::mat4 transform;
     glm::mat4 normalTransform;
@@ -146,7 +168,7 @@ private:
 
     std::vector<FaceSample> getFaceSamplingVector();
 
-    int addTexture(const tinyobj::material_t &tinyMaterial);
+    int addTexture(const std::string &textureName);
 };
 
 

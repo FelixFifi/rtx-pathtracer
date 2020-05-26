@@ -65,7 +65,7 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
     for (const auto &tinyMaterial : tinyMaterials) {
         Material material{};
 
-        material.lightColor = {tinyMaterial.ambient[0], tinyMaterial.ambient[1], tinyMaterial.ambient[2]};
+        material.lightColor = {tinyMaterial.emission[0], tinyMaterial.emission[1], tinyMaterial.emission[2]};
         material.diffuse = {tinyMaterial.diffuse[0], tinyMaterial.diffuse[1], tinyMaterial.diffuse[2]};
         material.specular = {tinyMaterial.specular[0], tinyMaterial.specular[1], tinyMaterial.specular[2]};
         material.specularHighlight = tinyMaterial.shininess;
@@ -75,8 +75,10 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
         switch (tinyMaterial.illum) {
             case 0:
             case 1:
-            case 2:
                 material.type = eDiffuse;
+                break;
+            case 2:
+                material.type = ePhong;
                 break;
             case 3:
                 material.type = eSpecular;
@@ -91,18 +93,21 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
                 throw std::runtime_error("Unknown illum mode");
         }
 
-        if (!tinyMaterial.ambient_texname.empty()) {
-            material.textureId = addTexture(tinyMaterial);
+        if (!tinyMaterial.diffuse_texname.empty()) {
+            material.textureIdDiffuse = addTexture(tinyMaterial.diffuse_texname);
+        }
 
+        if (!tinyMaterial.specular_texname.empty()) {
+            material.textureIdDiffuse = addTexture(tinyMaterial.specular_texname);
         }
 
         materials.push_back(material);
     }
 }
 
-int SceneLoader::addTexture(const tinyobj::material_t &tinyMaterial) {
+int SceneLoader::addTexture(const std::string &textureName) {
     std::filesystem::path path = textureBaseDir;
-    path /= tinyMaterial.diffuse_texname;
+    path /= textureName;
 
 
     // Return existing texture id if it was already loaded
@@ -417,22 +422,22 @@ std::vector<int> SceneLoader::getLightSamplingVector() {
 
 std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                       vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                       vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                      vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                      vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
                                                       vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
-                                                         vk::ShaderStageFlagBits::eRaygenKHR);
+                                                         vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR);
     vk::DescriptorSetLayoutBinding instanceInfoBufferBinding(4, vk::DescriptorType::eStorageBuffer, 1,
-                                                             vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                             vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
                                                              vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding lightsBufferBinding(5, vk::DescriptorType::eStorageBuffer, 1,
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding lightSamplersBufferBinding(6, vk::DescriptorType::eStorageBuffer, 1,
                                                               vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding texturesBinding(7, vk::DescriptorType::eCombinedImageSampler, textures.size(),
-                                                              vk::ShaderStageFlagBits::eRaygenKHR, nullptr);
+                                                              vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR, nullptr);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
             lightsBufferBinding, lightSamplersBufferBinding, texturesBinding};
@@ -547,7 +552,7 @@ nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::modelToBlas(const Model &model) 
     // Setting up the build info of the acceleration
     vk::AccelerationStructureGeometryKHR asGeom;
     asGeom.setGeometryType(asCreate.geometryType);
-    asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
+    asGeom.setFlags(vk::GeometryFlagBitsKHR::eNoDuplicateAnyHitInvocation);
     asGeom.geometry.setTriangles(triangles);
 
     // The primitive itself
