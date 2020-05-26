@@ -209,7 +209,9 @@ void main()
 
             switch (mat.type) {
                 case 3: // Light
-                    if (!pushC.enableNEE || addDirectLightHits) {
+                    if (pushC.enableNEE && addDirectLightHits) {
+                        sampleResult += 0.5 * throughput * mat.lightColor;
+                    } else {
                         sampleResult += throughput * mat.lightColor;
                     }
                     // Then continue as diffuse
@@ -289,7 +291,7 @@ void main()
 
                             cosThetaLight = dot(-lightDir, lightSampleNormal);
 
-                            pdf = light.sampleProb * triSample.sampleProb * lightDistance * lightDistance / cosThetaLight;
+                            pdf = light.sampleProb * triSample.sampleProb / triSample.faceArea * lightDistance * lightDistance / cosThetaLight;
                         }
 
                         shadowInfo.isShadowed = true;
@@ -309,7 +311,8 @@ void main()
                         }
 
                         if (!shadowInfo.isShadowed) {
-                            sampleResult += throughput * phong(mat, info.textureUV, info.normal, -direction, lightDir) * lightColor / pdf;
+                            sampleResult += 0.5 * throughput * phong(mat, info.textureUV, info.normal, -direction, lightDir)
+                                    * lightColor / pdf;
                         }
                     }
 
@@ -317,7 +320,7 @@ void main()
                     vec3 newDirection = randomInHemisphere(info.normal);
 
                     float p = 1 / (2 * M_PI);
-                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / p;
+                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) * dot(newDirection, info.normal) / p;
 
                     direction = newDirection;
                     addDirectLightHits = false;

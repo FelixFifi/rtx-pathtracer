@@ -71,7 +71,7 @@ public:
         int lightType = 0;
         uint previousFrames = -1;
         int maxDepth = 6;
-        int samplesPerPixel = 10;
+        int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
     } rtPushConstants;
