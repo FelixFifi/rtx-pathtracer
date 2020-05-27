@@ -3,6 +3,7 @@
 //
 
 #define IMGUI_UNLIMITED_FRAME_RATE
+
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_vulkan.h>
 #include <imgui/imgui_impl_sdl.h>
@@ -180,8 +181,9 @@ void PostProcessing::createDescriptorSets() {
 }
 
 void PostProcessing::createOffscreenImage() {
-    vulkanOps->createImage(extentOffscreen.width, extentOffscreen.height, offscreenImageFormat, vk::ImageTiling::eOptimal,
-                           vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
+    vulkanOps->createImage(extentOffscreen.width, extentOffscreen.height, offscreenImageFormat,
+                           vk::ImageTiling::eOptimal,
+                           vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc,
                            vk::MemoryPropertyFlagBits::eDeviceLocal,
                            offscreenImage, offscreenImageMemory);
 
@@ -305,16 +307,46 @@ void PostProcessing::configureCommandBuffer(size_t imageIndex) const {
                                            0, 0);
 }
 
-const vk::ImageView &PostProcessing::getOffscreenImageView() const {
-    return offscreenImageView;
+void PostProcessing::saveOffscreenImage(const std::string &filepath) {
+    vk::Buffer copyBuffer;
+    vk::DeviceMemory copyBufferMemory;
+
+    uint64_t bufferSize = extentOffscreen.width * extentOffscreen.height * 4 * sizeof(float);
+
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eTransferDst;
+    vk::MemoryPropertyFlags memoryFlags =
+            vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible;
+
+    vulkanOps->createBuffer(bufferSize, usage, memoryFlags, copyBuffer, copyBufferMemory);
+
+    vk::BufferImageCopy region{0, 0, 0,
+                               {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                               {0, 0, 0}, {extentOffscreen.width, extentOffscreen.height, 1}};
+
+    vk::CommandBuffer cmd = vulkanOps->beginSingleTimeCommands();
+
+    cmd.copyImageToBuffer(offscreenImage, vk::ImageLayout::eGeneral, copyBuffer, region);
+
+    vulkanOps->endSingleTimeCommands(cmd);
+
+    void *data = device.mapMemory(copyBufferMemory, 0, bufferSize);
+
+    writeEXR(filepath.c_str(), (float*) data, extentOffscreen.width, extentOffscreen.height);
+
+    device.free(copyBufferMemory);
+    device.destroy(copyBuffer);
 }
 
-const vk::Sampler &PostProcessing::getOffscreenImageSampler() const {
-    return offscreenImageSampler;
-}
+    const vk::ImageView &PostProcessing::getOffscreenImageView() const {
+        return offscreenImageView;
+    }
 
-const vk::Extent2D &PostProcessing::getExtentOffscreen() const {
-    return extentOffscreen;
-}
+    const vk::Sampler &PostProcessing::getOffscreenImageSampler() const {
+        return offscreenImageSampler;
+    }
+
+    const vk::Extent2D &PostProcessing::getExtentOffscreen() const {
+        return extentOffscreen;
+    }
 
 

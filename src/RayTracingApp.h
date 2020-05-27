@@ -86,6 +86,8 @@ private:
     bool accumulateResults = true;
     bool hasInputChanged = false;
 
+    int writeImageAfterNFrames = 100;
+
     CameraController cameraController;
 
     // Vulkan

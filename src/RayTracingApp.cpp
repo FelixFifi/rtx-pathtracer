@@ -78,6 +78,11 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     // TODO: Fences
     device.waitIdle();
 
+    if (rtPushConstants.previousFrames == writeImageAfterNFrames) {
+        postProcessing.saveOffscreenImage("test.exr");
+        std::cout << "Wrote file" << std::endl;
+    }
+
     postProcessing.drawCallback(imageIndex);
 }
 

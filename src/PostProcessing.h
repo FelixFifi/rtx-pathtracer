@@ -120,6 +120,8 @@ public:
     void cleanup();
 
     void addImGuiCallback(const fImGuiCallback &callback);
+
+    void saveOffscreenImage(const std::string &filepath);
 private:
     void init();
 

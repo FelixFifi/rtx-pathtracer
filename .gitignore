@@ -2,3 +2,5 @@ cmake-build-*/
 *.spv
 sponza.*
 textures/textures/
+*.exr
+

@@ -5,8 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
+find_package(OpenEXR REQUIRED)
 
-include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} "../nvidia_shared_sources" "external")
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
+
+include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} ${OpenEXR_INCLUDE_DIRS} "../nvidia_shared_sources" "external")
 
 set(IMGUI_CPP
         external/imgui/imgui.cpp
@@ -16,7 +23,7 @@ set(IMGUI_CPP
         external/imgui/imgui_impl_vulkan.cpp
         external/imgui/imgui_widgets.cpp)
 
-link_directories(${Vulkan_LIBRARY} ${SDL2_LIBRARIES})
+link_directories(${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${OpenEXR_INCLUDE_DIRS})
 add_executable(rtx_raytracer
         src/main.cpp
         src/VulkanOps.cpp
@@ -28,6 +35,8 @@ add_executable(rtx_raytracer
         src/CameraController.cpp
         src/SceneLoader.cpp
         src/WeightedSampler.cpp
+        src/CommonOps.cpp
         ${IMGUI_CPP})
 
-target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS} /usr/local/lib/libIlmImf-2_5.so)
+
