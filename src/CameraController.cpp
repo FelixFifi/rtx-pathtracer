@@ -9,6 +9,8 @@
 
 CameraController::CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir, glm::vec3 viewDirection)
         : pos(pos), mouseSensitivity(mouseSensitivity) {
+
+    viewDirection = glm::normalize(viewDirection);
     orientation = glm::conjugate(glm::quatLookAt(viewDirection, upDir));
     resetStatus();
 }

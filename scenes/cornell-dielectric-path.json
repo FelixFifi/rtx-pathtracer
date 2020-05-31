@@ -1,0 +1,22 @@
+{
+  "models": [
+    {"back": "back.obj"},
+    {"ceiling": "ceiling.obj"},
+    {"floor": "floor.obj"},
+    {"emitter": "emitter.obj"},
+    {"left":  "left.obj"},
+    {"right":  "right.obj"},
+    {"ball":  "ball.obj"},
+    {"shell":  "shell.obj"}
+  ],
+  "instances": [
+    {"back": {}},
+    {"ceiling": {}},
+    {"floor": {}},
+    {"emitter": {}},
+    {"left": {}},
+    {"right": {}},
+    {"ball": {}},
+    {"shell": {}}
+  ]
+}

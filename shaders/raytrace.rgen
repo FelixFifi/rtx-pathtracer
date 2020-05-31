@@ -4,6 +4,8 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #include "raycommon.glsl"
 #include "wavefront.glsl"
+#include "random.glsl"
+
 #define M_PI 3.1415926535897932384626433832795
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
@@ -25,7 +27,7 @@ layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer {
 };
 
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
-layout(binding = 8, set = 1) uniform sampler2D noiseSampler;
+layout(binding = 8, set = 1, rgba32f) uniform image2D accumulateImage;
 
 
 layout(binding = 0, set = 1) uniform CameraMatrices {
@@ -38,34 +40,23 @@ layout(binding = 0, set = 1) uniform CameraMatrices {
 layout(location = 0) rayPayloadEXT hitInfo info;
 layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
 
-vec2 noiseUV;
-const vec2 noiseStride = vec2(0.0129898, 0.078233);
+uint seed;
 
-// Random vec4 [-1, 1)
-vec4 getRandom() {
-    vec4 res = texture(noiseSampler, noiseUV);
-    noiseUV += noiseStride;
-    return res;
-}
-
-// Random vec4 [0, 1)
-vec4 getRandomPositive() {
-    return (getRandom() + 1.0) / 2.0;
+// Random float [-1, 1)
+float getRandomNegPos() {
+    return rnd(seed) * 2 - 1;
 }
 
 // Random int [0, max]
 int getRandomInteger(int max) {
-    return int(floor(getRandomPositive().x * (max + 1)));
+    return int(rnd(seed) * (max + 1));
 }
 
 // https://math.stackexchange.com/a/1163278
 vec3 randomOnUnitSphere() {
     vec3 res;
     do {
-        vec4 random = getRandom();
-
-        res = random.xyz;
-
+        res = vec3(rnd(seed), rnd(seed), rnd(seed));
     } while (length(res) > 1);
 
     res = normalize(res);
@@ -75,9 +66,7 @@ vec3 randomOnUnitSphere() {
 vec3 randomInHemisphere(vec3 normal) {
     vec3 res;
     do {
-        vec4 random = getRandom();
-
-        res = random.xyz;
+        res = vec3(getRandomNegPos(), getRandomNegPos(), getRandomNegPos());
     } while (length(res) > 1);
 
     res = normalize(res);
@@ -91,14 +80,16 @@ vec3 randomInHemisphere(vec3 normal) {
 vec3 randomInHemisphereCosine(vec3 normal) {
     vec3 res;
 
-    vec4 random = getRandomPositive();
+    float r1 = rnd(seed);
+    float r2 = rnd(seed);
+    float r3 = rnd(seed);
 
-    float a = 1 - 2 * random.x;
+    float a = 1 - 2 * r1;
     float b = sqrt(1- a * a);
-    float phi = 2 * M_PI * random.y;
-    res.x = normal.x + b * cos(phi);
-    res.y = normal.x + b * sin(phi);
-    res.z = normal.z + a;
+    float phi = 2 * M_PI * r2;
+    res.x = r1 + b * cos(phi);
+    res.y = r1 + b * sin(phi);
+    res.z = r3 + a;
 
     return normalize(res);
 }
@@ -148,12 +139,12 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 direction, in ve
 
 void main()
 {
+    // Init seed
+    seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
+
     vec3 result = vec3(0.0, 0.0, 0.0);
 
-
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-
-    noiseUV = pixelCenter / gl_LaunchSizeEXT.xy + pushC.uvOffset;
 
     const uint  rayFlags = 0;
     const uint  shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
@@ -168,7 +159,7 @@ void main()
         vec3 sampleResult = vec3(0.0, 0.0, 0.0);
         vec3 throughput = vec3(1.0, 1.0, 1.0);
 
-        vec2 inUV = (pixelCenter + getRandom().xy / 2.0) / vec2(gl_LaunchSizeEXT.xy);
+        vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
         vec2 d = inUV * 2.0 - 1.0;
 
         vec3 origin    = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
@@ -271,10 +262,10 @@ void main()
                             Vertex v2 = vertices[iModel].v[ind.z];
 
                             // Uniform random point on triangle
-                            vec2 random = getRandomPositive().xy;
-                            float sqrtx = sqrt(random.x);
-                            float sqrty = sqrt(random.y);
-                            vec3 barycentrics = vec3(1.0 - sqrtx, sqrtx * (1.0 - random.y), random.y * sqrtx);
+                            vec2 randomXY = vec2(rnd(seed), rnd(seed));
+                            float sqrtx = sqrt(randomXY.x);
+                            float sqrty = sqrt(randomXY.y);
+                            vec3 barycentrics = vec3(1.0 - sqrtx, sqrtx * (1.0 - randomXY.y), randomXY.y * sqrtx);
 
                             // Computing the coordinates of the hit position
                             vec3 lightSampleWorldPos = v0.pos * barycentrics.x + v1.pos * barycentrics.y + v2.pos * barycentrics.z;
@@ -320,7 +311,7 @@ void main()
                     vec3 newDirection = randomInHemisphere(info.normal);
 
                     float p = 1 / (2 * M_PI);
-                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) * dot(newDirection, info.normal) / p;
+                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / p;
 
                     direction = newDirection;
                     addDirectLightHits = false;
@@ -346,7 +337,7 @@ void main()
                     float cosTheta = dot(-direction, info.normal);
                     float fresnel = fresnel(eta, cosTheta);
 
-                    if (getRandomPositive().x > fresnel) {
+                    if (rnd(seed) > fresnel) {
                         // Refract
                         direction = refract(direction, info.normal, eta);
                     } else {
@@ -359,10 +350,10 @@ void main()
                 }
             }
 
-            if (pushC.enableRR && iDepth > 3) {
-                float p = max(throughput.x, max(throughput.y, throughput.z));
+            if (pushC.enableRR && iDepth > 5) {
+                float p = (throughput.x + throughput.y + throughput.z) / 3.0;
                 // Russian roulette
-                if (getRandomPositive().x > p) {
+                if (rnd(seed) > p) {
                     break;
                 } else {
                     throughput *= 1.0 / p;
@@ -377,10 +368,13 @@ void main()
 
     // if the camera hasn't changed, then accumulate results
     if (pushC.previousFrames > 0) {
-        vec4 previous = imageLoad(image, imageUV);
-        vec4 combined = mix(previous, vec4(result, 1.0), 1.0f / (pushC.previousFrames + 1));
-        imageStore(image, imageUV, combined);
+        vec3 accumulated = imageLoad(accumulateImage, imageUV).xyz;
+        accumulated += result;
+
+        imageStore(image, imageUV, vec4(accumulated / (pushC.previousFrames + 1), 1.0));
+        imageStore(accumulateImage, imageUV, vec4(accumulated, 1.0));
     } else {
+        imageStore(accumulateImage, imageUV, vec4(result, 1.0));
         imageStore(image, imageUV, vec4(result, 1.0));
     }
 }

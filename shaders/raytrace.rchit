@@ -36,7 +36,7 @@ void main()
     // Computing the coordinates of the hit position
     vec3 worldPos = v0.pos * barycentrics.x + v1.pos * barycentrics.y + v2.pos * barycentrics.z;
     // Transforming the position to world space
-    worldPos = (gl_ObjectToWorldEXT * vec4(worldPos, 1.0));
+    worldPos = (instanceInfos[gl_InstanceID].transform * vec4(worldPos, 1.0)).xyz;
 
     vec2 textureUV = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
 

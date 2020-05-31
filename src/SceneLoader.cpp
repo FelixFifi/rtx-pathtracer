@@ -28,6 +28,36 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
     createLightsBuffers();
     createBottomLevelAS();
     createTopLevelAS();
+
+    // To prevent empty descriptor sets
+    if (materials.empty()) {
+        materials.push_back({});
+    }
+    if (textures.empty()) {
+        Texture texture;
+
+        std::vector<char> pixels {
+            0, 0, 0, 0
+        };
+
+        vulkanOps->createImageFromData(pixels, 1, 1, vk::Format::eR8G8B8A8Srgb, texture.image, texture.imageMemory, texture.imageView);
+
+        vk::SamplerCreateInfo samplerCreateInfo{{},
+                                                vk::Filter::eLinear,
+                                                vk::Filter::eLinear,
+                                                vk::SamplerMipmapMode::eNearest,
+                                                vk::SamplerAddressMode::eRepeat,
+                                                vk::SamplerAddressMode::eRepeat,
+                                                vk::SamplerAddressMode::eRepeat,
+                                                {},
+                                                false,
+                                                0};
+
+        texture.sampler = device.createSampler(samplerCreateInfo);
+
+        textures.push_back(texture);
+
+    }
 }
 
 SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,

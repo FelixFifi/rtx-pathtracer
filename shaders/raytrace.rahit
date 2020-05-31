@@ -5,6 +5,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #include "wavefront.glsl"
 #include "raycommon.glsl"
+#include "random.glsl"
 
 hitAttributeEXT vec3 attribs;
 
@@ -13,19 +14,9 @@ layout(binding = 2, set = 1) buffer Indices { uint i[]; } indices[];
 layout(binding = 4, set = 1, std140) buffer Instances { InstanceInfo instanceInfos[]; };
 layout(binding = 3, set = 1, std430) buffer Materials { Material mats[]; };
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
-layout(binding = 8, set = 1) uniform sampler2D noiseSampler;
 
 
-// Random vec4 [-1, 1)
-vec4 getRandom(vec2 noiseUV) {
-    vec4 res = texture(noiseSampler, noiseUV);
-    return res;
-}
-
-// Random vec4 [0, 1)
-vec4 getRandomPositive(vec2 noiseUV) {
-    return (getRandom(noiseUV) + 1.0) / 2.0;
-}
+layout(push_constant) uniform PushConstant { pushConstant pushC; };
 
 void main()
 {
@@ -48,9 +39,11 @@ void main()
 
     Material mat = mats[v0.materialIndex];
     if (mat.textureIdDiffuse != -1) {
+        uint seed = tea(uint(textureUV * 100000000 + gl_WorldRayOriginEXT.x * gl_HitTEXT) , pushC.randomUInt);
+
         float alpha = texture(textureSamplers[mat.textureIdDiffuse], textureUV).a;
 
-        if (getRandomPositive(noiseUV).z > alpha) {
+        if (rnd(seed) > alpha) {
             ignoreIntersectionEXT();
         }
     }

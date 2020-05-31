@@ -1,6 +1,6 @@
 {
   "models": [
-    {"floor":  "floor.obj"},
+    {"floor":  "floor_large.obj"},
     {"cube": "cube.obj"},
     {"glassCube": "cubeGlass.obj"},
     {"lightBox": "lightBoxBright.obj"},

@@ -14,13 +14,13 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
     postProcessing = PostProcessing({width, height}, vulkanWindow);
 
-    cameraController = CameraController(glm::vec3(-20, 0, 15), 360.0f / width);
+    cameraController = CameraController(glm::vec3(0, 3, 4), 360.0f / width, glm::vec3(0, 1, 0), glm::vec3(0, -2, -4));
     fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
     vulkanWindow.setEventCallback(eventCallback);
     fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcher(key); };
     vulkanWindow.setNumberKeyEventCallback(numberKeyCallback);
 
-    fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };;
+    fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };
     postProcessing.addImGuiCallback(callbackImGui);
 
     device = vulkanWindow.getDevice();
@@ -29,7 +29,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
-    createNoiseTexture();
+    createAccumulateImage();
     createUniformBuffers();
     loadModels();
 
@@ -37,24 +37,15 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     initRayTracing();
 }
 
-void RayTracingApp::createNoiseTexture() {
-    std::vector<glm::vec4> noise(RANDOM_SIZE * RANDOM_SIZE);
+void RayTracingApp::createAccumulateImage() {
+    vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+    vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eStorage;
+    vulkanOps->createImage(offscreenExtent.width, offscreenExtent.height, format, vk::ImageTiling::eOptimal, usage,
+                           vk::MemoryPropertyFlagBits::eDeviceLocal, accumulateImage, accumulateImageMemory);
 
-    float noiseMin = -1.0f;
-    float noiseMax = 1.0f;
+    accumulateImageView = vulkanOps->createImageView(accumulateImage, format, vk::ImageAspectFlagBits::eColor);
 
-    std::mt19937 generator;
-    std::uniform_real_distribution<float> dis(noiseMin, noiseMax);
-
-    for (int i = 0; i < RANDOM_SIZE * RANDOM_SIZE; ++i) {
-        noise[i] = {dis(generator),
-                    dis(generator),
-                    dis(generator),
-                    dis(generator)};
-    }
-
-    vulkanOps->createNoiseTextureFromData(noise, RANDOM_SIZE, RANDOM_SIZE, noiseImage, noiseImageMemory, noiseImageView,
-                                          noiseImageSampler);
+    vulkanOps->transitionImageLayout(accumulateImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 }
 
 void RayTracingApp::loadModels() {
@@ -78,9 +69,10 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     // TODO: Fences
     device.waitIdle();
 
-    if (rtPushConstants.previousFrames == writeImageAfterNFrames) {
+    if (takePicture) {
         postProcessing.saveOffscreenImage("test.exr");
         std::cout << "Wrote file" << std::endl;
+        takePicture = false;
     }
 
     postProcessing.drawCallback(imageIndex);
@@ -101,8 +93,9 @@ void RayTracingApp::sceneSwitcher(int num) {
     }
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps, physicalDevice,
-                              vulkanWindow.getQueueFamilyIndices().graphicsFamily.value());
+    modelLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps,
+                              physicalDevice,
+                              graphicsQueueIndex);
 
     recreateDescriptorSets();
 
@@ -150,8 +143,8 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               1, vk::ShaderStageFlagBits::eRaygenKHR,
                                                               nullptr);
 
-    vk::DescriptorSetLayoutBinding noiseSamplerBinding(NOISE_BINDING, vk::DescriptorType::eCombinedImageSampler, 1,
-                                                       vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR);
+    vk::DescriptorSetLayoutBinding accumulateImageLayoutBinding(ACCUMULATE_IMAGE_BINDING, vk::DescriptorType::eStorageImage, 1,
+                                                                vk::ShaderStageFlagBits::eRaygenKHR);
 
 
     auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
@@ -163,7 +156,7 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               vertexIndexMaterialBindings[4],
                                                               vertexIndexMaterialBindings[5],
                                                               vertexIndexMaterialBindings[6],
-                                                              noiseSamplerBinding};
+                                                              accumulateImageLayoutBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -183,7 +176,7 @@ void RayTracingApp::createDescriptorPool() {
             vertexIndexMaterialPoolSizes[4],
             vertexIndexMaterialPoolSizes[5],
             vertexIndexMaterialPoolSizes[6],
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1)
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -202,8 +195,8 @@ void RayTracingApp::createDescriptorSets() {
 
     for (size_t i = 0; i < 1; i++) {
         vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
-        vk::DescriptorImageInfo noiseImageInfo(noiseImageSampler, noiseImageView,
-                                               vk::ImageLayout::eShaderReadOnlyOptimal);
+        vk::DescriptorImageInfo accumulateImageInfo({}, accumulateImageView,
+                                                    vk::ImageLayout::eGeneral);
 
 
         std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
@@ -231,9 +224,10 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[5] = vertexIndexBufferWrites[4];
         descriptorWrites[6] = vertexIndexBufferWrites[5];
         descriptorWrites[7] = vertexIndexBufferWrites[6];
-        descriptorWrites[NOISE_BINDING] = vk::WriteDescriptorSet(descriptorSet, NOISE_BINDING, 0, 1,
-                                                                 vk::DescriptorType::eCombinedImageSampler, &noiseImageInfo,
-                                                                 nullptr, nullptr);
+        descriptorWrites[ACCUMULATE_IMAGE_BINDING] = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING, 0, 1,
+                                                                            vk::DescriptorType::eStorageImage,
+                                                                            &accumulateImageInfo,
+                                                                            nullptr, nullptr);
 
         device.updateDescriptorSets(descriptorWrites, nullptr);
     }
@@ -319,14 +313,14 @@ void RayTracingApp::updateRtDescriptorSet(uint32_t currentImage) {
     // (1) Output buffer
     vk::DescriptorImageInfo imageInfo{
             {}, postProcessing.getOffscreenImageView(), vk::ImageLayout::eGeneral};
-    vk::WriteDescriptorSet wds{rtDescSet, 1, 0, 1, vkDT::eStorageImage, &imageInfo};
+    vk::WriteDescriptorSet storageImageWrite{rtDescSet, 1, 0, 1, vkDT::eStorageImage, &imageInfo};
 
 
     std::array<vk::WriteDescriptorSet, 2> writes;
     writes[0] = vk::WriteDescriptorSet(rtDescSet, 0, 0, 1, vk::DescriptorType::eAccelerationStructureKHR);
     writes[0].setPNext(&descASInfo);
 
-    writes[1] = vk::WriteDescriptorSet(rtDescSet, 1, 0, 1, vk::DescriptorType::eStorageImage, &imageInfo);
+    writes[1] = storageImageWrite;
     device.updateDescriptorSets(writes, nullptr);
 }
 
@@ -389,7 +383,7 @@ void RayTracingApp::createRtPipeline() {
     // Push constant: we want to be able to update constants used by the shaders
     vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eRaygenKHR
                                        | vk::ShaderStageFlagBits::eClosestHitKHR
-                                       | vk::ShaderStageFlagBits::eMissKHR,
+                                         | vk::ShaderStageFlagBits::eMissKHR | vk::ShaderStageFlagBits::eAnyHitKHR,
                                        0, sizeof(RtPushConstant)};
     pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
     pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
@@ -455,6 +449,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
 
+    ImGui::Checkbox("Take picture", &takePicture);
+
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
 
@@ -463,7 +459,7 @@ void RayTracingApp::imGuiWindowSetup() {
 }
 
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
-    rtPushConstants.uvOffset = {glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f)};
+    rtPushConstants.randomUInt = static_cast<uint>(glm::linearRand(0.0f, 1.0f) * std::numeric_limits<uint>::max());
 
     if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged() && !autoRotate) {
         rtPushConstants.previousFrames += 1;
@@ -477,7 +473,8 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     cmdBuf.pushConstants<RtPushConstant>(rtPipelineLayout,
                                          vk::ShaderStageFlagBits::eRaygenKHR
                                          | vk::ShaderStageFlagBits::eClosestHitKHR
-                                         | vk::ShaderStageFlagBits::eMissKHR,
+                                         | vk::ShaderStageFlagBits::eMissKHR
+                                         | vk::ShaderStageFlagBits::eAnyHitKHR,
                                          0, rtPushConstants);
 
     vk::DeviceSize progSize = rtProperties.shaderGroupHandleSize;  // Size of a program identifier
@@ -504,10 +501,10 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 
 void RayTracingApp::cleanup() {
 
-    device.destroy(noiseImageSampler);
-    device.destroy(noiseImageView);
-    device.destroyImage(noiseImage);
-    device.free(noiseImageMemory);
+    device.destroy(accumulateImageSampler);
+    device.destroy(accumulateImageView);
+    device.destroyImage(accumulateImage);
+    device.free(accumulateImageMemory);
 
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);

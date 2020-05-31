@@ -37,17 +37,15 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/cornell-dielectric-path.json",
         "scenes/test.json",
         "scenes/cornell.json",
         "scenes/large.json"
 };
 
-const int RANDOM_SIZE = 2048;
-
-
 static const int MAX_RECURSION = 2;
 
-static const int NOISE_BINDING = 8;
+static const int ACCUMULATE_IMAGE_BINDING = 8;
 
 struct CameraMatrices {
     glm::mat4 view;
@@ -67,10 +65,10 @@ public:
     struct RtPushConstant {
         glm::vec4 skyColor1 = {0, 0, 0, 0};
         glm::vec4 skyColor2 = {0, 0, 0, 0};
-        glm::vec2 uvOffset;
+        uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 6;
+        int maxDepth = 20;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
@@ -86,7 +84,7 @@ private:
     bool accumulateResults = true;
     bool hasInputChanged = false;
 
-    int writeImageAfterNFrames = 100;
+    bool takePicture = false;
 
     CameraController cameraController;
 
@@ -98,10 +96,10 @@ private:
     vk::DescriptorPool descriptorPool;
     vk::DescriptorSet descriptorSet;
 
-    vk::Image noiseImage;
-    vk::DeviceMemory noiseImageMemory;
-    vk::ImageView noiseImageView;
-    vk::Sampler noiseImageSampler;
+    vk::Image accumulateImage;
+    vk::DeviceMemory accumulateImageMemory;
+    vk::ImageView accumulateImageView;
+    vk::Sampler accumulateImageSampler;
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;
@@ -161,7 +159,7 @@ private:
 
     void imGuiWindowSetup();
 
-    void createNoiseTexture();
+    void createAccumulateImage();
 
     void sceneSwitcher(int num);
 
