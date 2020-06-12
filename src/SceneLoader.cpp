@@ -16,10 +16,13 @@
 
 #include <stb_image.h>
 
+#include "tinyxml2.h"
+
 #include "json.hpp"
 #include "WeightedSampler.h"
 
 using json = nlohmann::json;
+using namespace tinyxml2;
 
 void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
@@ -36,11 +39,12 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
     if (textures.empty()) {
         Texture texture;
 
-        std::vector<char> pixels {
-            0, 0, 0, 0
+        std::vector<char> pixels{
+                0, 0, 0, 0
         };
 
-        vulkanOps->createImageFromData(pixels, 1, 1, vk::Format::eR8G8B8A8Srgb, texture.image, texture.imageMemory, texture.imageView);
+        vulkanOps->createImageFromData(pixels, 1, 1, vk::Format::eR8G8B8A8Srgb, texture.image, texture.imageMemory,
+                                       texture.imageView);
 
         vk::SamplerCreateInfo samplerCreateInfo{{},
                                                 vk::Filter::eLinear,
@@ -67,6 +71,9 @@ SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectB
         : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
           vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
+    parseMitsubaSceneFile("/home/felixfifi/projects/rtx-raytracer/scenes/test.xml");
+
+
     parseSceneFile(filepath);
 
     createVulkanObjects(physicalDevice, graphicsQueueIndex);
@@ -114,6 +121,7 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
                 material.type = eSpecular;
                 break;
             case 4:
+            case 7:
                 material.type = eTransparent;
                 break;
             case 11:
@@ -146,7 +154,7 @@ int SceneLoader::addTexture(const std::string &textureName) {
     }
 
     if (path.string().find('\\') != -1)
-    path = path.string().replace(path.string().find('\\'), 1, "/");
+        path = path.string().replace(path.string().find('\\'), 1, "/");
     path = path.make_preferred().lexically_normal();
 
     int width, height, channels;
@@ -236,7 +244,7 @@ void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
             }
 
             if (materials[materialIndex].type == eLight) {
-                emissiveFaces.push_back(iFace);
+                emissiveFaces.push_back((indices.size() - 1) / VERTICES_PER_FACE);
             }
 
         }
@@ -244,6 +252,58 @@ void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
 
     models.emplace_back(vertices, indices, vulkanOps);
     emissiveFacesPerModel.push_back(emissiveFaces);
+}
+
+void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
+    XMLDocument document;
+    document.LoadFile(filepath.c_str());
+
+    if (document.Error()) {
+        throw std::runtime_error(document.ErrorName());
+    }
+
+    XMLElement *xScene = document.FirstChildElement("scene");
+
+    XMLElement *xSensor = xScene->FirstChildElement("sensor");
+
+    glm::vec3 origin {0, 0, 0};
+    glm::vec3 target {-1, 0, 0};
+    glm::vec3 upDir {0, 0, 1};
+
+    if (xSensor) {
+        XMLElement *xTransform = xSensor->FirstChildElement("transform");
+
+        if (xTransform) {
+            XMLElement *xLookAt = xTransform->FirstChildElement("lookAt");
+
+            if (xLookAt) {
+                std::string tOrigin = xLookAt->Attribute("origin");
+                std::string tTarget = xLookAt->Attribute("target");
+                std::string tUpDir = xLookAt->Attribute("up");
+
+                origin = parseCommaSeparatedVec3(tOrigin);
+                target = parseCommaSeparatedVec3(tTarget);
+                upDir = parseCommaSeparatedVec3(tUpDir);
+            }
+        }
+    }
+}
+
+glm::vec3 SceneLoader::parseCommaSeparatedVec3(const std::string &text) {
+    std::stringstream ss(text);
+
+    std::vector<float> values;
+    for (float f; ss >> f;) {
+        values.push_back(f);
+        if (ss.peek() == ',' || ss.peek() == ' ')
+            ss.ignore();
+    }
+
+    if (values.size() != 3) {
+        throw std::runtime_error("Parsed text did not contain 3 values");
+    }
+
+    return {values[0], values[1], values[2]};
 }
 
 void SceneLoader::parseSceneFile(const std::string &filepath) {// read a JSON file
@@ -452,22 +512,27 @@ std::vector<int> SceneLoader::getLightSamplingVector() {
 
 std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                       vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
+                                                       vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                       vk::ShaderStageFlagBits::eAnyHitKHR |
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
-                                                      vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
+                                                      vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                      vk::ShaderStageFlagBits::eAnyHitKHR |
                                                       vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding materialBufferBinding(3, vk::DescriptorType::eStorageBuffer, 1,
-                                                         vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR);
+                                                         vk::ShaderStageFlagBits::eRaygenKHR |
+                                                         vk::ShaderStageFlagBits::eAnyHitKHR);
     vk::DescriptorSetLayoutBinding instanceInfoBufferBinding(4, vk::DescriptorType::eStorageBuffer, 1,
-                                                             vk::ShaderStageFlagBits::eClosestHitKHR | vk::ShaderStageFlagBits::eAnyHitKHR |
+                                                             vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                             vk::ShaderStageFlagBits::eAnyHitKHR |
                                                              vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding lightsBufferBinding(5, vk::DescriptorType::eStorageBuffer, 1,
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding lightSamplersBufferBinding(6, vk::DescriptorType::eStorageBuffer, 1,
                                                               vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding texturesBinding(7, vk::DescriptorType::eCombinedImageSampler, textures.size(),
-                                                              vk::ShaderStageFlagBits::eRaygenKHR | vk::ShaderStageFlagBits::eAnyHitKHR, nullptr);
+                                                   vk::ShaderStageFlagBits::eRaygenKHR |
+                                                   vk::ShaderStageFlagBits::eAnyHitKHR, nullptr);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
             lightsBufferBinding, lightSamplersBufferBinding, texturesBinding};
@@ -520,7 +585,8 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
     }
 
     for (const auto &texture: textures) {
-        vk::DescriptorImageInfo textureInfo{texture.sampler, texture.imageView, vk::ImageLayout::eShaderReadOnlyOptimal};
+        vk::DescriptorImageInfo textureInfo{texture.sampler, texture.imageView,
+                                            vk::ImageLayout::eShaderReadOnlyOptimal};
         outTexturesInfos.push_back(textureInfo);
     }
 
@@ -549,7 +615,7 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                    vk::DescriptorType::eStorageBuffer, nullptr,
                                    &outLightSamplersBufferInfo, nullptr),
             vk::WriteDescriptorSet(descriptorSet, 7, 0, textures.size(),
-            vk::DescriptorType::eCombinedImageSampler, outTexturesInfos.data(),
+                                   vk::DescriptorType::eCombinedImageSampler, outTexturesInfos.data(),
                                    nullptr, nullptr)
     };
 }

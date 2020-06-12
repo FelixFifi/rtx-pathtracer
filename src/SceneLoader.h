@@ -149,6 +149,7 @@ private:
     void createTopLevelAS();
 
     void parseSceneFile(const std::string &filepath);
+    void parseMitsubaSceneFile(const std::string &filepath);
 
     void createInstanceInfoBuffer();
 
@@ -169,6 +170,8 @@ private:
     std::vector<FaceSample> getFaceSamplingVector();
 
     int addTexture(const std::string &textureName);
+
+    static glm::vec3 parseCommaSeparatedVec3(const std::string &text);
 };
 
 

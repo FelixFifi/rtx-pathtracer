@@ -5,6 +5,13 @@
   ],
   "instances": [
     {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
+    {"sponza": {"translate": [0, 0, 0], "rotate": [90, 0, 0], "scale": [0.1, 0.1, 0.1]}},
     {"lightBoxBright": {"translate": [0, 0, 30], "scale": [0.5, 0.5, 1]}},
     {"lightBoxBright": {"translate": [0, 0, 60], "scale": [1, 1, 4]}}
   ],

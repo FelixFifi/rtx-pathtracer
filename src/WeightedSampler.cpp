@@ -8,6 +8,10 @@ std::mt19937 WeightedSampler::generator;
 std::uniform_real_distribution<float> WeightedSampler::distribution;
 
 int WeightedSampler::sample() {
+    if (values.empty()) {
+        return -1;
+    }
+
     float random = distribution(generator);
     random *= total;
 

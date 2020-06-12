@@ -1,0 +1,8 @@
+{
+  "models": [
+    {"fireplace":  "fireplace_room.obj"}
+  ],
+  "instances": [
+    {"fireplace": {}}
+    ]
+}

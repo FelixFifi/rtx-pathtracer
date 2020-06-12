@@ -52,6 +52,40 @@ int getRandomInteger(int max) {
     return int(rnd(seed) * (max + 1));
 }
 
+// Rendering Vorlesung - Nori src/common.cpp
+void coordinateAxis(in vec3 z, out vec3 x, out vec3 y) {
+    if (abs(z.x) > abs(z.y)) {
+        float invLen = 1.0f / sqrt(z.x * z.x + z.z * z.z);
+        y = vec3(z.z * invLen, 0.0f, -z.x * invLen);
+    } else {
+        float invLen = 1.0f / sqrt(z.y * z.y + z.z * z.z);
+        y = vec3(0.0f, z.z * invLen, -z.y * invLen);
+    }
+    x = cross(y, z);
+}
+
+vec3 toLocal(vec3 v, vec3 x, vec3 y, vec3 z) {
+    return vec3(dot(v, x), dot(v, y), dot(v, z));
+}
+
+vec3 toLocal(vec3 v, vec3 n) {
+    vec3 x, y;
+    coordinateAxis(n, x, y);
+
+    return toLocal(v, x, y, n);
+}
+
+vec3 toWorld(vec3 v, vec3 x, vec3 y, vec3 z) {
+    return v.x * x + v.y * y + v.z * z;
+}
+
+vec3 toWorld(vec3 v, vec3 n) {
+    vec3 x, y;
+    coordinateAxis(n, x, y);
+
+    return toWorld(v, x, y, n);
+}
+
 // https://math.stackexchange.com/a/1163278
 vec3 randomOnUnitSphere() {
     vec3 res;
@@ -63,6 +97,7 @@ vec3 randomOnUnitSphere() {
     return res;
 }
 
+// PDF 1 / (2pi)
 vec3 randomInHemisphere(vec3 normal) {
     vec3 res;
     do {
@@ -77,21 +112,27 @@ vec3 randomInHemisphere(vec3 normal) {
     return res;
 }
 
+// PDF cos(theta) / pi
 vec3 randomInHemisphereCosine(vec3 normal) {
-    vec3 res;
+    float u = rnd(seed);
+    float sqrt_u = sqrt(u);
+    float phi = 2 * M_PI * rnd(seed);
 
-    float r1 = rnd(seed);
-    float r2 = rnd(seed);
-    float r3 = rnd(seed);
+    vec3 local = vec3(sqrt_u * cos(phi), sqrt_u * sin(phi), sqrt(1 - u));
 
-    float a = 1 - 2 * r1;
-    float b = sqrt(1- a * a);
-    float phi = 2 * M_PI * r2;
-    res.x = r1 + b * cos(phi);
-    res.y = r1 + b * sin(phi);
-    res.z = r3 + a;
+    return toWorld(local, normal);
+}
 
-    return normalize(res);
+// (p + 1) * dot(reflected, res)^p/(2pi)
+vec3 randomInHemisphereCosinePower(vec3 reflected, float p) {
+    float u = rnd(seed);
+    float cosTheta = pow(u, 1 / (p + 1));
+    float phi = 2 * M_PI * rnd(seed);
+
+    float sinTheta = sqrt(1 - cosTheta * cosTheta);
+
+    vec3 local = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+    return toWorld(local, reflected);
 }
 
 // Rendering Vorlesung - Nori src/common.cpp
@@ -213,10 +254,10 @@ void main()
                         // Next event estimation
                         // Sample random light
 
-                        // A single light should not interact with itself
-                        if (mat.type == 3 && lightCount == 1) {
-                            break;
-                        }
+//                        // A single light should not interact with itself
+//                        if (mat.type == 3 && lightCount == 1) {
+//                            break;
+//                        }
 
                         int iRandomLight;
                         int iLight;
@@ -227,7 +268,7 @@ void main()
                             iRandomLight = getRandomInteger(SIZE_LIGHT_RANDOM - 1);
                             iLight = randomLigthIndex[iRandomLight];
                             light = lights[iLight];
-                        } while (light.instanceIndex == info.instanceIndex && !light.isPointLight);
+                        } while (false);//light.instanceIndex == info.instanceIndex && !light.isPointLight);
 
 
                         vec3 lightColor;
@@ -307,11 +348,31 @@ void main()
                         }
                     }
 
+                    vec3 newDirection;
+                    float pdf;
+                    if (pushC.diffuseSampleStrategy == 0) {
+                        // Uniform Hemisphere
+                        newDirection = randomInHemisphere(info.normal);
+                        pdf = 1 / (2 * M_PI);
+                    } else if (pushC.diffuseSampleStrategy == 1) {
+                        // Cosine Hemisphere
+                        newDirection = randomInHemisphereCosine(info.normal);
+                        pdf = dot(newDirection, info.normal) / M_PI;
+                    } else {
+                        // Cosine Power Hemisphere
+                        vec3 reflected = reflect(direction, info.normal);
 
-                    vec3 newDirection = randomInHemisphere(info.normal);
+                        float highlight = mat.specularHighlight;
+                        newDirection = randomInHemisphereCosinePower(reflected, highlight);
 
-                    float p = 1 / (2 * M_PI);
-                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / p;
+                        if (dot(info.normal, newDirection) < 0) {
+                            // Absorb rays below surface
+                            break;
+                        }
+                        pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
+                    }
+
+                    throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / pdf;
 
                     direction = newDirection;
                     addDirectLightHits = false;
@@ -366,15 +427,28 @@ void main()
 
     ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
 
-    // if the camera hasn't changed, then accumulate results
-    if (pushC.previousFrames > 0) {
-        vec3 accumulated = imageLoad(accumulateImage, imageUV).xyz;
-        accumulated += result;
+    if (pushC.enableAverageInsteadOfMix) {
+        // if the camera hasn't changed, then accumulate results
+        if (pushC.previousFrames > 0) {
+            vec3 accumulated = imageLoad(accumulateImage, imageUV).xyz;
+            accumulated += result;
 
-        imageStore(image, imageUV, vec4(accumulated / (pushC.previousFrames + 1), 1.0));
-        imageStore(accumulateImage, imageUV, vec4(accumulated, 1.0));
+            imageStore(image, imageUV, vec4(accumulated / (pushC.previousFrames + 1), 1.0));
+            imageStore(accumulateImage, imageUV, vec4(accumulated, 1.0));
+        } else {
+            imageStore(accumulateImage, imageUV, vec4(result, 1.0));
+            imageStore(image, imageUV, vec4(result, 1.0));
+        }
     } else {
-        imageStore(accumulateImage, imageUV, vec4(result, 1.0));
-        imageStore(image, imageUV, vec4(result, 1.0));
+        // if the camera hasn't changed, then mix with previous results
+        if (pushC.previousFrames > 0) {
+            vec3 previous = imageLoad(image, imageUV).xyz;
+            result = mix(previous, result, 1.0 / (pushC.previousFrames + 1));
+
+            imageStore(image, imageUV, vec4(result, 1.0));
+        } else {
+            imageStore(image, imageUV, vec4(result, 1.0));
+        }
     }
+
 }

@@ -14,7 +14,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
     postProcessing = PostProcessing({width, height}, vulkanWindow);
 
-    cameraController = CameraController(glm::vec3(0, 3, 4), 360.0f / width, glm::vec3(0, 1, 0), glm::vec3(0, -2, -4));
+    cameraController = CameraController(glm::vec3(0, 2, 15), 360.0f / width, glm::vec3(0, 0.952424, -0.9524), glm::vec3(0, -0.30478, -0.9524));
     fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
     vulkanWindow.setEventCallback(eventCallback);
     fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcher(key); };
@@ -237,7 +237,7 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     CameraMatrices ubo = {};
-    ubo.proj = glm::perspective(glm::radians(45.0f), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
+    ubo.proj = glm::perspective(glm::radians(vfov), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
                                 1000.0f);
     ubo.proj[1][1] *= -1;
 
@@ -448,6 +448,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
+    hasInputChanged |= ImGui::InputInt("Uniform/Cosine/CosinePower", &rtPushConstants.diffuseSampleStrategy);
+    hasInputChanged |= ImGui::Checkbox("Enable average instead of mix", reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
 
     ImGui::Checkbox("Take picture", &takePicture);
 

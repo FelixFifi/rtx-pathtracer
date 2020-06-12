@@ -37,10 +37,12 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/veach-mis.json",
         "scenes/cornell-dielectric-path.json",
         "scenes/test.json",
         "scenes/cornell.json",
-        "scenes/large.json"
+        "scenes/large.json",
+        "scenes/fireplace.json"
 };
 
 static const int MAX_RECURSION = 2;
@@ -68,10 +70,12 @@ public:
         uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 20;
+        int maxDepth = 3;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
-        int enableNEE = 1; // GLSL has 4 byte bool
+        int enableNEE = 0; // GLSL has 4 byte bool
+        int diffuseSampleStrategy = 0;
+        int enableAverageInsteadOfMix = 0;
     } rtPushConstants;
 
 private:
@@ -80,6 +84,7 @@ private:
 
     SceneLoader modelLoader;
 
+    float vfov = 36.7774f;
     bool autoRotate = false;
     bool accumulateResults = true;
     bool hasInputChanged = false;

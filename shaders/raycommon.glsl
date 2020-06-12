@@ -25,4 +25,6 @@ struct pushConstant
     int samplesPerPixel;
     bool enableRR;
     bool enableNEE;
+    int diffuseSampleStrategy;
+    bool enableAverageInsteadOfMix;
 };

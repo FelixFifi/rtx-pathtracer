@@ -23,5 +23,9 @@
     {"glassCube": {"translate": [-40, 0, 3], "rotate": [0, 15, 20], "scale": [0.5, 0.5, 0.7]}},
     {"glassSphere": {"translate": [-20, -30, 15], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
     {"teapot": {"translate": [20, -30, 20], "rotate": [0, 0, 45], "scale": [1, 1, 1]}}
+  ],
+  "lights": [
+    {"color" :  [10000, 2000, 1000 ], "position" : [0, 0, 20]},
+    {"color" :  [1000, 2000, 100000 ], "position" : [20, 200, 20]}
   ]
 }
