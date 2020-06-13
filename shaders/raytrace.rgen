@@ -126,7 +126,7 @@ vec3 randomInHemisphereCosine(vec3 normal) {
 // (p + 1) * dot(reflected, res)^p/(2pi)
 vec3 randomInHemisphereCosinePower(vec3 reflected, float p) {
     float u = rnd(seed);
-    float cosTheta = pow(u, 1 / (p + 1));
+    float cosTheta = pow(u, 1.0 / (p + 1));
     float phi = 2 * M_PI * rnd(seed);
 
     float sinTheta = sqrt(1 - cosTheta * cosTheta);
@@ -241,9 +241,7 @@ void main()
 
             switch (mat.type) {
                 case 3: // Light
-                    if (pushC.enableNEE && addDirectLightHits) {
-                        sampleResult += 0.5 * throughput * mat.lightColor;
-                    } else {
+                    if (!pushC.enableNEE || addDirectLightHits) {
                         sampleResult += throughput * mat.lightColor;
                     }
                     // Then continue as diffuse
@@ -350,6 +348,7 @@ void main()
 
                     vec3 newDirection;
                     float pdf;
+
                     if (pushC.diffuseSampleStrategy == 0) {
                         // Uniform Hemisphere
                         newDirection = randomInHemisphere(info.normal);
@@ -359,17 +358,40 @@ void main()
                         newDirection = randomInHemisphereCosine(info.normal);
                         pdf = dot(newDirection, info.normal) / M_PI;
                     } else {
-                        // Cosine Power Hemisphere
-                        vec3 reflected = reflect(direction, info.normal);
+                        // Phong
+                        float lDiffuse = length(mat.diffuse);
+                        float lSpecular = length(mat.specular);
+                        float sumSpecDiff = lDiffuse + lSpecular;
 
-                        float highlight = mat.specularHighlight;
-                        newDirection = randomInHemisphereCosinePower(reflected, highlight);
-
-                        if (dot(info.normal, newDirection) < 0) {
-                            // Absorb rays below surface
+                        // Completely black objects would produce NaN otherwise
+                        if (sumSpecDiff == 0) {
                             break;
                         }
-                        pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
+
+                        if (rnd(seed) * sumSpecDiff > lDiffuse) {
+                            // Cosine power/phong lobe
+                            vec3 reflected = reflect(direction, info.normal);
+
+                            float highlight = mat.specularHighlight;
+                            newDirection = randomInHemisphereCosinePower(reflected, highlight);
+
+                            if (dot(info.normal, newDirection) < 0) {
+                                // Absorb rays below surface
+                                break;
+                            }
+
+                            pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
+                            pdf *= lSpecular / sumSpecDiff;
+                        } else {
+                            // Cosine Hemisphere
+                            newDirection = randomInHemisphereCosine(info.normal);
+                            pdf = dot(newDirection, info.normal) / M_PI;
+                            pdf *= lDiffuse / sumSpecDiff;
+                        }
+                    }
+
+                    if (pdf == 0) {
+                        break;
                     }
 
                     throughput *= phong(mat, info.textureUV, info.normal, -direction, newDirection) / pdf;
