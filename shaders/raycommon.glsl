@@ -5,8 +5,8 @@ struct hitInfo
     vec2 textureUV;
     int matIndex;
     float t;
-    bool isLight; // TODO: Find more consistent handling of miss
-    vec3 lightColor;
+    bool isMiss; // TODO: Find more consistent handling of miss
+    vec3 missColor;
     uint instanceIndex;
 };
 
@@ -27,4 +27,5 @@ struct pushConstant
     bool enableNEE;
     int diffuseSampleStrategy;
     bool enableAverageInsteadOfMix;
+    bool enableMIS;
 };

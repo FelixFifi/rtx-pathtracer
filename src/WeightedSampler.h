@@ -21,6 +21,10 @@ public:
 private:
     std::vector<float> values;
     float total;
+public:
+    float getTotal() const;
+
+private:
 
     static std::mt19937 generator;
     static std::uniform_real_distribution<float> distribution;

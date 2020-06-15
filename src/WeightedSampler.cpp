@@ -42,3 +42,7 @@ std::vector<float> WeightedSampler::getProbabilities() {
 
     return probs;
 }
+
+float WeightedSampler::getTotal() const {
+    return total;
+}

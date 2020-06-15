@@ -45,6 +45,6 @@ void main()
     info.textureUV = textureUV;
     info.matIndex = v0.materialIndex;
     info.t = gl_HitTEXT;
-    info.isLight = false;
+    info.isMiss = false;
     info.instanceIndex = gl_InstanceID;
 }

@@ -76,6 +76,7 @@ public:
         int enableNEE = 0; // GLSL has 4 byte bool
         int diffuseSampleStrategy = 0;
         int enableAverageInsteadOfMix = 0;
+        int enableMIS = 0;
     } rtPushConstants;
 
 private:

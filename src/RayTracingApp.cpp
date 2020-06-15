@@ -450,6 +450,7 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
     hasInputChanged |= ImGui::InputInt("Uniform/Cosine/CosinePower", &rtPushConstants.diffuseSampleStrategy);
     hasInputChanged |= ImGui::Checkbox("Enable average instead of mix", reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
+    hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)", reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
 
     ImGui::Checkbox("Take picture", &takePicture);
 

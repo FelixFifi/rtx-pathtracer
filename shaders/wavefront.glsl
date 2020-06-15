@@ -23,6 +23,7 @@ struct InstanceInfo {
     mat4 transform;
     mat4 normalTransform;
     int modelIndex;
+    int iLight;
 };
 
 struct Light {
@@ -31,6 +32,7 @@ struct Light {
     bool isPointLight;
     uint instanceIndex;
     float sampleProb;
+    float area;
 };
 
 struct FaceSample {

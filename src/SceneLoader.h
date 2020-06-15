@@ -49,6 +49,7 @@ struct alignas(16) Instance {
     glm::mat4 transform;
     glm::mat4 normalTransform;
     int iModel;
+    int iLight = -1;
 };
 
 struct alignas(16) Light {
@@ -57,6 +58,7 @@ struct alignas(16) Light {
     int isPointLight; // Bool as integer, because glsl uses ints to represent booleans
     uint instanceIndex;
     float sampleProb;
+    float area;
 };
 
 struct FaceSample {

@@ -358,6 +358,8 @@ void SceneLoader::parseInstances(const json &j, std::map<std::string, int> &name
             light.isPointLight = false;
             light.instanceIndex = instances.size();
             lights.push_back(light);
+
+            instance.iLight = lights.size() - 1;
         }
 
         glm::mat4 transform(1.0f);
@@ -451,7 +453,7 @@ void SceneLoader::createLightSamplersBuffer() {
 
 std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
     std::vector<FaceSample> randomTriIndicesPerLight;
-    for (const auto &light : lights) {
+    for (auto &light : lights) {
         // Area lights are before all point lights
         if (light.isPointLight) {
             break;
@@ -467,6 +469,10 @@ std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
         }
 
         WeightedSampler faceSampler(areas);
+
+        // Set this area for the light for prob calculations
+        // TODO: move
+        light.area = faceSampler.getTotal();
 
         std::vector<float> probSampleFace = faceSampler.getProbabilities();
 
