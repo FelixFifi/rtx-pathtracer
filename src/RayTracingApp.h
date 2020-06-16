@@ -73,10 +73,10 @@ public:
         int maxDepth = 3;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
-        int enableNEE = 0; // GLSL has 4 byte bool
-        int diffuseSampleStrategy = 0;
+        int enableNEE = 1; // GLSL has 4 byte bool
+        int diffuseSampleStrategy = 2;
         int enableAverageInsteadOfMix = 0;
-        int enableMIS = 0;
+        int enableMIS = 1;
     } rtPushConstants;
 
 private:

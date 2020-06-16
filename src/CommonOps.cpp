@@ -12,7 +12,6 @@ void writeEXR(const char *fileName, const float *pixels, int width, int height) 
     header.channels().insert("R", Imf::Channel(Imf::FLOAT));
     header.channels().insert("G", Imf::Channel(Imf::FLOAT));
     header.channels().insert("B", Imf::Channel(Imf::FLOAT));
-    header.channels().insert("A", Imf::Channel(Imf::FLOAT));
 
     Imf::OutputFile file(fileName, header);
     Imf::FrameBuffer frameBuffer;
@@ -29,11 +28,6 @@ void writeEXR(const char *fileName, const float *pixels, int width, int height) 
     frameBuffer.insert("B",                                // name
                        Imf::Slice(Imf::FLOAT,                       // type
                                   (char *) (pixels + 2),            // base
-                                  sizeof(*pixels) * 4,       // xStride
-                                  sizeof(*pixels) * width * 4)); // yStride
-    frameBuffer.insert("A",                                // name
-                       Imf::Slice(Imf::FLOAT,                       // type
-                                  (char *) (pixels + 3),            // base
                                   sizeof(*pixels) * 4,       // xStride
                                   sizeof(*pixels) * width * 4)); // yStride
     file.setFrameBuffer(frameBuffer);
