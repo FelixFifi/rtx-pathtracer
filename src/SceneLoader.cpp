@@ -24,6 +24,21 @@
 using json = nlohmann::json;
 using namespace tinyxml2;
 
+SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
+                         const std::string &materialBaseDir, const std::string &textureBaseDir,
+                         std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
+                         uint32_t graphicsQueueIndex)
+        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
+          vulkanOps(vulkanOps),
+          device(vulkanOps->getDevice()) {
+    parseMitsubaSceneFile("/home/felixfifi/projects/rtx-raytracer/scenes/veach-mis.xml");
+
+
+    parseSceneFile(filepath);
+
+    createVulkanObjects(physicalDevice, graphicsQueueIndex);
+}
+
 void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createMaterialBuffer();
@@ -62,21 +77,6 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
         textures.push_back(texture);
 
     }
-}
-
-SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
-                         const std::string &materialBaseDir, const std::string &textureBaseDir,
-                         std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
-                         uint32_t graphicsQueueIndex)
-        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
-          vulkanOps(vulkanOps),
-          device(vulkanOps->getDevice()) {
-    parseMitsubaSceneFile("/home/felixfifi/projects/rtx-raytracer/scenes/test.xml");
-
-
-    parseSceneFile(filepath);
-
-    createVulkanObjects(physicalDevice, graphicsQueueIndex);
 }
 
 void SceneLoader::loadModel(const std::string &objFilePath) {
@@ -264,18 +264,23 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
 
     XMLElement *xScene = document.FirstChildElement("scene");
 
-    XMLElement *xSensor = xScene->FirstChildElement("sensor");
+    parseCameraSettings(xScene);
 
-    glm::vec3 origin {0, 0, 0};
-    glm::vec3 target {-1, 0, 0};
-    glm::vec3 upDir {0, 0, 1};
+}
+
+void SceneLoader::parseCameraSettings(XMLElement *xScene) {
+    XMLElement *xSensor = xScene->FirstChildElement("sensor");
 
     if (xSensor) {
         XMLElement *xTransform = xSensor->FirstChildElement("transform");
 
         if (xTransform) {
             XMLElement *xLookAt = xTransform->FirstChildElement("lookAt");
+            if (!xLookAt) {
+                xLookAt = xTransform->FirstChildElement("lookat");
+            }
 
+            // LookAt element with origin target upDir
             if (xLookAt) {
                 std::string tOrigin = xLookAt->Attribute("origin");
                 std::string tTarget = xLookAt->Attribute("target");
@@ -285,6 +290,17 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
                 target = parseCommaSeparatedVec3(tTarget);
                 upDir = parseCommaSeparatedVec3(tUpDir);
             }
+
+            // FOV
+            XMLElement *xFov = xSensor->FirstChildElement("float");
+            while (xFov && xFov->FindAttribute("name") && strcmp(xFov->FindAttribute("name")->Value(), "fov") != 0) {
+                xFov = xFov->NextSiblingElement("float");
+            }
+
+            if (xFov) {
+                vfov = xFov->FloatAttribute("value");
+            }
+
         }
     }
 }

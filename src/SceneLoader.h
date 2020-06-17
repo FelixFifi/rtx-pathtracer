@@ -21,6 +21,7 @@ static const int BINDINGS_COUNT = 7;
 #include <nvvkpp/descriptorsets_vkpp.hpp>
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 #include <json.hpp>
+#include <tinyxml2.h>
 #include "Model.h"
 
 
@@ -110,6 +111,11 @@ private:
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
 public:
+    glm::vec3 origin {0, 0, 0};
+    glm::vec3 target {0, 1, 0};
+    glm::vec3 upDir {0, 0, 1};
+    float vfov = 45.0f;
+public:
     SceneLoader() = default;
     SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
                 const std::string &materialBaseDir, const std::string &textureBaseDir,
@@ -174,6 +180,8 @@ private:
     int addTexture(const std::string &textureName);
 
     static glm::vec3 parseCommaSeparatedVec3(const std::string &text);
+
+    void parseCameraSettings(tinyxml2::XMLElement *xScene);
 };
 
 

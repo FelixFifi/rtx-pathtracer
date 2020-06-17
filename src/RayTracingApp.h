@@ -83,9 +83,8 @@ private:
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
 
-    SceneLoader modelLoader;
+    SceneLoader sceneLoader;
 
-    float vfov = 36.7774f;
     bool autoRotate = false;
     bool accumulateResults = true;
     bool hasInputChanged = false;
@@ -135,7 +134,7 @@ private:
 
     void recreateSwapchainCallback();
 
-    void loadModels();
+    void loadScene();
 
     void cleanupDescriptorSets();
 

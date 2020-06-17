@@ -23,11 +23,14 @@ public:
 
     glm::quat orientation;
 
+    float vfov;
+    float aspectRatio;
+
     float speed = 0.5f;
     float mouseSensitivity;
 public:
-    CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir = glm::vec3(0, 0, 1)
-            , glm::vec3 viewDirection = glm::vec3(1, 0, 0));
+    CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir = glm::vec3(0, 0, 1),
+                     glm::vec3 viewDirection = glm::vec3(1, 0, 0), float aspectRatio = 1);
 
     CameraController() = default;
 
@@ -41,6 +44,10 @@ public:
     bool hasCameraChanged() const;
 
     void resetStatus();
+
+    void lookAt(glm::vec3 origin, glm::vec3 target, glm::vec3 upDir);
+
+    glm::mat4 getProjMatrix();
 };
 
 

@@ -7,8 +7,9 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
-CameraController::CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir, glm::vec3 viewDirection)
-        : pos(pos), mouseSensitivity(mouseSensitivity) {
+CameraController::CameraController(glm::vec3 pos, float mouseSensitivity, glm::vec3 upDir, glm::vec3 viewDirection,
+                                   float aspectRatio)
+        : pos(pos), mouseSensitivity(mouseSensitivity), aspectRatio(aspectRatio) {
 
     viewDirection = glm::normalize(viewDirection);
     orientation = glm::conjugate(glm::quatLookAt(viewDirection, upDir));
@@ -57,8 +58,13 @@ void CameraController::eventCallbackSDL(const SDL_Event &event) {
             }
             break;
     }
+}
 
-
+void CameraController::lookAt(glm::vec3 origin, glm::vec3 target, glm::vec3 upDir) {
+    glm::vec3 viewDirection = glm::normalize(target - origin);
+    orientation = glm::conjugate(glm::quatLookAt(viewDirection, upDir));
+    pos = origin;
+    cameraChanged = true;
 }
 
 glm::vec3 CameraController::getForward() {
@@ -77,6 +83,14 @@ glm::vec3 CameraController::getUp() {
 glm::mat4 CameraController::getViewMatrix() {
 
     return glm::translate(glm::mat4_cast(orientation), -pos);
+}
+
+glm::mat4 CameraController::getProjMatrix() {
+    glm::mat4 proj = glm::perspective(glm::radians(vfov), aspectRatio, 0.1f,
+                                1000.0f);
+    proj[1][1] *= -1;
+
+    return proj;
 }
 
 void CameraController::resetStatus() {

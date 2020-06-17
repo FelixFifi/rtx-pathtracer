@@ -14,7 +14,9 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
     vulkanWindow = VulkanWindow(width, height, drawFunc, recreateSwapchainFunc);
     postProcessing = PostProcessing({width, height}, vulkanWindow);
 
-    cameraController = CameraController(glm::vec3(0, 2, 15), 360.0f / width, glm::vec3(0, 0.952424, -0.9524), glm::vec3(0, -0.30478, -0.9524));
+    float aspectRatio = width / (float) height;
+    cameraController = CameraController(glm::vec3(0, 2, 15), 360.0f / width, glm::vec3(0, 0.952424, -0.304805),
+                                        glm::vec3(0, -0.30478, -0.9524), aspectRatio);
     fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
     vulkanWindow.setEventCallback(eventCallback);
     fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcher(key); };
@@ -31,7 +33,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     createAccumulateImage();
     createUniformBuffers();
-    loadModels();
+    loadScene();
 
 
     initRayTracing();
@@ -48,7 +50,7 @@ void RayTracingApp::createAccumulateImage() {
     vulkanOps->transitionImageLayout(accumulateImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 }
 
-void RayTracingApp::loadModels() {
+void RayTracingApp::loadScene() {
     sceneSwitcher(1);
 }
 
@@ -88,14 +90,17 @@ void RayTracingApp::sceneSwitcher(int num) {
     int sceneCount = SCENES.size();
     int sceneIndex = std::min(num - 1, sceneCount - 1);
 
-    if (modelLoader.getModelCount() > 0) {
-        modelLoader.cleanup();
+    if (sceneLoader.getModelCount() > 0) {
+        sceneLoader.cleanup();
     }
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    modelLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps,
+    sceneLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps,
                               physicalDevice,
                               graphicsQueueIndex);
+
+    cameraController.vfov = sceneLoader.vfov;
+    cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
     recreateDescriptorSets();
 
@@ -147,7 +152,7 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                 vk::ShaderStageFlagBits::eRaygenKHR);
 
 
-    auto vertexIndexMaterialBindings = modelLoader.getDescriptorSetLayouts();
+    auto vertexIndexMaterialBindings = sceneLoader.getDescriptorSetLayouts();
     std::array<vk::DescriptorSetLayoutBinding, 9> bindings = {uniformBufferLayoutBinding,
                                                               vertexIndexMaterialBindings[0],
                                                               vertexIndexMaterialBindings[1],
@@ -164,7 +169,7 @@ void RayTracingApp::createDecriptorSetLayout() {
 }
 
 void RayTracingApp::createDescriptorPool() {
-    auto vertexIndexMaterialPoolSizes = modelLoader.getDescriptorPoolSizes();
+    auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
 
     std::array<vk::DescriptorPoolSize, 9> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
@@ -207,7 +212,7 @@ void RayTracingApp::createDescriptorSets() {
         vk::DescriptorBufferInfo lightSamplersBufferInfo;
         std::vector<vk::DescriptorImageInfo> textureInfos;
 
-        auto vertexIndexBufferWrites = modelLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
+        auto vertexIndexBufferWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                                           indexBufferInfos, materialBufferInfo,
                                                                           instanceInfoBufferInfo, lightBufferInfo,
                                                                           lightSamplersBufferInfo, textureInfos);
@@ -237,10 +242,6 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     CameraMatrices ubo = {};
-    ubo.proj = glm::perspective(glm::radians(vfov), offscreenExtent.width / (float) offscreenExtent.height, 0.1f,
-                                1000.0f);
-    ubo.proj[1][1] *= -1;
-
 
     if (autoRotate) {
         auto currentTime = std::chrono::high_resolution_clock::now();
@@ -254,6 +255,7 @@ void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
     } else {
         ubo.view = cameraController.getViewMatrix();
     }
+    ubo.proj = cameraController.getProjMatrix();
 
     ubo.projInverse = glm::inverse(ubo.proj);
     ubo.viewInverse = glm::inverse(ubo.view);
@@ -290,7 +292,7 @@ void RayTracingApp::createRtDescriptorSet() {
 
     vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
     descASInfo.setAccelerationStructureCount(1);
-    descASInfo.setPAccelerationStructures(&modelLoader.getAccelerationStructure());
+    descASInfo.setPAccelerationStructures(&sceneLoader.getAccelerationStructure());
     vk::DescriptorImageInfo imageInfo{
             {}, postProcessing.getOffscreenImageView(), vk::ImageLayout::eGeneral}; // TODO: Update each frame
 
@@ -308,7 +310,7 @@ void RayTracingApp::updateRtDescriptorSet(uint32_t currentImage) {
 
     vk::WriteDescriptorSetAccelerationStructureKHR descASInfo;
     descASInfo.setAccelerationStructureCount(1);
-    descASInfo.setPAccelerationStructures(&modelLoader.getAccelerationStructure());
+    descASInfo.setPAccelerationStructures(&sceneLoader.getAccelerationStructure());
 
     // (1) Output buffer
     vk::DescriptorImageInfo imageInfo{
@@ -516,7 +518,7 @@ void RayTracingApp::cleanup() {
 
     cleanupRtPipeline();
 
-    modelLoader.cleanup();
+    sceneLoader.cleanup();
 
     postProcessing.cleanup();
     vulkanWindow.cleanup();
