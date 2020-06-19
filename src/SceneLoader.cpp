@@ -20,6 +20,7 @@
 
 #include "json.hpp"
 #include "WeightedSampler.h"
+#include "MitsubaXML.h"
 
 using json = nlohmann::json;
 using namespace tinyxml2;
@@ -122,7 +123,7 @@ void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMater
                 break;
             case 4:
             case 7:
-                material.type = eTransparent;
+                material.type = eDielectric;
                 break;
             case 11:
                 material.type = eLight;
@@ -266,6 +267,41 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
 
     parseCameraSettings(xScene);
 
+    std::map<std::string, Material> definedMaterials;
+
+    XMLElement *xBSDF = xScene->FirstChildElement("bsdf");
+    while (xBSDF) {
+        std::string id = xBSDF->Attribute("id");
+        std::string type = xBSDF->Attribute("type");
+
+        Material mat;
+        if (type == "phong") {
+            mat.type = ePhong;
+            mat.specular = getChildRGB(xBSDF, "specularReflectance");
+            mat.diffuse = getChildRGB(xBSDF, "diffuseReflectance");
+            mat.specularHighlight = getChildFloat(xBSDF, "exponent");
+        } else if (type == "diffuse") {
+            mat.type = eDiffuse;
+            mat.specular = {0, 0, 0};
+            mat.diffuse = getChildRGB(xBSDF, "reflectance");
+            mat.specularHighlight = 0;
+        } else if (type == "dielectric") {
+            mat.type = eDielectric;
+            mat.specular = {1, 1, 1};
+            mat.refractionIndex = getChildFloat(xBSDF, "intIOR") / getChildFloat(xBSDF, "extIOR");
+            mat.refractionIndexInv = 1.0f / mat.refractionIndex;
+        }
+
+        if (definedMaterials.contains(id)) {
+            throw std::runtime_error("Duplicate BSDF id");
+        }
+
+        definedMaterials[id] = mat;
+
+        xBSDF = xBSDF->NextSiblingElement("bsdf");
+    }
+
+    std::cout << definedMaterials.size() << std::endl;
 }
 
 void SceneLoader::parseCameraSettings(XMLElement *xScene) {
@@ -286,9 +322,9 @@ void SceneLoader::parseCameraSettings(XMLElement *xScene) {
                 std::string tTarget = xLookAt->Attribute("target");
                 std::string tUpDir = xLookAt->Attribute("up");
 
-                origin = parseCommaSeparatedVec3(tOrigin);
-                target = parseCommaSeparatedVec3(tTarget);
-                upDir = parseCommaSeparatedVec3(tUpDir);
+                origin = parseCommaSpaceSeparatedVec3(tOrigin);
+                target = parseCommaSpaceSeparatedVec3(tTarget);
+                upDir = parseCommaSpaceSeparatedVec3(tUpDir);
             }
 
             // FOV
@@ -303,23 +339,6 @@ void SceneLoader::parseCameraSettings(XMLElement *xScene) {
 
         }
     }
-}
-
-glm::vec3 SceneLoader::parseCommaSeparatedVec3(const std::string &text) {
-    std::stringstream ss(text);
-
-    std::vector<float> values;
-    for (float f; ss >> f;) {
-        values.push_back(f);
-        if (ss.peek() == ',' || ss.peek() == ' ')
-            ss.ignore();
-    }
-
-    if (values.size() != 3) {
-        throw std::runtime_error("Parsed text did not contain 3 values");
-    }
-
-    return {values[0], values[1], values[2]};
 }
 
 void SceneLoader::parseSceneFile(const std::string &filepath) {// read a JSON file

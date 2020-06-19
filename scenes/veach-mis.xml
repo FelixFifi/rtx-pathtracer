@@ -13,40 +13,28 @@
 		<rgb name="reflectance" value="0.4 0.04 0.04"/>
 	</bsdf>
 
-	<bsdf type="roughplastic" id="plate_01_material">
+	<bsdf type="phong" id="plate_01_material">
 		<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 		<rgb name="specularReflectance" value="1 1 1"/>
-		<rgb name="specularTransmittance" value="1 1 1"/>
-		<string name="distribution" value="ggx"/>
-		<string name="material" value="none"/>
-		<float name="alpha" value="0.005"/>
+		<float name="exponent" value="80000"/>
 	</bsdf>
 
-	<bsdf type="roughplastic" id="plate_02_material">
-        <rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
+	<bsdf type="phong" id="plate_02_material">
+		<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 		<rgb name="specularReflectance" value="1 1 1"/>
-		<rgb name="specularTransmittance" value="1 1 1"/>
-		<string name="distribution" value="ggx"/>
-		<string name="material" value="none"/>
-		<float name="alpha" value="0.01"/>
+		<float name="exponent" value="20000"/>
 	</bsdf>
 
-	<bsdf type="roughplastic" id="plate_03_material">
-        <rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
+	<bsdf type="phong" id="plate_03_material">
+		<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 		<rgb name="specularReflectance" value="1 1 1"/>
-		<rgb name="specularTransmittance" value="1 1 1"/>
-		<string name="distribution" value="ggx"/>
-		<string name="material" value="none"/>
-		<float name="alpha" value="0.05"/>
+		<float name="exponent" value="800"/>
 	</bsdf>
 
-	<bsdf type="roughplastic" id="plate_04_material">
-        <rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
+	<bsdf type="phong" id="plate_04_material">
+		<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 		<rgb name="specularReflectance" value="1 1 1"/>
-		<rgb name="specularTransmittance" value="1 1 1"/>
-		<string name="distribution" value="ggx"/>
-		<string name="material" value="none"/>
-		<float name="alpha" value="0.1"/>
+		<float name="exponent" value="200"/>
 	</bsdf>
 
 	<shape type="serialized" id="default_mesh">

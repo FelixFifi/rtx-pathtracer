@@ -28,7 +28,7 @@ static const int BINDINGS_COUNT = 7;
 enum EMatType {
     eDiffuse = 0,
     eSpecular = 1,
-    eTransparent = 2,
+    eDielectric = 2,
     eLight = 3,
     ePhong = 4
 };
@@ -178,8 +178,6 @@ private:
     std::vector<FaceSample> getFaceSamplingVector();
 
     int addTexture(const std::string &textureName);
-
-    static glm::vec3 parseCommaSeparatedVec3(const std::string &text);
 
     void parseCameraSettings(tinyxml2::XMLElement *xScene);
 };
