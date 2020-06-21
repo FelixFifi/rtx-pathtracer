@@ -180,6 +180,20 @@ private:
     int addTexture(const std::string &textureName);
 
     void parseCameraSettings(tinyxml2::XMLElement *xScene);
+
+    Material parseXmlBSDF(tinyxml2::XMLElement *xBSDF, std::string &outId) const;
+
+    std::map<std::string, int> parseXmlBSDFs(tinyxml2::XMLElement *xScene);
+
+    void
+    converteObjData(const std::vector<tinyobj::shape_t> &shapes, const tinyobj::attrib_t &attrib,
+                    int materialIndexOffset, int materialIndexOverride, std::vector<Vertex> &outVertices,
+                    std::vector<uint32_t> &outIndices, std::vector<int> &outEmissiveFaces) const;
+
+    void readObjFile(const std::string &objFilePath, tinyobj::attrib_t &attrib, std::vector<tinyobj::shape_t> &shapes,
+                     std::vector<tinyobj::material_t> &tinyMaterials) const;
+
+    std::string toObjPath(const std::string &path);
 };
 
 

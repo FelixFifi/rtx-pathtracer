@@ -37,7 +37,10 @@ glm::vec3 parseCommaSpaceSeparatedVec3(const std::string &text) {
             ss.ignore();
     }
 
-    if (values.size() != 3) {
+    if (values.size() == 1) {
+        // All the same values
+        return {values[0], values[0], values[0]};
+    } else if (values.size() != 3) {
         throw std::runtime_error("Parsed text did not contain 3 values");
     }
 
@@ -98,6 +101,17 @@ glm::vec3 getChildRGB(XMLElement *elem, const std::string &name) {
     }
 
     return parseCommaSpaceSeparatedVec3(xChild->Attribute("value"));
+}
+
+glm::vec3 getChildPoint(XMLElement *elem, const std::string &name) {
+    const char *FILTER = "point";
+    XMLElement *xChild = getNamedChild(elem, name, FILTER);
+
+    if (!xChild) {
+        throw std::runtime_error("Name not found: " + name);
+    }
+
+    return {xChild->FloatAttribute("x"), xChild->FloatAttribute("y"), xChild->FloatAttribute("z")};
 }
 
 

@@ -32,10 +32,14 @@ SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectB
         : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
           vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
-    parseMitsubaSceneFile("/home/felixfifi/projects/rtx-raytracer/scenes/veach-mis.xml");
 
+    std::filesystem::path path = filepath;
 
-    parseSceneFile(filepath);
+    if (path.extension().string() == ".xml") {
+        parseMitsubaSceneFile(filepath);
+    } else if (path.extension().string() == ".json") {
+        parseSceneFile(filepath);
+    }
 
     createVulkanObjects(physicalDevice, graphicsQueueIndex);
 }
@@ -84,12 +88,7 @@ void SceneLoader::loadModel(const std::string &objFilePath) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> tinyMaterials;
-    std::string warn, err;
-
-    if (!tinyobj::LoadObj(&attrib, &shapes, &tinyMaterials, &warn, &err, objFilePath.c_str(),
-                          materialBaseDir.c_str())) {
-        throw std::runtime_error(warn + err);
-    }
+    readObjFile(objFilePath, attrib, shapes, tinyMaterials);
 
     int materialIndexOffset = materials.size();
 
@@ -97,6 +96,17 @@ void SceneLoader::loadModel(const std::string &objFilePath) {
 
     addModel(attrib, shapes, materialIndexOffset);
 
+}
+
+void SceneLoader::readObjFile(const std::string &objFilePath, tinyobj::attrib_t &attrib,
+                              std::vector<tinyobj::shape_t> &shapes,
+                              std::vector<tinyobj::material_t> &tinyMaterials) const {
+    std::string warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &tinyMaterials, &warn, &err, objFilePath.c_str(),
+                          materialBaseDir.c_str())) {
+        throw std::runtime_error(warn + err);
+    }
 }
 
 void SceneLoader::addMaterials(const std::vector<tinyobj::material_t> &tinyMaterials) {
@@ -200,19 +210,35 @@ int SceneLoader::addTexture(const std::string &textureName) {
 
 void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<tinyobj::shape_t> &shapes,
                            int materialIndexOffset) {
-    std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
-
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     std::vector<int> emissiveFaces;
+    converteObjData(shapes, attrib, materialIndexOffset, -1, vertices, indices, emissiveFaces);
 
 
+    models.emplace_back(vertices, indices, vulkanOps);
+    emissiveFacesPerModel.push_back(emissiveFaces);
+}
+
+void SceneLoader::converteObjData(const std::vector<tinyobj::shape_t> &shapes, const tinyobj::attrib_t &attrib,
+                                  int materialIndexOffset, int materialIndexOverride, std::vector<Vertex> &outVertices,
+                                  std::vector<uint32_t> &outIndices, std::vector<int> &outEmissiveFaces) const {
+    bool hasNormals = !attrib.normals.empty();
+    bool hasTexCoords = !attrib.texcoords.empty();
+
+    std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
     for (const auto &shape : shapes) { // TODO: separate obj by shape instead of joing all
         unsigned long numFaces = shape.mesh.indices.size() / VERTICES_PER_FACE;
         for (int iFace = 0; iFace < numFaces; ++iFace) {
+            int materialIndex = materialIndexOverride;
 
-            // Material offsets are per file, but we accumulate materials over multiple files
-            int materialIndex = materialIndexOffset + shape.mesh.material_ids[iFace];
+            if (materialIndexOverride < 0) {
+                // Material offsets are per file, but we accumulate materials over multiple files
+                materialIndex = materialIndexOffset + shape.mesh.material_ids[iFace];
+            }
+
+            std::vector<Vertex> faceVertices;
+
             for (int i = 0; i < VERTICES_PER_FACE; i++) {
                 const auto &index = shape.mesh.indices[VERTICES_PER_FACE * iFace + i];
                 Vertex vertex = {};
@@ -223,36 +249,54 @@ void SceneLoader::addModel(const tinyobj::attrib_t &attrib, const std::vector<ti
                         attrib.vertices[3 * index.vertex_index + 2]
                 };
 
-                vertex.normal = {
-                        attrib.normals[3 * index.normal_index + 0],
-                        attrib.normals[3 * index.normal_index + 1],
-                        attrib.normals[3 * index.normal_index + 2]
-                };
+                if (hasNormals) {
+                    vertex.normal = {
+                            attrib.normals[3 * index.normal_index + 0],
+                            attrib.normals[3 * index.normal_index + 1],
+                            attrib.normals[3 * index.normal_index + 2]
+                    };
+                }
 
-                vertex.texCoord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                };
+                if (hasTexCoords) {
+                    vertex.texCoord = {
+                            attrib.texcoords[2 * index.texcoord_index + 0],
+                            1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                    };
+                }
 
                 vertex.materialIndex = materialIndex;
 
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                    vertices.push_back(vertex);
-                }
-
-                indices.push_back(uniqueVertices[vertex]);
+                faceVertices.push_back(vertex);
             }
 
+            if (!hasNormals) {
+                // Calculate normals per face
+                glm::vec3 ab = faceVertices[1].pos - faceVertices[0].pos;
+                glm::vec3 ac = faceVertices[2].pos - faceVertices[0].pos;
+                glm::vec3 normal = glm::normalize(glm::cross(ab, ac));
+
+                for (Vertex &v: faceVertices) {
+                    v.normal = normal;
+                }
+            }
+
+            for (Vertex &vertex: faceVertices) {
+                // Check if there exist copies of this vertex with the same exact values
+                if (uniqueVertices.count(vertex) == 0) {
+                    uniqueVertices[vertex] = static_cast<uint32_t>(outVertices.size());
+                    outVertices.push_back(vertex);
+                }
+
+                outIndices.push_back(uniqueVertices[vertex]);
+            }
+
+
             if (materials[materialIndex].type == eLight) {
-                emissiveFaces.push_back((indices.size() - 1) / VERTICES_PER_FACE);
+                outEmissiveFaces.push_back((outIndices.size() - 1) / VERTICES_PER_FACE);
             }
 
         }
     }
-
-    models.emplace_back(vertices, indices, vulkanOps);
-    emissiveFacesPerModel.push_back(emissiveFaces);
 }
 
 void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
@@ -266,42 +310,202 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
     XMLElement *xScene = document.FirstChildElement("scene");
 
     parseCameraSettings(xScene);
+    std::map<std::string, int> definedMaterials = parseXmlBSDFs(xScene);
 
-    std::map<std::string, Material> definedMaterials;
+    XMLElement *xShape = xScene->FirstChildElement("shape");
+    while (xShape) {
+        std::string type = xShape->Attribute("type");
+
+        // First get material
+        int matIndex = -1;
+
+        // Check if a bsdf definition is given in the shape itself
+        XMLElement *xBSDF = xShape->FirstChildElement("bsdf");
+        if (xBSDF) {
+            std::string tmp;
+            Material mat = parseXmlBSDF(xBSDF, tmp);
+
+            matIndex = materials.size();
+            materials.push_back(mat);
+        }
+
+        if (matIndex < 0) {
+            // Else, check for refs
+            XMLElement *xRef = xShape->FirstChildElement("ref");
+            if (xRef && xRef->Attribute("name", "bsdf")) {
+                std::string id = xRef->Attribute("id");
+
+                matIndex = definedMaterials[id];
+            }
+        }
+
+        if (matIndex < 0) {
+            throw std::runtime_error("Material index not set");
+        }
+
+        // Check if emitter data is also set and create a new material to represent this
+        XMLElement *xEmitter = xShape->FirstChildElement("emitter");
+        if (xEmitter) {
+            // As the BSDF definitions in Mitsuba files don't contain emittance, we now have to create a new material,
+            // as multiple objects can use the same BSDF but different emittance values
+
+            glm::vec3 radiance = getChildRGB(xEmitter, "radiance");
+
+            // Not a reference, but a copy
+            Material mat = materials[matIndex];
+
+            mat.lightColor = radiance;
+            mat.type = eLight;
+
+            materials.push_back(mat);
+            matIndex = materials.size() - 1;
+        }
+
+        if (type == "obj") {
+            std::string filename = getChildString(xShape, "filename");
+            filename = toObjPath(filename);
+
+            tinyobj::attrib_t attrib;
+            std::vector<tinyobj::shape_t> shapes;
+            std::vector<tinyobj::material_t> tinyMaterials;
+            readObjFile(filename, attrib, shapes, tinyMaterials);
+
+
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+            std::vector<int> emissiveFaces;
+            converteObjData(shapes, attrib, -1, matIndex, vertices, indices, emissiveFaces);
+
+            models.emplace_back(vertices, indices, vulkanOps);
+            emissiveFacesPerModel.push_back(emissiveFaces);
+
+            int modelIndex = models.size() - 1;
+            int instanceIndex = instances.size();
+
+            // A model definition is automatically an instance
+            Instance instance{};
+            instance.transform = glm::mat4(1);
+            instance.normalTransform = glm::mat4(1);
+            instance.iModel = modelIndex;
+
+            if (!emissiveFaces.empty()) {
+                Light light{};
+                light.isPointLight = 0;
+                light.instanceIndex = instanceIndex;
+
+                lights.push_back(light);
+
+                instance.iLight = lights.size() - 1;
+            }
+
+            instances.push_back(instance);
+        } else if (type == "sphere") {
+            // TODO: For now, represent spheres by loading the sphere obj and scaling it
+            const float SPHERE_OBJ_RADIUS = 3;
+            const std::string SPHERE_OBJ_PATH = "sphere.obj";
+
+            std::string filename = SPHERE_OBJ_PATH;
+            filename = toObjPath(filename);
+
+            tinyobj::attrib_t attrib;
+            std::vector<tinyobj::shape_t> shapes;
+            std::vector<tinyobj::material_t> tinyMaterials;
+            readObjFile(filename, attrib, shapes, tinyMaterials);
+
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+            std::vector<int> emissiveFaces;
+            converteObjData(shapes, attrib, -1, matIndex, vertices, indices, emissiveFaces);
+
+            models.emplace_back(vertices, indices, vulkanOps);
+            emissiveFacesPerModel.push_back(emissiveFaces);
+
+            int modelIndex = models.size() - 1;
+            int instanceIndex = instances.size();
+
+
+            float radius = getChildFloat(xShape, "radius");
+            glm::vec3 center = getChildPoint(xShape, "center");
+
+            // A model definition is automatically an instance
+            Instance instance{};
+            float scale = radius / SPHERE_OBJ_RADIUS;
+            glm::mat4 transform = glm::translate(glm::mat4(1), center);
+            transform = glm::scale(transform, {scale, scale, scale});
+            instance.transform = transform;
+
+            glm::mat4 normalTransform = glm::scale(glm::mat4(1), {1.0f / scale, 1.0f / scale, 1.0f / scale});
+            instance.normalTransform = normalTransform;
+            instance.iModel = modelIndex;
+
+            if (!emissiveFaces.empty()) {
+                Light light{};
+                light.isPointLight = 0;
+                light.instanceIndex = instanceIndex;
+
+                lights.push_back(light);
+
+                instance.iLight = lights.size() - 1;
+            }
+
+            instances.push_back(instance);
+
+        }
+
+        xShape = xShape->NextSiblingElement("shape");
+    }
+}
+
+std::map<std::string, int> SceneLoader::parseXmlBSDFs(XMLElement *xScene) {
+    std::map<std::string, int> definedMaterials;
 
     XMLElement *xBSDF = xScene->FirstChildElement("bsdf");
     while (xBSDF) {
-        std::string id = xBSDF->Attribute("id");
-        std::string type = xBSDF->Attribute("type");
-
-        Material mat;
-        if (type == "phong") {
-            mat.type = ePhong;
-            mat.specular = getChildRGB(xBSDF, "specularReflectance");
-            mat.diffuse = getChildRGB(xBSDF, "diffuseReflectance");
-            mat.specularHighlight = getChildFloat(xBSDF, "exponent");
-        } else if (type == "diffuse") {
-            mat.type = eDiffuse;
-            mat.specular = {0, 0, 0};
-            mat.diffuse = getChildRGB(xBSDF, "reflectance");
-            mat.specularHighlight = 0;
-        } else if (type == "dielectric") {
-            mat.type = eDielectric;
-            mat.specular = {1, 1, 1};
-            mat.refractionIndex = getChildFloat(xBSDF, "intIOR") / getChildFloat(xBSDF, "extIOR");
-            mat.refractionIndexInv = 1.0f / mat.refractionIndex;
-        }
+        std::string id;
+        Material mat = parseXmlBSDF(xBSDF, id);
 
         if (definedMaterials.contains(id)) {
             throw std::runtime_error("Duplicate BSDF id");
         }
 
-        definedMaterials[id] = mat;
+        definedMaterials[id] = materials.size();
+        materials.push_back(mat);
 
         xBSDF = xBSDF->NextSiblingElement("bsdf");
     }
 
-    std::cout << definedMaterials.size() << std::endl;
+    return definedMaterials;
+}
+
+Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId) const {
+
+    const char *id = xBSDF->Attribute("id");
+    if (id) {
+        outId = id;
+    }
+    std::string type = xBSDF->Attribute("type");
+
+    Material mat;
+    if (type == "phong") {
+        mat.type = ePhong;
+        mat.specular = getChildRGB(xBSDF, "specularReflectance");
+        mat.diffuse = getChildRGB(xBSDF, "diffuseReflectance");
+        mat.specularHighlight = getChildFloat(xBSDF, "exponent");
+    } else if (type == "diffuse") {
+        mat.type = eDiffuse;
+        mat.specular = {0, 0, 0};
+        mat.diffuse = getChildRGB(xBSDF, "reflectance");
+        mat.specularHighlight = 0;
+    } else if (type == "dielectric") {
+        mat.type = eDielectric;
+        mat.specular = {1, 1, 1};
+        mat.refractionIndex = getChildFloat(xBSDF, "intIOR") / getChildFloat(xBSDF, "extIOR");
+        mat.refractionIndexInv = 1.0f / mat.refractionIndex;
+    } else {
+        std::cerr << "Encountered unknown material type: " << type << std::endl;
+    }
+
+    return mat;
 }
 
 void SceneLoader::parseCameraSettings(XMLElement *xScene) {
@@ -441,9 +645,14 @@ void SceneLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapp
         std::string name = jModel.items().begin().key();
         auto path = jModel[name].get<std::string>();
 
-        loadModel(std::filesystem::path(objectBaseDir) / path);
+        loadModel(toObjPath(path));
         nameIndexMapping[name] = models.size() - 1;
     }
+}
+
+std::string SceneLoader::toObjPath(const std::string &path) {
+    std::string res = (std::filesystem::path(objectBaseDir) / path);
+    return res;
 }
 
 void SceneLoader::createMaterialBuffer() {
