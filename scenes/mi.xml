@@ -36,7 +36,7 @@
 	</shape>
 
 	<shape type="sphere">
-		<point name="center" x="1.25" y="0" z="0"/>
+		<point name="center" x="1" y="0" z="0"/>
 		<float name="radius" value=".3"/>
 
 		<emitter type="area">
@@ -65,7 +65,7 @@
 		<string name="filename" value="plate1.obj"/>
 
 		<bsdf type="phong">
-			<rgb name="diffuseReflectance" value="0.07 0.09 0.13"/>
+			<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 			<rgb name="specularReflectance" value="1"/>
 			<float name="exponent" value="80000"/>
 		</bsdf>
@@ -75,7 +75,7 @@
 		<string name="filename" value="plate2.obj"/>
 
 		<bsdf type="phong">
-			<rgb name="diffuseReflectance" value="0.07 0.09 0.13"/>
+			<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 			<rgb name="specularReflectance" value="1"/>
 			<float name="exponent" value="20000"/>
 		</bsdf>
@@ -85,7 +85,7 @@
 		<string name="filename" value="plate3.obj"/>
 
 		<bsdf type="phong">
-			<rgb name="diffuseReflectance" value="0.07 0.09 0.13"/>
+			<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 			<rgb name="specularReflectance" value="1"/>
 			<float name="exponent" value="800"/>
 		</bsdf>
@@ -95,7 +95,7 @@
 		<string name="filename" value="plate4.obj"/>
 
 		<bsdf type="phong">
-			<rgb name="diffuseReflectance" value="0.07 0.09 0.13"/>
+			<rgb name="diffuseReflectance" value="0.25 0.25 0.5"/>
 			<rgb name="specularReflectance" value="1"/>
 			<float name="exponent" value="200"/>
 		</bsdf>
@@ -105,7 +105,7 @@
 		<string name="filename" value="floor.obj"/>
 
 		<bsdf type="diffuse">
-			<rgb name="reflectance" value="0.4 0.4 0.4"/>
+			<rgb name="reflectance" value="0.4 0.04 0.04"/>
 		</bsdf>
 	</shape>
 

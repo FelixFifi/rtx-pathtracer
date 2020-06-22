@@ -111,10 +111,10 @@ private:
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
 public:
-    glm::vec3 origin {0, 0, 0};
-    glm::vec3 target {0, 1, 0};
-    glm::vec3 upDir {0, 0, 1};
-    float vfov = 45.0f;
+    glm::vec3 origin {0, 2, 15};
+    glm::vec3 target {0, -2, 2.5};
+    glm::vec3 upDir {0, 1, 0};
+    float vfov = 28.0f;
 public:
     SceneLoader() = default;
     SceneLoader(const std::string &filepath, const std::string &objectBaseDir,

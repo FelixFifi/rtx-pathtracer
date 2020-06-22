@@ -243,8 +243,8 @@ float pdfBSDF(in Material mat, in vec3 wi, in vec3 normal, in vec3
 float pdfLight(in Light light, in vec3 lightDir, in vec3 lightNormal, in float lightDistance) {
     float cosThetaLight = dot(-lightDir, lightNormal);
 
-    return light.sampleProb / light.area * lightDistance * lightDistance /
-           cosThetaLight;
+    return light.sampleProb * lightDistance * lightDistance /
+           cosThetaLight / light.area;
 }
 
 float powerHeuristic(in float pdf1, in float pdf2) {
@@ -329,8 +329,8 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
 
         float cosThetaLight = dot(-lightDir, lightSampleNormal);
 
-        return light.sampleProb * triSample.sampleProb / triSample.faceArea * lightDistance * lightDistance /
-               cosThetaLight;
+        return light.sampleProb * lightDistance * lightDistance /
+               cosThetaLight / light.area;
     }
 }
 

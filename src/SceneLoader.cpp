@@ -401,8 +401,8 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
             instances.push_back(instance);
         } else if (type == "sphere") {
             // TODO: For now, represent spheres by loading the sphere obj and scaling it
-            const float SPHERE_OBJ_RADIUS = 3;
-            const std::string SPHERE_OBJ_PATH = "sphere.obj";
+            const float SPHERE_OBJ_RADIUS = 1.0f;
+            const std::string SPHERE_OBJ_PATH = "unit_sphere.obj";
 
             std::string filename = SPHERE_OBJ_PATH;
             filename = toObjPath(filename);
