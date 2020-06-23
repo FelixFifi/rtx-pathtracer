@@ -30,7 +30,8 @@ enum EMatType {
     eSpecular = 1,
     eDielectric = 2,
     eLight = 3,
-    ePhong = 4
+    ePhong = 4,
+    eConductor = 5
 };
 
 struct alignas(16) Material {
@@ -41,6 +42,9 @@ struct alignas(16) Material {
     float transparency;
     float refractionIndex;
     float refractionIndexInv;
+    float eta;
+    float k;
+    float roughness;
     int textureIdDiffuse = -1;
     int textureIdSpecular = -1;
     EMatType type;

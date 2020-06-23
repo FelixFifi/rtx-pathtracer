@@ -2,10 +2,8 @@
 // Created by felixfifi on 21.05.20.
 //
 
+#include <iostream>
 #include "WeightedSampler.h"
-
-std::mt19937 WeightedSampler::generator;
-std::uniform_real_distribution<float> WeightedSampler::distribution;
 
 int WeightedSampler::sample() {
     if (values.empty()) {

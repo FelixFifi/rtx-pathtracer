@@ -8,6 +8,17 @@
 #include "random.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
+#define E 2.7182818284590452353602874713527
+
+#define MAT_DIFFUSE 0
+#define MAT_SPECULAR 1
+#define MAT_DIELECTRIC 2
+#define MAT_LIGHT 3
+#define MAT_PHONG 4
+#define MAT_CONDUCTOR 5
+
+
+
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
 
@@ -170,6 +181,38 @@ float fresnel(in float eta, in float cosThetaI) {
     return (Rs * Rs + Rp * Rp) / 2.0f;
 }
 
+// Rendering Vorlesung - Nori src/common.cpp
+float fresnelConductor(in float cosThetaI, in float eta, in float k) {
+    if (cosThetaI < 0.0f) {
+        cosThetaI = -cosThetaI;
+    }
+
+    // via http://web.cse.ohio-state.edu/~parent.1/classes/782/Lectures/05_Reflectance_Handout.pdf, slide "Fresnel Reflection - Conductor"
+    float Rs2 = ((eta * eta + k * k) * cosThetaI * cosThetaI - 2 * eta * cosThetaI + 1)
+                / ((eta * eta + k * k) * cosThetaI * cosThetaI + 2 * eta * cosThetaI + 1);
+    float Rp2 = ((eta * eta + k * k) - 2 * eta * cosThetaI + cosThetaI * cosThetaI)
+                / ((eta * eta + k * k) + 2 * eta * cosThetaI + cosThetaI * cosThetaI);
+
+    return (Rs2 + Rp2) / 2.0f;
+}
+
+
+// Beckmann Distribution https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf
+float D(in Material mat, in vec3 n, in vec3 m) {
+    float cosTheta = dot(n, m);
+
+    if (cosTheta <= 0) {
+        return 0.0;
+    }
+
+    float theta = acos(cosTheta);
+    float thanTheta = tan(theta);
+
+    float alphaSqr = (mat.roughness * mat.roughness);
+
+    return pow(E, - thanTheta * thanTheta / alphaSqr) / (M_PI * alphaSqr * pow(cosTheta, 4));
+}
+
 // Energy conserving phong method (Lewis ?)
 vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) {
     vec3 res = vec3(0.0, 0.0, 0.0);
@@ -198,15 +241,12 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
     return cosThetaWo * res;
 }
 
+
+
 float pdfBSDF(in Material mat, in vec3 wi, in vec3 normal, in vec3
               wo) { // TODO: wi wo renaming for defined directions
-    switch (pushC.diffuseSampleStrategy) {
-        case 0: // Uniform Hemisphere
-            return 1.0 / (2 * M_PI);
-        case 1: // Cosine Hemisphere
-            return dot(wo, normal) / M_PI;
-        case 2: // Phong
-        default:
+    switch (mat.type) {
+        case MAT_PHONG: // Phong
             if (dot(normal, wo) < 0) {
                 // Absorb rays below surface
                 return 0.0;
@@ -237,6 +277,9 @@ float pdfBSDF(in Material mat, in vec3 wi, in vec3 normal, in vec3
             pdf += dot(wo, normal) / M_PI * lDiffuse / sumSpecDiff;
 
             return pdf;
+        case MAT_DIFFUSE: // Cosine Hemisphere
+        default:
+            return dot(wo, normal) / M_PI;
     }
 }
 
@@ -321,6 +364,9 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
         lightSampleWorldPos = (transform * vec4(lightSampleWorldPos, 1.0)).xyz;
         lightSampleNormal = (normalTransform * vec4(lightSampleNormal, 0.0)).xyz;
 
+        // Normalize normal, because scaling
+        lightSampleNormal = normalize(lightSampleNormal);
+
         vec3 toLight = lightSampleWorldPos - origin;
         lightDistance = length(toLight);
         lightDir = toLight / lightDistance;
@@ -343,46 +389,44 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
  * @return pdf
  */
 float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 newDirection) {
-    if (pushC.diffuseSampleStrategy == 0) { // TODO: switch case
-        // Uniform Hemisphere
-        newDirection = randomInHemisphere(normal);
-        return 1 / (2 * M_PI);
-    } else if (pushC.diffuseSampleStrategy == 1) {
-        // Cosine Hemisphere
-        newDirection = randomInHemisphereCosine(normal);
-        return dot(newDirection, normal) / M_PI;
-    } else {
-        // Phong
-        float lDiffuse = length(mat.diffuse);
-        float lSpecular = length(mat.specular);
-        float sumSpecDiff = lDiffuse + lSpecular;
+    switch (mat.type) {
+        case MAT_PHONG: // Phong
+            // Phong
+            float lDiffuse = length(mat.diffuse);
+            float lSpecular = length(mat.specular);
+            float sumSpecDiff = lDiffuse + lSpecular;
 
-        // Completely black objects would produce NaN otherwise
-        if (sumSpecDiff == 0) {
-            return 0.0;
-        }
-
-        float pdf;
-        if (rnd(seed) * sumSpecDiff > lDiffuse) {
-            // Cosine power/phong lobe
-            vec3 reflected = reflect(direction, normal);
-
-            float highlight = mat.specularHighlight;
-            newDirection = randomInHemisphereCosinePower(reflected, highlight);
-
-            if (dot(normal, newDirection) < 0) {
-                // Absorb rays below surface
+            // Completely black objects would produce NaN otherwise
+            if (sumSpecDiff == 0) {
                 return 0.0;
             }
 
+            float pdf;
+            if (rnd(seed) * sumSpecDiff > lDiffuse) {
+                // Cosine power/phong lobe
+                vec3 reflected = reflect(direction, normal);
+
+                float highlight = mat.specularHighlight;
+                newDirection = randomInHemisphereCosinePower(reflected, highlight);
+
+                if (dot(normal, newDirection) < 0) {
+                    // Absorb rays below surface
+                    return 0.0;
+                }
+
 //            pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
-            return pdfBSDF(mat, -direction, normal, newDirection);// pdf * lSpecular / sumSpecDiff;
-        } else {
+                return pdfBSDF(mat, -direction, normal, newDirection);// pdf * lSpecular / sumSpecDiff;
+            } else {
+                // Cosine Hemisphere
+                newDirection = randomInHemisphereCosine(normal);
+//            pdf = dot(newDirection, normal) / M_PI;
+                return pdfBSDF(mat, -direction, normal, newDirection);////pdf * lDiffuse / sumSpecDiff;
+            }
+        case MAT_DIFFUSE: // Cosine Hemisphere
+        default:
             // Cosine Hemisphere
             newDirection = randomInHemisphereCosine(normal);
-//            pdf = dot(newDirection, normal) / M_PI;
-            return pdfBSDF(mat, -direction, normal, newDirection);////pdf * lDiffuse / sumSpecDiff;
-        }
+            return dot(newDirection, normal) / M_PI;
     }
 }
 
@@ -450,13 +494,13 @@ void main() {
             float cosThetaWi = -dot(direction, normal);
 
             switch (mat.type) {
-                case 3: // Light
+                case MAT_LIGHT: // Light
                     if (!pushC.enableNEE || addDirectLightHits) {
                         sampleResult += throughput * mat.lightColor;
                     }
                     // Then continue as diffuse
-                case 0: // Diffuse
-                case 4: // Phong
+                case MAT_DIFFUSE: // Diffuse
+                case MAT_PHONG: // Phong
 
                     if (pushC.enableNEE && lightCount > 0) {
                         // Next event estimation
@@ -558,7 +602,7 @@ void main() {
                     direction = newDirection;
                     addDirectLightHits = false;
                     break;
-                case 1: // Specular
+                case MAT_SPECULAR: // Specular
                 {
                     throughput *= mat.specular;
 
@@ -567,7 +611,7 @@ void main() {
                     break;
                 }
 
-                case 2: // Transparent
+                case MAT_DIELECTRIC: // Transparent
                 {
                     throughput *= mat.specular;
 
@@ -587,6 +631,16 @@ void main() {
                         direction = reflect(direction, normal);
                     }
 
+                    addDirectLightHits = true;
+                    break;
+                }
+
+                case MAT_CONDUCTOR:
+                {
+                    float cosTheta = dot(-direction, normal);
+                    throughput *= fresnelConductor(cosTheta, mat.eta, mat.k);
+
+                    direction = reflect(direction, normal);
                     addDirectLightHits = true;
                     break;
                 }

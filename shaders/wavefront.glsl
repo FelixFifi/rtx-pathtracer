@@ -14,6 +14,9 @@ struct Material {
     float transparency;
     float refractionIndex;
     float refractionIndexInv;
+    float eta;
+    float k;
+    float roughness;
     int textureIdDiffuse;
     int textureIdSpecular;
     int type;

@@ -26,8 +26,8 @@ public:
 
 private:
 
-    static std::mt19937 generator;
-    static std::uniform_real_distribution<float> distribution;
+    std::mt19937 generator;
+    std::uniform_real_distribution<float> distribution{0, 1};
 };
 
 #endif //RTX_RAYTRACER_WEIGHTEDSAMPLER_H
