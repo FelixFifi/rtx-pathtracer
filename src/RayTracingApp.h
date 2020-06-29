@@ -37,7 +37,8 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "/home/felixfifi/projects/rtx-raytracer/scenes/mi.xml",
+        "scenes/materialTest.xml",
+        "scenes/mi.xml",
         "scenes/veach-mis.json",
         "scenes/cornell-dielectric-path.json",
         "scenes/test.json",

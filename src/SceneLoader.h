@@ -31,7 +31,8 @@ enum EMatType {
     eDielectric = 2,
     eLight = 3,
     ePhong = 4,
-    eConductor = 5
+    eConductor = 5,
+    eRoughConductor = 6
 };
 
 struct alignas(16) Material {

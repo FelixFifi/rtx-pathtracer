@@ -69,6 +69,17 @@ float getChildFloat(XMLElement *elem, const std::string &name) {
     return xChild->FloatAttribute("value");
 }
 
+float getChildSingleSpectrum(XMLElement *elem, const std::string &name) {
+    const char *FILTER = "spectrum";
+    XMLElement *xChild = getNamedChild(elem, name, FILTER);
+
+    if (!xChild) {
+        throw std::runtime_error("Name not found: " + name);
+    }
+
+    return xChild->FloatAttribute("value");
+}
+
 int getChildInt(XMLElement *elem, const std::string &name) {
     const char *FILTER = "integer";
     XMLElement *xChild = getNamedChild(elem, name, FILTER);

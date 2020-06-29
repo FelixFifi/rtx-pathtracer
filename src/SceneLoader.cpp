@@ -501,6 +501,15 @@ Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId) const 
         mat.specular = {1, 1, 1};
         mat.refractionIndex = getChildFloat(xBSDF, "intIOR") / getChildFloat(xBSDF, "extIOR");
         mat.refractionIndexInv = 1.0f / mat.refractionIndex;
+    } else if (type == "conductor") {
+        mat.type = eConductor;
+        mat.eta = getChildSingleSpectrum(xBSDF, "eta");
+        mat.k = getChildSingleSpectrum(xBSDF, "k");
+    } else if (type == "roughconductor") {
+        mat.type = eRoughConductor;
+        mat.roughness = getChildFloat(xBSDF, "alpha");
+        mat.eta = getChildSingleSpectrum(xBSDF, "eta");
+        mat.k = getChildSingleSpectrum(xBSDF, "k");
     } else {
         std::cerr << "Encountered unknown material type: " << type << std::endl;
     }

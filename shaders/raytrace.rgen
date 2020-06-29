@@ -16,57 +16,47 @@
 #define MAT_LIGHT 3
 #define MAT_PHONG 4
 #define MAT_CONDUCTOR 5
+#define MAT_ROUGH_CONDUCTOR 6
 
 
 
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
 
+
+//@formater:off
 layout(push_constant)
-uniform PushConstant{pushConstant pushC;};
+uniform PushConstant{ pushConstant pushC; };
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 
 
-layout(binding = 1, set = 1, std140) buffer Vertices{Vertex v[];} vertices[];
-layout(binding = 2, set = 1) buffer Indices{uint i[];} indices[];
-layout(binding = 3, set = 1, std430) buffer Materials{Material mats[];};
-layout(binding = 4, set = 1, std140) buffer Instances{InstanceInfo instanceInfos[];};
-layout(binding = 5, set = 1, std140) buffer LightsBuffer{int lightCount; Light lights[];};
+layout(binding = 1, set = 1, std140) buffer Vertices{ Vertex v[]; } vertices[];
+layout(binding = 2, set = 1) buffer Indices{ uint i[]; } indices[];
+layout(binding = 3, set = 1, std430) buffer Materials{ Material mats[]; };
+layout(binding = 4, set = 1, std140) buffer Instances{ InstanceInfo instanceInfos[]; };
+layout(binding = 5, set = 1, std140) buffer LightsBuffer{ int lightCount; Light lights[]; };
 layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer{
-        int randomLigthIndex[SIZE_LIGHT_RANDOM];
-        FaceSample randomTriIndex[][SIZE_TRI_RANDOM]; // access index is the one returned from randomLightIndex, as point lights come after area lights
+    int randomLigthIndex[SIZE_LIGHT_RANDOM];
+    FaceSample randomTriIndex[][SIZE_TRI_RANDOM];// access index is the one returned from randomLightIndex, as point lights come after area lights
 };
 
-layout(binding = 7, set = 1
-)
-uniform sampler2D
-textureSamplers[];
-layout(binding = 8, set = 1, rgba32f
-)
-uniform image2D
-accumulateImage;
+layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
+layout(binding = 8, set = 1, rgba32f) uniform image2D accumulateImage;
 
 
-layout(binding = 0, set = 1
-)
+layout(binding = 0, set = 1)
 uniform CameraMatrices{
-        mat4 view;
-        mat4 proj;
-        mat4 viewInverse;
-        mat4 projInverse;
-}
-cam;
+    mat4 view;
+    mat4 proj;
+    mat4 viewInverse;
+    mat4 projInverse;
+} cam;
 
-layout(location = 0
-)
-rayPayloadEXT hitInfo
-info;
-layout(location = 1
-)
-rayPayloadEXT shadowCheck
-shadowInfo;
+layout(location = 0) rayPayloadEXT hitInfo info;
+layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
+//@formatter:on
 
 uint seed;
 
@@ -168,15 +158,15 @@ float fresnel(in float eta, in float cosThetaI) {
     float sinThetaSqr = eta * eta * (1 - cosThetaI * cosThetaI);
 
     if (sinThetaSqr > 1.0f) {
-        return 1.0f; // Total internal reflection
+        return 1.0f;// Total internal reflection
     }
 
     float cosThetaT = sqrt(1.0f - sinThetaSqr);
 
     float Rs = (eta * cosThetaI - cosThetaT)
-               / (eta * cosThetaI + cosThetaT);
+    / (eta * cosThetaI + cosThetaT);
     float Rp = (cosThetaI - eta * cosThetaT)
-               / (cosThetaI + eta * cosThetaT);
+    / (cosThetaI + eta * cosThetaT);
 
     return (Rs * Rs + Rp * Rp) / 2.0f;
 }
@@ -189,9 +179,9 @@ float fresnelConductor(in float cosThetaI, in float eta, in float k) {
 
     // via http://web.cse.ohio-state.edu/~parent.1/classes/782/Lectures/05_Reflectance_Handout.pdf, slide "Fresnel Reflection - Conductor"
     float Rs2 = ((eta * eta + k * k) * cosThetaI * cosThetaI - 2 * eta * cosThetaI + 1)
-                / ((eta * eta + k * k) * cosThetaI * cosThetaI + 2 * eta * cosThetaI + 1);
+    / ((eta * eta + k * k) * cosThetaI * cosThetaI + 2 * eta * cosThetaI + 1);
     float Rp2 = ((eta * eta + k * k) - 2 * eta * cosThetaI + cosThetaI * cosThetaI)
-                / ((eta * eta + k * k) + 2 * eta * cosThetaI + cosThetaI * cosThetaI);
+    / ((eta * eta + k * k) + 2 * eta * cosThetaI + cosThetaI * cosThetaI);
 
     return (Rs2 + Rp2) / 2.0f;
 }
@@ -213,6 +203,30 @@ float D(in Material mat, in vec3 n, in vec3 m) {
     return pow(E, - thanTheta * thanTheta / alphaSqr) / (M_PI * alphaSqr * pow(cosTheta, 4));
 }
 
+float G1(in Material mat, in vec3 n, in vec3 m, in vec3 v) {
+    float thetaV = dot(v, n);
+    float c = dot(v, m) / thetaV;
+
+    if (c <= 0) {
+        return 0;
+    }
+
+
+    float a = 1.0 / (mat.roughness * tan(thetaV));
+
+    if (a >= 1.6) {
+        return 1.0;
+    } else {
+        float a2 = a * a;
+        return (3.535 * a + 2.181 * a2)/(1 + 2.276 * a + 2.577 * a);
+    }
+
+}
+
+float G(in Material mat, in vec3 i, in vec3 o, in vec3 n, in vec3 m) {
+    return G1(mat, n, m, i) * G1(mat, n, m, o);
+}
+
 // Energy conserving phong method (Lewis ?)
 vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) {
     vec3 res = vec3(0.0, 0.0, 0.0);
@@ -221,7 +235,7 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
     if (cosThetaWo > 0) {
         if (mat.textureIdDiffuse != -1) {
             res += mat.diffuse * texture(textureSamplers[mat.textureIdDiffuse], info.textureUV).xyz /
-                   M_PI;
+            M_PI;
         } else {
             res += mat.diffuse / M_PI;
         }
@@ -230,7 +244,7 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
         if (dotReflDir > 0) {
             if (mat.textureIdSpecular != -1) {
                 res += (mat.specularHighlight + 2) / (2 * M_PI) * mat.specular * pow(dotReflDir, mat.specularHighlight) *
-                       texture(textureSamplers[mat.textureIdSpecular], info.textureUV).xyz;
+                texture(textureSamplers[mat.textureIdSpecular], info.textureUV).xyz;
             } else {
                 res += (mat.specularHighlight + 2) / (2 * M_PI) * mat.specular * pow(dotReflDir, mat.specularHighlight);
             }
@@ -244,42 +258,43 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
 
 
 float pdfBSDF(in Material mat, in vec3 wi, in vec3 normal, in vec3
-              wo) { // TODO: wi wo renaming for defined directions
+wo) { // TODO: wi wo renaming for defined directions
     switch (mat.type) {
-        case MAT_PHONG: // Phong
-            if (dot(normal, wo) < 0) {
-                // Absorb rays below surface
-                return 0.0;
-            }
+        case MAT_PHONG:// Phong
+        if (dot(normal, wo) < 0) {
+            // Absorb rays below surface
+            return 0.0;
+        }
 
-            float lDiffuse = length(mat.diffuse);
-            float lSpecular = length(mat.specular);
-            float sumSpecDiff = lDiffuse + lSpecular;
+        float lDiffuse = length(mat.diffuse);
+        float lSpecular = length(mat.specular);
+        float sumSpecDiff = lDiffuse + lSpecular;
 
-            // Completely black objects would produce NaN otherwise
-            if (sumSpecDiff == 0) {
-                return 0.0;
-            }
+        // Completely black objects would produce NaN otherwise
+        if (sumSpecDiff == 0) {
+            return 0.0;
+        }
 
 
-            // Combine the probabilities of the two sampling methods
-            // Cosine power/phong lobe
-            vec3 reflected = reflect(-wi, normal);
-            float highlight = mat.specularHighlight;
+        // Combine the probabilities of the two sampling methods
+        // Cosine power/phong lobe
+        vec3 reflected = reflect(-wi, normal);
+        float highlight = mat.specularHighlight;
 
-            float pdf = 0;
-            if (dot(reflected, wo) > 0) {
-                pdf = (highlight + 1) * pow(dot(reflected, wo), highlight) / (2 * M_PI);
-                pdf *= lSpecular / sumSpecDiff;
-            }
+        float pdf = 0;
+        if (dot(reflected, wo) > 0) {
+            pdf = (highlight + 1) * pow(dot(reflected, wo), highlight) / (2 * M_PI);
+            pdf *= lSpecular / sumSpecDiff;
+        }
 
-            // Cosine Hemisphere
-            pdf += dot(wo, normal) / M_PI * lDiffuse / sumSpecDiff;
+        // Cosine Hemisphere
+        pdf += dot(wo, normal) / M_PI * lDiffuse / sumSpecDiff;
 
-            return pdf;
-        case MAT_DIFFUSE: // Cosine Hemisphere
-        default:
-            return dot(wo, normal) / M_PI;
+        return pdf;
+
+        case MAT_DIFFUSE:// Cosine Hemisphere
+        default :
+        return dot(wo, normal) / M_PI;
     }
 }
 
@@ -287,7 +302,7 @@ float pdfLight(in Light light, in vec3 lightDir, in vec3 lightNormal, in float l
     float cosThetaLight = dot(-lightDir, lightNormal);
 
     return light.sampleProb * lightDistance * lightDistance /
-           cosThetaLight / light.area;
+    cosThetaLight / light.area;
 }
 
 float powerHeuristic(in float pdf1, in float pdf2) {
@@ -307,10 +322,10 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
     // Next event estimation
     // Sample random light
 
-//                        // A single light should not interact with itself
-//                        if (mat.type == 3 && lightCount == 1) {
-//                            break;
-//                        }
+    //                        // A single light should not interact with itself
+    //                        if (mat.type == 3 && lightCount == 1) {
+    //                            break;
+    //                        }
 
     int iRandomLight;
     int iLight;
@@ -339,9 +354,9 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
 
         int iTri = triSample.index;
 
-        ivec3 ind = ivec3(indices[iModel].i[3 * iTri + 0],   //
-                          indices[iModel].i[3 * iTri + 1],   //
-                          indices[iModel].i[3 * iTri + 2]);  //
+        ivec3 ind = ivec3(indices[iModel].i[3 * iTri + 0], //
+        indices[iModel].i[3 * iTri + 1], //
+        indices[iModel].i[3 * iTri + 2]);//
 
         // Vertex of the triangle
         Vertex v0 = vertices[iModel].v[ind.x];
@@ -376,7 +391,7 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
         float cosThetaLight = dot(-lightDir, lightSampleNormal);
 
         return light.sampleProb * lightDistance * lightDistance /
-               cosThetaLight / light.area;
+        cosThetaLight / light.area;
     }
 }
 
@@ -390,43 +405,44 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
  */
 float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 newDirection) {
     switch (mat.type) {
-        case MAT_PHONG: // Phong
-            // Phong
-            float lDiffuse = length(mat.diffuse);
-            float lSpecular = length(mat.specular);
-            float sumSpecDiff = lDiffuse + lSpecular;
+        case MAT_PHONG:// Phong
+        // Phong
+        float lDiffuse = length(mat.diffuse);
+        float lSpecular = length(mat.specular);
+        float sumSpecDiff = lDiffuse + lSpecular;
 
-            // Completely black objects would produce NaN otherwise
-            if (sumSpecDiff == 0) {
+        // Completely black objects would produce NaN otherwise
+        if (sumSpecDiff == 0) {
+            return 0.0;
+        }
+
+        float pdf;
+        if (rnd(seed) * sumSpecDiff > lDiffuse) {
+            // Cosine power/phong lobe
+            vec3 reflected = reflect(direction, normal);
+
+            float highlight = mat.specularHighlight;
+            newDirection = randomInHemisphereCosinePower(reflected, highlight);
+
+            if (dot(normal, newDirection) < 0) {
+                // Absorb rays below surface
                 return 0.0;
             }
 
-            float pdf;
-            if (rnd(seed) * sumSpecDiff > lDiffuse) {
-                // Cosine power/phong lobe
-                vec3 reflected = reflect(direction, normal);
-
-                float highlight = mat.specularHighlight;
-                newDirection = randomInHemisphereCosinePower(reflected, highlight);
-
-                if (dot(normal, newDirection) < 0) {
-                    // Absorb rays below surface
-                    return 0.0;
-                }
-
-//            pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
-                return pdfBSDF(mat, -direction, normal, newDirection);// pdf * lSpecular / sumSpecDiff;
-            } else {
-                // Cosine Hemisphere
-                newDirection = randomInHemisphereCosine(normal);
-//            pdf = dot(newDirection, normal) / M_PI;
-                return pdfBSDF(mat, -direction, normal, newDirection);////pdf * lDiffuse / sumSpecDiff;
-            }
-        case MAT_DIFFUSE: // Cosine Hemisphere
-        default:
+            //            pdf = (highlight + 1) * pow(dot(reflected, newDirection), highlight) / (2 * M_PI);
+            return pdfBSDF(mat, -direction, normal, newDirection);// pdf * lSpecular / sumSpecDiff;
+        } else {
             // Cosine Hemisphere
             newDirection = randomInHemisphereCosine(normal);
-            return dot(newDirection, normal) / M_PI;
+            //            pdf = dot(newDirection, normal) / M_PI;
+            return pdfBSDF(mat, -direction, normal, newDirection);////pdf * lDiffuse / sumSpecDiff;
+        }
+
+        case MAT_DIFFUSE:
+        default :
+        // Cosine Hemisphere
+        newDirection = randomInHemisphereCosine(normal);
+        return dot(newDirection, normal) / M_PI;
     }
 }
 
@@ -462,17 +478,17 @@ void main() {
         bool addDirectLightHits = true;
 
         for (int iDepth = 0; iDepth < maxDepth; ++iDepth) {
-            traceRayEXT(topLevelAS,     // acceleration structure
-                        rayFlags,       // rayFlags
-                        0xFF,           // cullMask
-                        0,              // sbtRecordOffset
-                        0,              // sbtRecordStride
-                        0,              // missIndex
-                        origin.xyz,     // ray origin
-                        tMin,           // ray min range
-                        direction.xyz,  // ray direction
-                        tMax,           // ray max range
-                        0               // payload (location = 0)
+            traceRayEXT(topLevelAS, // acceleration structure
+            rayFlags, // rayFlags
+            0xFF, // cullMask
+            0, // sbtRecordOffset
+            0, // sbtRecordStride
+            0, // missIndex
+            origin.xyz, // ray origin
+            tMin, // ray min range
+            direction.xyz, // ray direction
+            tMax, // ray max range
+            0// payload (location = 0)
             );
             // Miss => Directional light / skybox
             if (info.isMiss) {
@@ -494,115 +510,115 @@ void main() {
             float cosThetaWi = -dot(direction, normal);
 
             switch (mat.type) {
-                case MAT_LIGHT: // Light
-                    if (!pushC.enableNEE || addDirectLightHits) {
-                        sampleResult += throughput * mat.lightColor;
+                case MAT_LIGHT:// Light
+                if (!pushC.enableNEE || addDirectLightHits) {
+                    sampleResult += throughput * mat.lightColor;
+                }
+                // Then continue as diffuse
+                case MAT_DIFFUSE:// Diffuse
+                case MAT_PHONG:// Phong
+
+                if (pushC.enableNEE && lightCount > 0) {
+                    // Next event estimation
+
+                    vec3 neeResult = vec3(0, 0, 0);
+
+                    // Sample random light
+                    vec3 lightDir;
+                    vec3 lightColor;
+                    float lightDistance;
+                    float pdfLights = sampleLights(origin, lightDir, lightColor, lightDistance);
+
+                    // Check if shadowed
+                    shadowInfo.isShadowed = true;
+                    if (dot(lightDir, normal) > 0) {
+                        traceRayEXT(topLevelAS, // acceleration structure
+                        shadowRayFlags, // rayFlags
+                        0xFF, // cullMask
+                        0, // sbtRecordOffset
+                        0, // sbtRecordStride
+                        1, // missIndex of shadow miss
+                        origin.xyz, // ray origin
+                        tMin, // ray min range
+                        lightDir, // ray direction
+                        lightDistance - 0.0001, // ray max range
+                        1// payload (location = 1)
+                        );
                     }
-                    // Then continue as diffuse
-                case MAT_DIFFUSE: // Diffuse
-                case MAT_PHONG: // Phong
 
-                    if (pushC.enableNEE && lightCount > 0) {
-                        // Next event estimation
-
-                        vec3 neeResult = vec3(0, 0, 0);
-
-                        // Sample random light
-                        vec3 lightDir;
-                        vec3 lightColor;
-                        float lightDistance;
-                        float pdfLights = sampleLights(origin, lightDir, lightColor, lightDistance);
-
-                        // Check if shadowed
-                        shadowInfo.isShadowed = true;
-                        if (dot(lightDir, normal) > 0) {
-                            traceRayEXT(topLevelAS,     // acceleration structure
-                                        shadowRayFlags,       // rayFlags
-                                        0xFF,           // cullMask
-                                        0,              // sbtRecordOffset
-                                        0,              // sbtRecordStride
-                                        1,              // missIndex of shadow miss
-                                        origin.xyz,     // ray origin
-                                        tMin,           // ray min range
-                                        lightDir,  // ray direction
-                                        lightDistance - 0.0001,           // ray max range
-                                        1               // payload (location = 1)
-                            );
-                        }
-
-                        if (!shadowInfo.isShadowed) {
-                            if (pushC.enableMIS) {
-                                // MIS
-                                float pdfMat = pdfBSDF(mat, -direction, normal, lightDir);
-                                neeResult += throughput *
-                                             phong(mat, textureUV, normal, -direction, lightDir) *
-                                             lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
-                            } else {
-                                neeResult = throughput * phong(mat, textureUV, normal, -direction, lightDir)
-                                            * lightColor / pdfLights;
-                            }
-                        }
-
+                    if (!shadowInfo.isShadowed) {
                         if (pushC.enableMIS) {
-                            // Direct light check with BSDF sample
-                            vec3 bsdfDir;
-                            float pdfMat = sampleBSDF(mat, direction, normal, bsdfDir);
-
-                            if (pdfMat > 0)  {
-                                traceRayEXT(topLevelAS,     // acceleration structure
-                                            rayFlags,       // rayFlags
-                                            0xFF,           // cullMask
-                                            0,              // sbtRecordOffset
-                                            0,              // sbtRecordStride
-                                            0,              // missIndex
-                                            origin.xyz,     // ray origin
-                                            tMin,           // ray min range
-                                            bsdfDir,  // ray direction
-                                            tMax,           // ray max range
-                                            0               // payload (location = 0)
-                                );
-
-                                // Check if a light was hit at all
-                                Material matSample = mats[info.matIndex];
-                                if (!info.isMiss && matSample.type == 3) {
-                                    int iLight = instanceInfos[info.instanceIndex].iLight;
-                                    Light light = lights[iLight];
-
-                                    lightColor = matSample.lightColor;
-                                    pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
-
-                                    neeResult += throughput *
-                                                 phong(mat, textureUV, normal, -direction, bsdfDir) *
-                                                 lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
-                                }
-
-
-                            }
+                            // MIS
+                            float pdfMat = pdfBSDF(mat, -direction, normal, lightDir);
+                            neeResult += throughput *
+                            phong(mat, textureUV, normal, -direction, lightDir) *
+                            lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
+                        } else {
+                            neeResult = throughput * phong(mat, textureUV, normal, -direction, lightDir)
+                            * lightColor / pdfLights;
                         }
-
-
-                        sampleResult += neeResult;
                     }
 
-                    vec3 newDirection;
-                    float pdf = sampleBSDF(mat, direction, normal, newDirection);
+                    if (pushC.enableMIS) {
+                        // Direct light check with BSDF sample
+                        vec3 bsdfDir;
+                        float pdfMat = sampleBSDF(mat, direction, normal, bsdfDir);
 
-                    // Absorbed rays
-                    if (pdf == 0) {
-                        iDepth = maxDepth + 1;
-                        break;
+                        if (pdfMat > 0)  {
+                            traceRayEXT(topLevelAS, // acceleration structure
+                            rayFlags, // rayFlags
+                            0xFF, // cullMask
+                            0, // sbtRecordOffset
+                            0, // sbtRecordStride
+                            0, // missIndex
+                            origin.xyz, // ray origin
+                            tMin, // ray min range
+                            bsdfDir, // ray direction
+                            tMax, // ray max range
+                            0// payload (location = 0)
+                            );
+
+                            // Check if a light was hit at all
+                            Material matSample = mats[info.matIndex];
+                            if (!info.isMiss && matSample.type == 3) {
+                                int iLight = instanceInfos[info.instanceIndex].iLight;
+                                Light light = lights[iLight];
+
+                                lightColor = matSample.lightColor;
+                                pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
+
+                                neeResult += throughput *
+                                phong(mat, textureUV, normal, -direction, bsdfDir) *
+                                lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
+                            }
+
+
+                        }
                     }
 
-                    normal = normalize(normal);
-                    direction = normalize(direction);
-                    newDirection = normalize(newDirection);
 
-                    throughput *= phong(mat, textureUV, normal, -direction, newDirection) / pdf;
+                    sampleResult += neeResult;
+                }
 
-                    direction = newDirection;
-                    addDirectLightHits = false;
+                vec3 newDirection;
+                float pdf = sampleBSDF(mat, direction, normal, newDirection);
+
+                // Absorbed rays
+                if (pdf == 0) {
+                    iDepth = maxDepth + 1;
                     break;
-                case MAT_SPECULAR: // Specular
+                }
+
+                normal = normalize(normal);
+                direction = normalize(direction);
+                newDirection = normalize(newDirection);
+
+                throughput *= phong(mat, textureUV, normal, -direction, newDirection) / pdf;
+
+                direction = newDirection;
+                addDirectLightHits = false;
+                break;
+                case MAT_SPECULAR:// Specular
                 {
                     throughput *= mat.specular;
 
@@ -611,7 +627,7 @@ void main() {
                     break;
                 }
 
-                case MAT_DIELECTRIC: // Transparent
+                case MAT_DIELECTRIC:// Transparent
                 {
                     throughput *= mat.specular;
 
@@ -641,6 +657,30 @@ void main() {
                     throughput *= fresnelConductor(cosTheta, mat.eta, mat.k);
 
                     direction = reflect(direction, normal);
+                    addDirectLightHits = true;
+                    break;
+                }
+
+                case MAT_ROUGH_CONDUCTOR:
+                {
+                    float thetaM = atan(sqrt(- mat.roughness * mat.roughness * log(1 - rnd(seed))));
+                    float phiM = 2 * M_PI * rnd(seed);
+
+                    float cosThetaNM = cos(thetaM);
+
+                    vec3 localM = vec3(sin(thetaM) * cos(phiM), sin(thetaM) * sin(phiM), cosThetaNM);
+                    vec3 worldM = toWorld(localM, normal);
+
+                    newDirection = reflect(direction, worldM);
+
+                    float cosThetaIM = dot(-direction, worldM);
+                    float cosThetaIN = dot(-direction, normal);
+                    float cosThetaON = dot(newDirection, normal);
+
+                    // Eqn 41 https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf
+                    throughput *= fresnelConductor(cosThetaIM, mat.eta, mat.k) * G(mat, -direction, newDirection, normal, worldM) * cosThetaIM / (cosThetaIN * cosThetaNM);
+
+                    direction = newDirection;
                     addDirectLightHits = true;
                     break;
                 }
