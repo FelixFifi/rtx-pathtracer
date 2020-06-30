@@ -21,6 +21,7 @@
 #include "json.hpp"
 #include "WeightedSampler.h"
 #include "MitsubaXML.h"
+#include "CommonOps.h"
 
 using json = nlohmann::json;
 using namespace tinyxml2;
@@ -34,6 +35,9 @@ SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectB
           device(vulkanOps->getDevice()) {
 
     std::filesystem::path path = filepath;
+
+    // Reserve position for EnvMap
+    textures.push_back({});
 
     if (path.extension().string() == ".xml") {
         parseMitsubaSceneFile(filepath);
@@ -57,31 +61,37 @@ void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32
         materials.push_back({});
     }
     if (textures.empty()) {
-        Texture texture;
-
-        std::vector<char> pixels{
-                0, 0, 0, 0
-        };
-
-        vulkanOps->createImageFromData(pixels, 1, 1, vk::Format::eR8G8B8A8Srgb, texture.image, texture.imageMemory,
-                                       texture.imageView);
-
-        vk::SamplerCreateInfo samplerCreateInfo{{},
-                                                vk::Filter::eLinear,
-                                                vk::Filter::eLinear,
-                                                vk::SamplerMipmapMode::eNearest,
-                                                vk::SamplerAddressMode::eRepeat,
-                                                vk::SamplerAddressMode::eRepeat,
-                                                vk::SamplerAddressMode::eRepeat,
-                                                {},
-                                                false,
-                                                0};
-
-        texture.sampler = device.createSampler(samplerCreateInfo);
+        Texture texture = generateDefaultTexture();
 
         textures.push_back(texture);
-
+    } else if (!textures[0].image) {
+        textures[0] = generateDefaultTexture();
     }
+}
+
+Texture SceneLoader::generateDefaultTexture() const {
+    Texture texture;
+
+    std::vector<char> pixels{
+            0, 0, 0, 0
+    };
+
+    vulkanOps->createImageFromData(pixels, 1, 1, vk::Format::eR8G8B8A8Srgb, texture.image, texture.imageMemory,
+                                   texture.imageView);
+
+    vk::SamplerCreateInfo samplerCreateInfo{{},
+                                            vk::Filter::eLinear,
+                                            vk::Filter::eLinear,
+                                            vk::SamplerMipmapMode::eNearest,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            vk::SamplerAddressMode::eRepeat,
+                                            {},
+                                            false,
+                                            0};
+
+    texture.sampler = device.createSampler(samplerCreateInfo);
+    return texture;
 }
 
 void SceneLoader::loadModel(const std::string &objFilePath) {
@@ -312,6 +322,41 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
     parseCameraSettings(xScene);
     std::map<std::string, int> definedMaterials = parseXmlBSDFs(xScene);
 
+    parseXmlShapes(xScene, definedMaterials);
+
+    XMLElement *xEnvMap = xScene->FirstChildElement("emitter");
+
+    if (xEnvMap) {
+        if (xEnvMap->Attribute("type") == std::string("envmap")) {
+            std::string envMapPath = getChildString(xEnvMap, "filename");
+            envMapPath = "envMap/" + envMapPath;
+
+            int width, height;
+            std::vector<float> envMap = readEXR(envMapPath.c_str(), width, height);
+
+            writeEXR("test.exr", envMap.data(), width, height);
+
+            vulkanOps->createImageFromData(envMap, width, height, vk::Format::eR32G32B32A32Sfloat, textures[0].image,
+                                           textures[0].imageMemory, textures[0].imageView);
+
+            vk::SamplerCreateInfo samplerCreateInfo{{},
+                                                    vk::Filter::eLinear,
+                                                    vk::Filter::eLinear,
+                                                    vk::SamplerMipmapMode::eNearest,
+                                                    vk::SamplerAddressMode::eRepeat,
+                                                    vk::SamplerAddressMode::eRepeat,
+                                                    vk::SamplerAddressMode::eRepeat,
+                                                    {},
+                                                    false,
+                                                    0};
+
+            textures[0].sampler = device.createSampler(samplerCreateInfo);
+
+        }
+    }
+}
+
+void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> &definedMaterials) {
     XMLElement *xShape = xScene->FirstChildElement("shape");
     while (xShape) {
         std::string type = xShape->Attribute("type");
@@ -791,7 +836,8 @@ std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescr
                                                               vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding texturesBinding(7, vk::DescriptorType::eCombinedImageSampler, textures.size(),
                                                    vk::ShaderStageFlagBits::eRaygenKHR |
-                                                   vk::ShaderStageFlagBits::eAnyHitKHR, nullptr);
+                                                   vk::ShaderStageFlagBits::eAnyHitKHR |
+                                                   vk::ShaderStageFlagBits::eMissKHR, nullptr);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
             lightsBufferBinding, lightSamplersBufferBinding, texturesBinding};

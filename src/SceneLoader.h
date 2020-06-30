@@ -101,6 +101,7 @@ private:
     std::vector<Texture> textures;
     std::map<std::string, int> pathTextureIdMapping;
 
+
     std::shared_ptr<VulkanOps> vulkanOps;
 
     vk::Device device;
@@ -199,6 +200,10 @@ private:
                      std::vector<tinyobj::material_t> &tinyMaterials) const;
 
     std::string toObjPath(const std::string &path);
+
+    void parseXmlShapes(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedMaterials);
+
+    Texture generateDefaultTexture() const;
 };
 
 

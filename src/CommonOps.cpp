@@ -5,6 +5,9 @@
 #include "CommonOps.h"
 #include <OpenEXR/ImfOutputFile.h>
 #include <OpenEXR/ImfChannelList.h>
+#include <OpenEXR/ImfRgbaFile.h>
+#include <OpenEXR/ImfArray.h>
+#include <memory>
 
 void writeEXR(const char *fileName, const float *pixels, int width, int height) {
     Imf::Header header(width,
@@ -32,6 +35,33 @@ void writeEXR(const char *fileName, const float *pixels, int width, int height) 
                                   sizeof(*pixels) * width * 4)); // yStride
     file.setFrameBuffer(frameBuffer);
     file.writePixels(height);
+}
+
+std::vector<float> readEXR(const char *filename, int &width, int &height) {
+    Imf::RgbaInputFile file(filename);
+
+    Imath::Box2i dw = file.dataWindow();
+    width = dw.max.x - dw.min.x + 1;
+    height = dw.max.y - dw.min.y + 1;
+
+    Imf::Array2D<Imf::Rgba> image(height, width);
+
+    file.setFrameBuffer(&image[0][0] - dw.min.x - dw.min.y * width, 1, width);
+    file.readPixels(dw.min.y, dw.max.y);
+
+    std::vector<float> pixels(4 * width * height);
+
+    for (int iY = 0; iY < height; ++iY) {
+        for (int iX = 0; iX < width; ++iX) {
+            Imf::Rgba &rgba = image[iY][iX];
+            pixels[iX * 4 + iY * 4 * width + 0] = (float) rgba.r;
+            pixels[iX * 4 + iY * 4 * width + 1] = (float) rgba.g;
+            pixels[iX * 4 + iY * 4 * width + 2] = (float) rgba.b;
+            pixels[iX * 4 + iY * 4 * width + 3] = (float) rgba.a;
+        }
+    }
+
+    return pixels;
 }
 
 std::vector<char> readFile(const std::string &filename) {

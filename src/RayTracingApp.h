@@ -37,6 +37,7 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/mi.xml",
         "scenes/veach-mis.json",
@@ -72,7 +73,7 @@ public:
         uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 3;
+        int maxDepth = 15;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
