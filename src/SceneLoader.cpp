@@ -50,6 +50,7 @@ SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectB
 
 void SceneLoader::createVulkanObjects(vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex) {
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
+    createSpheresBuffer();
     createMaterialBuffer();
     createInstanceInfoBuffer();
     createLightsBuffers();
@@ -436,6 +437,7 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
             if (!emissiveFaces.empty()) {
                 Light light{};
                 light.isPointLight = 0;
+                light.isSphere = 0;
                 light.instanceIndex = instanceIndex;
 
                 lights.push_back(light);
@@ -445,56 +447,21 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
 
             instances.push_back(instance);
         } else if (type == "sphere") {
-            // TODO: For now, represent spheres by loading the sphere obj and scaling it
-            const float SPHERE_OBJ_RADIUS = 1.0f;
-            const std::string SPHERE_OBJ_PATH = "unit_sphere.obj";
-
-            std::string filename = SPHERE_OBJ_PATH;
-            filename = toObjPath(filename);
-
-            tinyobj::attrib_t attrib;
-            std::vector<tinyobj::shape_t> shapes;
-            std::vector<tinyobj::material_t> tinyMaterials;
-            readObjFile(filename, attrib, shapes, tinyMaterials);
-
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
-            std::vector<int> emissiveFaces;
-            converteObjData(shapes, attrib, -1, matIndex, vertices, indices, emissiveFaces);
-
-            models.emplace_back(vertices, indices, vulkanOps);
-            emissiveFacesPerModel.push_back(emissiveFaces);
-
-            int modelIndex = models.size() - 1;
-            int instanceIndex = instances.size();
-
-
             float radius = getChildFloat(xShape, "radius");
             glm::vec3 center = getChildPoint(xShape, "center");
 
-            // A model definition is automatically an instance
-            Instance instance{};
-            float scale = radius / SPHERE_OBJ_RADIUS;
-            glm::mat4 transform = glm::translate(glm::mat4(1), center);
-            transform = glm::scale(transform, {scale, scale, scale});
-            instance.transform = transform;
+            Sphere sphere{center, radius, matIndex};
 
-            glm::mat4 normalTransform = glm::scale(glm::mat4(1), {1.0f / scale, 1.0f / scale, 1.0f / scale});
-            instance.normalTransform = normalTransform;
-            instance.iModel = modelIndex;
-
-            if (!emissiveFaces.empty()) {
+            if (materials[matIndex].type == eLight) {
                 Light light{};
                 light.isPointLight = 0;
-                light.instanceIndex = instanceIndex;
+                light.instanceIndex = spheres.size();
+                light.isSphere = 1;
 
                 lights.push_back(light);
-
-                instance.iLight = lights.size() - 1;
+                sphere.iLight = lights.size() - 1;
             }
-
-            instances.push_back(instance);
-
+            spheres.push_back(sphere);
         }
 
         xShape = xShape->NextSiblingElement("shape");
@@ -709,6 +676,28 @@ std::string SceneLoader::toObjPath(const std::string &path) {
     return res;
 }
 
+void SceneLoader::createSpheresBuffer() {
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress;
+
+    if (spheres.empty()) {
+        std::vector<Sphere> alibiSphere{{}};
+        vulkanOps->createBufferFromData(alibiSphere, usage,
+                                        vk::MemoryPropertyFlagBits::eDeviceLocal, sphereBuffer, sphereBufferMemory);
+
+        return;
+    }
+    vulkanOps->createBufferFromData(spheres, usage,
+                                    vk::MemoryPropertyFlagBits::eDeviceLocal, sphereBuffer, sphereBufferMemory);
+
+    for (const auto &sphere : spheres) {
+        aabbs.push_back(sphere.getAabb());
+    }
+
+    vulkanOps->createBufferFromData(aabbs, usage,
+                                    vk::MemoryPropertyFlagBits::eDeviceLocal, aabbBuffer, aabbBufferMemory);
+
+}
+
 void SceneLoader::createMaterialBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
@@ -733,11 +722,21 @@ void SceneLoader::createLightsBuffers() {
                                      vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
 }
 
+bool lightCompareModelsFirst(Light l1, Light l2) {
+    bool isModel1 = !(l1.isPointLight || l1.isSphere);
+    bool isModel2 = !(l2.isPointLight || l2.isSphere);
+
+    return isModel1 || !isModel2;
+}
+
 /**
  * Creates buffer that hold samplers to choose a random light, and if it is an area light, to choose a random face.
  * These random numbers should be weighted by the total power and face area.
  */
 void SceneLoader::createLightSamplersBuffer() {
+    // Sort lights, so that model lights are before spheres and point lights, as they don't need random face indices
+    std::sort(lights.begin(), lights.end(), lightCompareModelsFirst);
+
     std::vector<int> randomLightIndex = getLightSamplingVector();
 
     std::vector<FaceSample> randomTriIndicesPerLight = getFaceSamplingVector();
@@ -752,41 +751,48 @@ void SceneLoader::createLightSamplersBuffer() {
 std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
     std::vector<FaceSample> randomTriIndicesPerLight;
     for (auto &light : lights) {
-        // Area lights are before all point lights
         if (light.isPointLight) {
-            break;
+            continue;
+        } else if (light.isSphere) {
+            float radius = spheres[light.instanceIndex].radius;
+
+            light.area = 4 * glm::pi<float>() * radius * radius;
+        } else {
+            Instance &instance = instances[light.instanceIndex];
+            int iModel = instance.iModel;
+            Model model = models[iModel];
+
+            std::vector<float> areas;
+            areas = std::vector<float>(emissiveFacesPerModel[iModel].size());
+
+            for (int iEmissiveFace = 0; iEmissiveFace < emissiveFacesPerModel[iModel].size(); ++iEmissiveFace) {
+                areas[iEmissiveFace] = model.getFaceArea(emissiveFacesPerModel[iModel][iEmissiveFace], instance.transform);
+            }
+
+            WeightedSampler faceSampler(areas);
+
+            // Set this area for the light for prob calculations
+            // TODO: move
+            light.area = faceSampler.getTotal();
+
+            std::vector<float> probSampleFace = faceSampler.getProbabilities();
+
+            std::vector<FaceSample> randomTriIndices(SIZE_TRI_RANDOM);
+            for (int i = 0; i < SIZE_TRI_RANDOM; ++i) {
+                int sample = faceSampler.sample();
+
+                FaceSample faceSample{};
+                faceSample.index = emissiveFacesPerModel[iModel][sample];
+                faceSample.sampleProb = probSampleFace[sample];
+                faceSample.faceArea = areas[sample];
+                randomTriIndices[i] = faceSample;
+            }
+
+            randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(),
+                                            randomTriIndices.end());
         }
 
-        Instance &instance = instances[light.instanceIndex];
-        int iModel = instance.iModel;
-        Model model = models[iModel];
-        std::vector<float> areas(emissiveFacesPerModel[iModel].size());
 
-        for (int iEmissiveFace = 0; iEmissiveFace < emissiveFacesPerModel[iModel].size(); ++iEmissiveFace) {
-            areas[iEmissiveFace] = model.getFaceArea(emissiveFacesPerModel[iModel][iEmissiveFace], instance.transform);
-        }
-
-        WeightedSampler faceSampler(areas);
-
-        // Set this area for the light for prob calculations
-        // TODO: move
-        light.area = faceSampler.getTotal();
-
-        std::vector<float> probSampleFace = faceSampler.getProbabilities();
-
-        std::vector<FaceSample> randomTriIndices(SIZE_TRI_RANDOM);
-        for (int i = 0; i < SIZE_TRI_RANDOM; ++i) {
-            int sample = faceSampler.sample();
-
-            FaceSample faceSample{};
-            faceSample.index = emissiveFacesPerModel[iModel][sample];
-            faceSample.sampleProb = probSampleFace[sample];
-            faceSample.faceArea = areas[sample];
-            randomTriIndices[i] = faceSample;
-        }
-
-        randomTriIndicesPerLight.insert(randomTriIndicesPerLight.end(), randomTriIndices.begin(),
-                                        randomTriIndices.end());
     }
     return randomTriIndicesPerLight;
 }
@@ -838,9 +844,13 @@ std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescr
                                                    vk::ShaderStageFlagBits::eRaygenKHR |
                                                    vk::ShaderStageFlagBits::eAnyHitKHR |
                                                    vk::ShaderStageFlagBits::eMissKHR, nullptr);
+    vk::DescriptorSetLayoutBinding spheresBufferBinding(8, vk::DescriptorType::eStorageBuffer, 1,
+                                                        vk::ShaderStageFlagBits::eIntersectionKHR |
+                                                        vk::ShaderStageFlagBits::eClosestHitKHR|
+                                                        vk::ShaderStageFlagBits::eRaygenKHR);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
-            lightsBufferBinding, lightSamplersBufferBinding, texturesBinding};
+            lightsBufferBinding, lightSamplersBufferBinding, texturesBinding, spheresBufferBinding};
 }
 
 std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoolSizes() {
@@ -851,7 +861,8 @@ std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoo
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, textures.size())
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, textures.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
     };
 }
 
@@ -871,7 +882,8 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                     vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
                                     vk::DescriptorBufferInfo &outLightsBufferInfo,
                                     vk::DescriptorBufferInfo &outLightSamplersBufferInfo,
-                                    std::vector<vk::DescriptorImageInfo> &outTexturesInfos) {
+                                    std::vector<vk::DescriptorImageInfo> &outTexturesInfos,
+                                    vk::DescriptorBufferInfo &outSpheresBufferInfo) {
     unsigned long modelCount = models.size();
 
     outVertexBufferInfos.clear();
@@ -899,6 +911,7 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
     outInstanceInfoBufferInfo = vk::DescriptorBufferInfo(instanceInfoBuffer, 0, VK_WHOLE_SIZE);
     outLightsBufferInfo = vk::DescriptorBufferInfo(lightsBuffer, 0, VK_WHOLE_SIZE);
     outLightSamplersBufferInfo = vk::DescriptorBufferInfo(lightsSamplersBuffer, 0, VK_WHOLE_SIZE);
+    outSpheresBufferInfo = vk::DescriptorBufferInfo(sphereBuffer, 0, VK_WHOLE_SIZE);
 
     return {
             vk::WriteDescriptorSet(descriptorSet, 1, 0, modelCount,
@@ -921,7 +934,10 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                    &outLightSamplersBufferInfo, nullptr),
             vk::WriteDescriptorSet(descriptorSet, 7, 0, textures.size(),
                                    vk::DescriptorType::eCombinedImageSampler, outTexturesInfos.data(),
-                                   nullptr, nullptr)
+                                   nullptr, nullptr),
+            vk::WriteDescriptorSet(descriptorSet, 8, 0, 1,
+                                   vk::DescriptorType::eStorageBuffer, nullptr,
+                                   &outSpheresBufferInfo, nullptr),
     };
 }
 
@@ -972,6 +988,45 @@ nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::modelToBlas(const Model &model) 
     return blas;
 }
 
+nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::spheresToBlas() {
+    // Setting up the creation info of acceleration structure
+    vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
+    asCreate.setGeometryType(vk::GeometryTypeKHR::eAabbs);
+    asCreate.setIndexType(vk::IndexType::eNoneKHR);
+    asCreate.setVertexFormat(vk::Format::eUndefined);
+    asCreate.setMaxPrimitiveCount(spheres.size());
+    asCreate.setMaxVertexCount(0);
+    asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
+
+    // Building part
+    vk::DeviceAddress aabbAddress = device.getBufferAddressKHR({aabbBuffer});
+
+    vk::AccelerationStructureGeometryAabbsDataKHR aabbsData;
+    aabbsData.setData(aabbAddress);
+    aabbsData.setStride(sizeof(Aabb));
+
+    // Setting up the build info of the acceleration
+    vk::AccelerationStructureGeometryKHR asGeom;
+    asGeom.setGeometryType(asCreate.geometryType);
+    asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
+    asGeom.geometry.setAabbs(aabbsData);
+
+    // The primitive itself
+    vk::AccelerationStructureBuildOffsetInfoKHR offset;
+    offset.setFirstVertex(0);
+    offset.setPrimitiveCount(asCreate.maxPrimitiveCount);
+    offset.setPrimitiveOffset(0);
+    offset.setTransformOffset(0);
+
+    // Our blas is only one geometry, but could be made of many geometries
+    nvvkpp::RaytracingBuilderKHR::Blas blas{};
+    blas.asGeometry.emplace_back(asGeom);
+    blas.asCreateGeometryInfo.emplace_back(asCreate);
+    blas.asBuildOffsetInfo.emplace_back(offset);
+
+    return blas;
+}
+
 void SceneLoader::createBottomLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
     allBlas.reserve(models.size());
@@ -980,12 +1035,16 @@ void SceneLoader::createBottomLevelAS() {
         allBlas.push_back(modelToBlas(model));
     }
 
+    if (!spheres.empty()) {
+        allBlas.emplace_back(spheresToBlas());
+    }
+
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
 void SceneLoader::createTopLevelAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
-    tlas.reserve(models.size());
+    tlas.reserve(models.size() + 1);
 
     for (int i = 0; i < static_cast<int>(instances.size()); ++i) {
         Instance instance = instances[i];
@@ -998,6 +1057,18 @@ void SceneLoader::createTopLevelAS() {
         rayInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
         rayInst.mask = 0xFF;
         tlas.emplace_back(rayInst);
+    }
+
+    if (!spheres.empty()) {
+        nvvkpp::RaytracingBuilderKHR::Instance spheresInst;
+        spheresInst.transform = glm::value_ptr(glm::mat4(1.0f));
+        spheresInst.instanceId = instances.size();
+        spheresInst.blasId = models.size(); // After models
+        spheresInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
+        spheresInst.hitGroupId = 1;
+        spheresInst.mask = 0xFF;
+
+        tlas.emplace_back(spheresInst);
     }
 
     rtBuilder.buildTlas(tlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
@@ -1021,6 +1092,13 @@ void SceneLoader::cleanup() {
     device.destroy(lightsBuffer);
     device.free(lightsSamplerBufferMemory);
     device.destroy(lightsSamplersBuffer);
+    device.free(sphereBufferMemory);
+    device.destroy(sphereBuffer);
+
+    if (aabbBuffer) {
+        device.free(aabbBufferMemory);
+        device.destroy(aabbBuffer);
+    }
 
     for (auto &model: models) {
         model.cleanup();

@@ -42,8 +42,9 @@ layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer{
     FaceSample randomTriIndex[][SIZE_TRI_RANDOM];// access index is the one returned from randomLightIndex, as point lights come after area lights
 };
 
+layout(binding = 8, set = 1, std430) buffer Spheres { sphere spheres[]; };
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
-layout(binding = 8, set = 1, rgba32f) uniform image2D accumulateImage;
+layout(binding = 9, set = 1, rgba32f) uniform image2D accumulateImage;
 
 
 layout(binding = 0, set = 1)
@@ -322,20 +323,13 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
     // Next event estimation
     // Sample random light
 
-    //                        // A single light should not interact with itself
-    //                        if (mat.type == 3 && lightCount == 1) {
-    //                            break;
-    //                        }
-
     int iRandomLight;
     int iLight;
     Light light;
 
-    do {
-        iRandomLight = getRandomInteger(SIZE_LIGHT_RANDOM - 1);
-        iLight = randomLigthIndex[iRandomLight];
-        light = lights[iLight];
-    } while (false);//light.instanceIndex == info.instanceIndex && !light.isPointLight); // Don't let light contribute to itself
+    iRandomLight = getRandomInteger(SIZE_LIGHT_RANDOM - 1);
+    iLight = randomLigthIndex[iRandomLight];
+    light = lights[iLight];
 
     if (light.isPointLight) {
         // Point light
@@ -345,6 +339,26 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
 
         lightColor = light.color / (lightDistance * lightDistance);
         return light.sampleProb;
+    } else if (light.isSphere) {
+        // Sphere
+        sphere s = spheres[light.instanceIndex];
+
+        lightColor = mats[s.materialIndex].lightColor;
+
+        float phi = rnd(seed) * M_PI * 2;
+        float theta = rnd(seed) * M_PI;
+
+        vec3 normal = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+        vec3 position = s.center + s.radius * normal;
+        vec3 toLight = position - origin;
+
+        lightDistance = length(toLight);
+        lightDir = normalize(toLight);
+
+        float cosThetaLight = dot(-lightDir, normal);
+
+        return light.sampleProb * lightDistance * lightDistance /
+        cosThetaLight / light.area;
     } else {
         // Area light
         int iModel = instanceInfos[light.instanceIndex].modelIndex;

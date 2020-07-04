@@ -152,15 +152,16 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                 vk::ShaderStageFlagBits::eRaygenKHR);
 
 
-    auto vertexIndexMaterialBindings = sceneLoader.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 9> bindings = {uniformBufferLayoutBinding,
-                                                              vertexIndexMaterialBindings[0],
-                                                              vertexIndexMaterialBindings[1],
-                                                              vertexIndexMaterialBindings[2],
-                                                              vertexIndexMaterialBindings[3],
-                                                              vertexIndexMaterialBindings[4],
-                                                              vertexIndexMaterialBindings[5],
-                                                              vertexIndexMaterialBindings[6],
+    auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, 10> bindings = {uniformBufferLayoutBinding,
+                                                              sceneBindings[0],
+                                                              sceneBindings[1],
+                                                              sceneBindings[2],
+                                                              sceneBindings[3],
+                                                              sceneBindings[4],
+                                                              sceneBindings[5],
+                                                              sceneBindings[6],
+                                                              sceneBindings[7],
                                                               accumulateImageLayoutBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -171,7 +172,7 @@ void RayTracingApp::createDecriptorSetLayout() {
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 9> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 10> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -181,6 +182,7 @@ void RayTracingApp::createDescriptorPool() {
             vertexIndexMaterialPoolSizes[4],
             vertexIndexMaterialPoolSizes[5],
             vertexIndexMaterialPoolSizes[6],
+            vertexIndexMaterialPoolSizes[7],
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1)
     }; // TODO: One per frame
 
@@ -211,24 +213,27 @@ void RayTracingApp::createDescriptorSets() {
         vk::DescriptorBufferInfo lightBufferInfo;
         vk::DescriptorBufferInfo lightSamplersBufferInfo;
         std::vector<vk::DescriptorImageInfo> textureInfos;
+        vk::DescriptorBufferInfo spheresBufferInfo;
 
-        auto vertexIndexBufferWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
-                                                                          indexBufferInfos, materialBufferInfo,
-                                                                          instanceInfoBufferInfo, lightBufferInfo,
-                                                                          lightSamplersBufferInfo, textureInfos);
+        auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
+                                                              indexBufferInfos, materialBufferInfo,
+                                                              instanceInfoBufferInfo, lightBufferInfo,
+                                                              lightSamplersBufferInfo, textureInfos,
+                                                              spheresBufferInfo);
 
-        std::array<vk::WriteDescriptorSet, 9> descriptorWrites = {};
+        std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 1> descriptorWrites = {};
 
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
                                                      &bufferInfo, nullptr);
-        descriptorWrites[1] = vertexIndexBufferWrites[0];
-        descriptorWrites[2] = vertexIndexBufferWrites[1];
-        descriptorWrites[3] = vertexIndexBufferWrites[2];
-        descriptorWrites[4] = vertexIndexBufferWrites[3];
-        descriptorWrites[5] = vertexIndexBufferWrites[4];
-        descriptorWrites[6] = vertexIndexBufferWrites[5];
-        descriptorWrites[7] = vertexIndexBufferWrites[6];
+        descriptorWrites[1] = sceneWrites[0];
+        descriptorWrites[2] = sceneWrites[1];
+        descriptorWrites[3] = sceneWrites[2];
+        descriptorWrites[4] = sceneWrites[3];
+        descriptorWrites[5] = sceneWrites[4];
+        descriptorWrites[6] = sceneWrites[5];
+        descriptorWrites[7] = sceneWrites[6];
+        descriptorWrites[8] = sceneWrites[7];
         descriptorWrites[ACCUMULATE_IMAGE_BINDING] = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING, 0, 1,
                                                                             vk::DescriptorType::eStorageImage,
                                                                             &accumulateImageInfo,
@@ -332,12 +337,16 @@ void RayTracingApp::createRtPipeline() {
     auto chitCode = readFile("shaders/raytrace.rchit.spv");
     auto ahitCode = readFile("shaders/raytrace.rahit.spv");
     auto shadowMissCode = readFile("shaders/raytrace.shadow.rmiss.spv");
+    auto sphereIntCode = readFile("shaders/raytrace.sphere.rint.spv");
+    auto sphereChitCode = readFile("shaders/raytrace.sphere.rchit.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
     vk::ShaderModule chitShaderModule = vulkanOps->createShaderModule(chitCode);
     vk::ShaderModule ahitShaderModule = vulkanOps->createShaderModule(ahitCode);
     vk::ShaderModule shadowMissShaderModule = vulkanOps->createShaderModule(shadowMissCode);
+    vk::ShaderModule sphereIntShaderModule = vulkanOps->createShaderModule(sphereIntCode);
+    vk::ShaderModule sphereChitShaderModule = vulkanOps->createShaderModule(sphereChitCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -367,17 +376,28 @@ void RayTracingApp::createRtPipeline() {
     ms.setGeneralShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(ms);
 
-    // Hit Group - Closest Hit + AnyHit
+    // Hit Group 0 - Closest Hit + AnyHit
 
-    vk::RayTracingShaderGroupCreateInfoKHR hg{vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup,
-                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
-                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    vk::RayTracingShaderGroupCreateInfoKHR hg0{vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
     stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, chitShaderModule, "main"});
-    hg.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+    hg0.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
 
     stages.push_back({{}, vk::ShaderStageFlagBits::eAnyHitKHR, ahitShaderModule, "main"});
-    hg.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
-    rtShaderGroups.push_back(hg);
+    hg0.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg0);
+
+    // Hit Group 1 - Intersection + Closest Hit
+    vk::RayTracingShaderGroupCreateInfoKHR hg1{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
+                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, sphereChitShaderModule, "main"});
+    hg1.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, sphereIntShaderModule, "main"});
+    hg1.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg1);
 
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
@@ -415,10 +435,12 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(chitShaderModule);
     device.destroy(ahitShaderModule);
     device.destroy(shadowMissShaderModule);
+    device.destroy(sphereIntShaderModule);
+    device.destroy(sphereChitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
-    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size()); // 5 shaders: raygen, miss, chit, shadow miss, shadow anyhit
+    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size());
     auto groupHandleSize = static_cast<uint64_t>(rtProperties.shaderGroupHandleSize); // Size of a program identifier
 
     // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
@@ -450,7 +472,6 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
-    hasInputChanged |= ImGui::InputInt("Uniform/Cosine/CosinePower", &rtPushConstants.diffuseSampleStrategy);
     hasInputChanged |= ImGui::Checkbox("Enable average instead of mix", reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)", reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
 

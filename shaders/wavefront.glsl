@@ -36,6 +36,7 @@ struct Light {
     uint instanceIndex;
     float sampleProb;
     float area;
+    bool isSphere;
 };
 
 struct FaceSample {

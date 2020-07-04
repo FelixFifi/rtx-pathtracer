@@ -6,7 +6,7 @@
 #define RTX_RAYTRACER_SCENELOADER_H
 
 static const int VERTICES_PER_FACE = 3;
-static const int BINDINGS_COUNT = 7;
+static const int BINDINGS_COUNT = 8;
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
 
@@ -65,6 +65,7 @@ struct alignas(16) Light {
     uint instanceIndex;
     float sampleProb;
     float area;
+    int isSphere;
 };
 
 struct FaceSample {
@@ -87,6 +88,23 @@ struct Texture {
     }
 };
 
+struct Aabb {
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
+struct alignas(16) Sphere {
+    glm::vec3 center;
+    float radius;
+    int matertialIndex;
+    int iLight = -1;
+
+    Aabb getAabb() const {
+        const glm::vec3 &r = glm::vec3(radius, radius, radius);
+        return {center - r, center + r};
+    }
+};
+
 class SceneLoader {
 private:
     std::string objectBaseDir;
@@ -95,6 +113,8 @@ private:
 
     std::vector<Instance> instances;
     std::vector<Model> models;
+    std::vector<Sphere> spheres;
+    std::vector<Aabb> aabbs;
     std::vector<Material> materials;
     std::vector<Light> lights;
     std::vector<std::vector<int>> emissiveFacesPerModel;
@@ -107,6 +127,11 @@ private:
     vk::Device device;
     vk::Buffer materialBuffer;
     vk::DeviceMemory materialBufferMemory;
+
+    vk::Buffer sphereBuffer;
+    vk::DeviceMemory sphereBufferMemory;
+    vk::Buffer aabbBuffer;
+    vk::DeviceMemory aabbBufferMemory;
 
     vk::Buffer instanceInfoBuffer;
     vk::DeviceMemory instanceInfoBufferMemory;
@@ -140,7 +165,8 @@ public:
                                                                               vk::DescriptorBufferInfo &outInstanceInfoBufferInfo,
                                                                               vk::DescriptorBufferInfo &outLightsBufferInfo,
                                                                               vk::DescriptorBufferInfo &outLightSamplersBufferInfo,
-                                                                              std::vector<vk::DescriptorImageInfo> &outTexturesInfos);
+                                                                              std::vector<vk::DescriptorImageInfo> &outTexturesInfos,
+                                                                              vk::DescriptorBufferInfo &outSpheresBufferInfo);
 
     const vk::AccelerationStructureKHR & getAccelerationStructure();
 
@@ -158,7 +184,7 @@ private:
     nvvkpp::RaytracingBuilderKHR::Blas modelToBlas(const Model &model);
 
     void createBottomLevelAS();
-
+    void createSpheresBuffer();
     void createMaterialBuffer();
     void createTopLevelAS();
 
@@ -204,6 +230,8 @@ private:
     void parseXmlShapes(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedMaterials);
 
     Texture generateDefaultTexture() const;
+
+    nvvkpp::RaytracingBuilderKHR::Blas spheresToBlas();
 };
 
 

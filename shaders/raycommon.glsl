@@ -25,7 +25,13 @@ struct pushConstant
     int samplesPerPixel;
     bool enableRR;
     bool enableNEE;
-    int diffuseSampleStrategy;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
+};
+
+struct sphere {
+    vec3 center;
+    float radius;
+    int materialIndex;
+    int iLight;
 };

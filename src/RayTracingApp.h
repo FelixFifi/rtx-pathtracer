@@ -37,8 +37,8 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "scenes/matpreview.xml",
         "scenes/materialTest.xml",
+        "scenes/matpreview.xml",
         "scenes/mi.xml",
         "scenes/veach-mis.json",
         "scenes/cornell-dielectric-path.json",
@@ -50,7 +50,7 @@ const std::vector<std::string> SCENES{
 
 static const int MAX_RECURSION = 2;
 
-static const int ACCUMULATE_IMAGE_BINDING = 8;
+static const int ACCUMULATE_IMAGE_BINDING = 9;
 
 struct CameraMatrices {
     glm::mat4 view;
@@ -77,7 +77,6 @@ public:
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
-        int diffuseSampleStrategy = 2;
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 1;
     } rtPushConstants;
