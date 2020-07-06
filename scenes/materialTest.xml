@@ -4,21 +4,20 @@
      after a file by Steve Marschner (CS667)
 -->
 <scene version="0.4.0">
-	<integrator type="direct">
-		<integer name="emitterSamples" value="4"/>
-		<integer name="bsdfSamples" value="4"/>
+	<integrator type="path">
+		<integer name="maxDepth" value="8"/>
 	</integrator>
 
 	<shape type="sphere">
 		<point name="center" x="-1.25" y="0" z="0"/>
-		<float name="radius" value="0.1"/>
+		<float name="radius" value=".1"/>
 
 		<emitter type="area">
 			<rgb name="radiance" value="100, 100, 100"/>
 		</emitter>
 
 		<bsdf type="diffuse">
-			<rgb name="reflectance" value="1,1,1"/>
+			<rgb name="reflectance" value="0,0,0"/>
 		</bsdf>
 	</shape>
 
@@ -31,7 +30,7 @@
 		</emitter>
 
 		<bsdf type="diffuse">
-			<rgb name="reflectance" value="1,1,1"/>
+			<rgb name="reflectance" value="0,0,0"/>
 		</bsdf>
 	</shape>
 
@@ -44,7 +43,7 @@
 		</emitter>
 
 		<bsdf type="diffuse">
-			<rgb name="reflectance" value="1,1,1"/>
+			<rgb name="reflectance" value="0,0,0"/>
 		</bsdf>
 	</shape>
 
@@ -57,10 +56,57 @@
 		</emitter>
 
 		<bsdf type="diffuse">
-			<rgb name="reflectance" value="1,1,1"/>
+			<rgb name="reflectance" value="0,0,0"/>
 		</bsdf>
 	</shape>
 
+	<shape type="obj">
+		<string name="filename" value="plate1.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.02"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate2.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.06"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate3.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.1"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate4.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.2"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
 
 	<shape type="obj">
 		<string name="filename" value="floor.obj"/>
@@ -69,12 +115,6 @@
 			<rgb name="reflectance" value="0.4 0.04 0.04"/>
 		</bsdf>
 	</shape>
-
-
-
-	<emitter type="envmap" id="Area_002-light">
-		<string name="filename" value="envmap.exr"/>
-	</emitter>
 
 	<sensor type="perspective">
 		<string name="fovAxis" value="smaller"/>

@@ -4,9 +4,7 @@
      after a file by Steve Marschner (CS667)
 -->
 <scene version="0.4.0">
-	<integrator type="direct">
-		<integer name="emitterSamples" value="4"/>
-		<integer name="bsdfSamples" value="4"/>
+	<integrator type="path">
 	</integrator>
 
 	<shape type="sphere">
@@ -126,7 +124,6 @@
 		<film type="hdrfilm">
 			<integer name="width" value="768"/>
 			<integer name="height" value="512"/>
-			<boolean name="banner" value="true"/>
 
 			<rfilter type="gaussian"/>
 		</film>
