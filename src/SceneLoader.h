@@ -113,7 +113,6 @@ private:
 
     std::vector<Instance> instances;
     std::vector<Model> models;
-    std::vector<Sphere> spheres;
     std::vector<Aabb> aabbs;
     std::vector<Material> materials;
     std::vector<Light> lights;
@@ -128,11 +127,6 @@ private:
     vk::Buffer materialBuffer;
     vk::DeviceMemory materialBufferMemory;
 
-    vk::Buffer sphereBuffer;
-    vk::DeviceMemory sphereBufferMemory;
-    vk::Buffer aabbBuffer;
-    vk::DeviceMemory aabbBufferMemory;
-
     vk::Buffer instanceInfoBuffer;
     vk::DeviceMemory instanceInfoBufferMemory;
     vk::Buffer lightsBuffer;
@@ -141,11 +135,22 @@ private:
     vk::DeviceMemory lightsSamplerBufferMemory;
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
+
+    std::vector<Model> defaultModels;
 public:
     glm::vec3 origin {0, 2, 15};
     glm::vec3 target {0, -2, 2.5};
     glm::vec3 upDir {0, 1, 0};
     float vfov = 28.0f;
+
+    std::vector<Sphere> spheres;
+
+    vk::Buffer sphereBuffer;
+    vk::DeviceMemory sphereBufferMemory;
+    vk::Buffer aabbBuffer;
+    vk::DeviceMemory aabbBufferMemory;
+
+    std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
 public:
     SceneLoader() = default;
     SceneLoader(const std::string &filepath, const std::string &objectBaseDir,

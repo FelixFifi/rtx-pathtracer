@@ -37,6 +37,7 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/testSpheres.xml",
         "scenes/materialTest.xml",
         "scenes/matpreview.xml",
         "scenes/mi.xml",
@@ -102,6 +103,14 @@ private:
     vk::DescriptorSetLayout descriptorSetLayout;
     vk::DescriptorPool descriptorPool;
     vk::DescriptorSet descriptorSet;
+
+
+    vk::DescriptorSetLayout compSetLayout;
+    vk::DescriptorPool compPool;
+    vk::DescriptorSet compSet;
+
+    vk::PipelineLayout compPipelineLayout;
+    vk::Pipeline compPipeline;
 
     vk::Image accumulateImage;
     vk::DeviceMemory accumulateImageMemory;
@@ -171,6 +180,14 @@ private:
     void sceneSwitcher(int num);
 
     void cleanupRtPipeline();
+
+    void updateSpheres();
+
+    void createComputeDescriptorSet();
+
+    void updateCompDescriptorSet();
+
+    void createComputePipeline();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

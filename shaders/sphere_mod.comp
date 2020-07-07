@@ -1,0 +1,17 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#include "raycommon.glsl"
+
+layout(binding = 0, std430) buffer Spheres { sphere spheres[]; };
+layout(binding = 1, std430) buffer Aabbs { aabb aabbs[]; };
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    spheres[i].center += vec3(0.0001, 0.0001, 0);
+    aabbs[i].min = spheres[i].center - spheres[i].radius.xxx;
+    aabbs[i].max = spheres[i].center + spheres[i].radius.xxx;
+}

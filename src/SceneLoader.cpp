@@ -706,9 +706,20 @@ void SceneLoader::createMaterialBuffer() {
 
 void SceneLoader::createInstanceInfoBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
-    vulkanOps->createBufferFromData(instances, usage,
-                                    vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
-                                    instanceInfoBufferMemory);
+
+    if (instances.empty()) {
+        Instance tmp{};
+        std::vector<Instance> tmps{tmp};
+
+        vulkanOps->createBufferFromData(tmps, usage,
+                                        vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
+                                        instanceInfoBufferMemory);
+
+    } else {
+        vulkanOps->createBufferFromData(instances, usage,
+                                        vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
+                                        instanceInfoBufferMemory);
+    }
 }
 
 void SceneLoader::createLightsBuffers() {
@@ -821,11 +832,18 @@ std::vector<int> SceneLoader::getLightSamplingVector() {
 }
 
 std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescriptorSetLayouts() {
-    vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, models.size(),
+    unsigned long modelCount = models.size();
+
+    // Necessary as empty descriptor sets are not allowed
+    if (modelCount == 0) {
+        modelCount = 1;
+    }
+
+    vk::DescriptorSetLayoutBinding vertexBufferBinding(1, vk::DescriptorType::eStorageBuffer, modelCount,
                                                        vk::ShaderStageFlagBits::eClosestHitKHR |
                                                        vk::ShaderStageFlagBits::eAnyHitKHR |
                                                        vk::ShaderStageFlagBits::eRaygenKHR);
-    vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, models.size(),
+    vk::DescriptorSetLayoutBinding indexBufferBinding(2, vk::DescriptorType::eStorageBuffer, modelCount,
                                                       vk::ShaderStageFlagBits::eClosestHitKHR |
                                                       vk::ShaderStageFlagBits::eAnyHitKHR |
                                                       vk::ShaderStageFlagBits::eRaygenKHR);
@@ -854,9 +872,15 @@ std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescr
 }
 
 std::array<vk::DescriptorPoolSize, BINDINGS_COUNT> SceneLoader::getDescriptorPoolSizes() {
+    unsigned long modelCount = models.size();
+
+    // Necessary as empty descriptor sets are not allowed
+    if (modelCount == 0) {
+        modelCount = 1;
+    }
     return {
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, models.size()),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, modelCount),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, modelCount),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
@@ -886,6 +910,11 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                     vk::DescriptorBufferInfo &outSpheresBufferInfo) {
     unsigned long modelCount = models.size();
 
+    // Necessary as empty descriptor sets are not allowed
+    if (modelCount == 0) {
+        modelCount = 1;
+    }
+
     outVertexBufferInfos.clear();
     outIndexBufferInfos.clear();
     outTexturesInfos.clear();
@@ -893,13 +922,28 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
     outIndexBufferInfos.reserve(modelCount);
     outTexturesInfos.reserve(textures.size());
 
-    for (const auto &model: models) {
-        vk::DescriptorBufferInfo vertexBufferInfo(model.vertexBuffer, 0, VK_WHOLE_SIZE);
-        vk::DescriptorBufferInfo indexBufferInfo(model.indexBuffer, 0, VK_WHOLE_SIZE);
+    if (models.empty()) {
+        std::vector<Vertex> vertices{{}, {}, {}};
+        std::vector<uint32_t> indices{0, 1, 2};
+
+        defaultModels.emplace_back(vertices, indices, vulkanOps);
+
+        vk::DescriptorBufferInfo vertexBufferInfo(defaultModels[0].vertexBuffer, 0, VK_WHOLE_SIZE);
+        vk::DescriptorBufferInfo indexBufferInfo(defaultModels[0].indexBuffer, 0, VK_WHOLE_SIZE);
 
         outVertexBufferInfos.push_back(vertexBufferInfo);
         outIndexBufferInfos.push_back(indexBufferInfo);
+    } else {
+        for (const auto &model: models) {
+            vk::DescriptorBufferInfo vertexBufferInfo(model.vertexBuffer, 0, VK_WHOLE_SIZE);
+            vk::DescriptorBufferInfo indexBufferInfo(model.indexBuffer, 0, VK_WHOLE_SIZE);
+
+            outVertexBufferInfos.push_back(vertexBufferInfo);
+            outIndexBufferInfos.push_back(indexBufferInfo);
+        }
     }
+
+
 
     for (const auto &texture: textures) {
         vk::DescriptorImageInfo textureInfo{texture.sampler, texture.imageView,
@@ -1028,7 +1072,7 @@ nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::spheresToBlas() {
 }
 
 void SceneLoader::createBottomLevelAS() {
-    std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
+    allBlas.clear();
     allBlas.reserve(models.size());
 
     for (const auto &model : models) {
@@ -1102,6 +1146,12 @@ void SceneLoader::cleanup() {
 
     for (auto &model: models) {
         model.cleanup();
+    }
+
+    if (!defaultModels.empty()) {
+        for (auto &model: defaultModels) {
+            model.cleanup();
+        }
     }
 
     rtBuilder.destroy();

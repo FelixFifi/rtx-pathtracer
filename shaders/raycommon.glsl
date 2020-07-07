@@ -5,7 +5,7 @@ struct hitInfo
     vec2 textureUV;
     int matIndex;
     float t;
-    bool isMiss; // TODO: Find more consistent handling of miss
+    bool isMiss;// TODO: Find more consistent handling of miss
     vec3 missColor;
     uint instanceIndex;
 };
@@ -34,4 +34,9 @@ struct sphere {
     float radius;
     int materialIndex;
     int iLight;
+};
+
+struct aabb {
+    vec3 min;
+    vec3 max;
 };

@@ -9,3 +9,4 @@ glslc raytrace.rmiss -O -o raytrace.rmiss.spv
 glslc raytrace.shadow.rmiss -O -o raytrace.shadow.rmiss.spv
 glslc raytrace.sphere.rint -O -o raytrace.sphere.rint.spv
 glslc raytrace.sphere.rchit -O -o raytrace.sphere.rchit.spv
+glslc sphere_mod.comp -O -o sphere_mod.comp.spv

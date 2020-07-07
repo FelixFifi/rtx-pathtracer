@@ -31,10 +31,12 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
+
+    createComputeDescriptorSet();
+    createComputePipeline();
     createAccumulateImage();
     createUniformBuffers();
     loadScene();
-
 
     initRayTracing();
 }
@@ -90,7 +92,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     int sceneCount = SCENES.size();
     int sceneIndex = std::min(num - 1, sceneCount - 1);
 
-    if (sceneLoader.getModelCount() > 0) {
+    if (sceneLoader.getModelCount() > 0 || !sceneLoader.spheres.empty()) {
         sceneLoader.cleanup();
     }
 
@@ -103,6 +105,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
     recreateDescriptorSets();
+    updateCompDescriptorSet();
 
     if (rtDescSet) {
         updateRtDescriptorSet(0);
@@ -226,7 +229,7 @@ void RayTracingApp::createDescriptorSets() {
         descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                                      vk::DescriptorType::eUniformBuffer, nullptr,
                                                      &bufferInfo, nullptr);
-        descriptorWrites[1] = sceneWrites[0];
+        descriptorWrites[1] = sceneWrites[0];1
         descriptorWrites[2] = sceneWrites[1];
         descriptorWrites[3] = sceneWrites[2];
         descriptorWrites[4] = sceneWrites[3];
@@ -457,10 +460,74 @@ void RayTracingApp::createRtShaderBindingTable() {
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
 }
 
+void RayTracingApp::createComputeDescriptorSet() {
+    vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;
+    vk::DescriptorPoolSize poolSizeSpheres{type, 1};
+    vk::DescriptorPoolSize poolSizeAabbs{type, 1};
+
+    std::array<vk::DescriptorPoolSize, 2> poolSizes{poolSizeSpheres, poolSizeAabbs};
+
+    vk::DescriptorPoolCreateInfo poolInfo{{}, 1, 2, poolSizes.data()};
+    compPool = device.createDescriptorPool(poolInfo);
+
+    uint32_t bindingSpheres = 0;
+    uint32_t bindingAabbs = 1;
+    vk::DescriptorSetLayoutBinding bufferBindingSphere{bindingSpheres, type, 1, vk::ShaderStageFlagBits::eCompute};
+    vk::DescriptorSetLayoutBinding bufferBindingAabbs{bindingAabbs, type, 1, vk::ShaderStageFlagBits::eCompute};
+    std::array<vk::DescriptorSetLayoutBinding, 2> bindings{bufferBindingSphere, bufferBindingAabbs};
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{{}, bindings.size(), bindings.data()};
+    compSetLayout = device.createDescriptorSetLayout(layoutInfo);
+
+    vk::DescriptorSetAllocateInfo allocateInfo{compPool, 1, &compSetLayout};
+    compSet = device.allocateDescriptorSets(allocateInfo)[0];
+}
+
+void RayTracingApp::updateCompDescriptorSet()  {
+    vk::DescriptorBufferInfo sphereBufferInfo{sceneLoader.sphereBuffer, 0, VK_WHOLE_SIZE};
+    vk::DescriptorBufferInfo aabbsBufferInfo{sceneLoader.aabbBuffer, 0, VK_WHOLE_SIZE};
+
+    vk::WriteDescriptorSet writeSpheres{compSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &sphereBufferInfo};
+    vk::WriteDescriptorSet writeAabbs{compSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &aabbsBufferInfo};
+
+    std::array<vk::WriteDescriptorSet, 2> writes{writeSpheres, writeAabbs};
+
+    device.updateDescriptorSets(writes, nullptr);
+}
+
+void RayTracingApp::createComputePipeline() {
+    vk::PipelineLayoutCreateInfo layoutCreateInfo{{}, 1, &compSetLayout, 0, nullptr};
+    compPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
+
+    auto compCode = readFile("shaders/sphere_mod.comp.spv");
+    vk::ShaderModule compShaderModule = vulkanOps->createShaderModule(compCode);
+
+    vk::PipelineShaderStageCreateInfo shaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eCompute, compShaderModule, "main"};
+
+    vk::ComputePipelineCreateInfo computePipelineCreateInfo{{}, shaderStageCreateInfo, compPipelineLayout};
+    compPipeline = device.createComputePipeline({}, computePipelineCreateInfo);
+
+    device.destroy(compShaderModule);
+}
+
+void RayTracingApp::updateSpheres() {
+    if (sceneLoader.spheres.empty())  {
+        return;
+    }
+
+    vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
+
+    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, compPipeline);
+    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, compPipelineLayout, 0, compSet, {});
+
+    cmdBuf.dispatch(sceneLoader.spheres.size(), 1, 1);
+
+    vulkanOps->endSingleTimeCommands(cmdBuf);
+    hasInputChanged = true;
+}
+
 void RayTracingApp::imGuiWindowSetup() {
     ImGui::Begin("Raytrace Window");
-
-    hasInputChanged = false;
 
     hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
     hasInputChanged |= ImGui::InputFloat4("SkyColor1", &rtPushConstants.skyColor1.x, "%.2f");
@@ -487,11 +554,14 @@ void RayTracingApp::imGuiWindowSetup() {
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     rtPushConstants.randomUInt = static_cast<uint>(glm::linearRand(0.0f, 1.0f) * std::numeric_limits<uint>::max());
 
+//    updateSpheres();
+
     if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged() && !autoRotate) {
         rtPushConstants.previousFrames += 1;
     } else {
         rtPushConstants.previousFrames = 0;
     }
+
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
@@ -523,9 +593,16 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     cmdBuf.traceRaysKHR(&raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
                         &callableShaderBindingTable,      //
                         offscreenExtent.width, offscreenExtent.height, 1);  //
+
+    hasInputChanged = false;
 }
 
 void RayTracingApp::cleanup() {
+
+    device.destroy(compPool);
+    device.destroy(compSetLayout);
+    device.destroy(compPipeline);
+    device.destroy(compPipelineLayout);
 
     device.destroy(accumulateImageSampler);
     device.destroy(accumulateImageView);
