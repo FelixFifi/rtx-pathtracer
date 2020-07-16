@@ -3,8 +3,8 @@
 
 
 int main() {
-    const int WIDTH = 768;
-    const int HEIGHT = 512;
+    const int WIDTH = 1920;
+    const int HEIGHT = 1080;
     RayTracingApp app(WIDTH, HEIGHT);
 
     app.run();

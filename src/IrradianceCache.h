@@ -30,6 +30,11 @@ struct UpdateCommad {
     uint32_t iSphere;
 };
 
+struct CacheData {
+    glm::vec3 color;
+    glm::vec3 normal;
+};
+
 class IrradianceCache {
 private:
     uint32_t maxSpheres;
@@ -45,6 +50,8 @@ private:
     vk::DeviceMemory spheresBufferMemory;
     vk::Buffer aabbsBuffer;
     vk::DeviceMemory aabbsBufferMemory;
+    vk::Buffer cacheBuffer;
+    vk::DeviceMemory cacheBufferMemory;
 
     vk::Buffer updateCommandsBuffer;
     vk::DeviceMemory updateCommandsBufferMemory;
@@ -68,15 +75,16 @@ public:
 
     void updateSpheres();
 
-    std::array<vk::DescriptorSetLayoutBinding, 3> getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, 4> getDescriptorSetLayouts();
 
-    std::array<vk::DescriptorPoolSize, 3> getDescriptorPoolSizes();
+    std::array<vk::DescriptorPoolSize, 4> getDescriptorPoolSizes();
 
-    std::array<vk::WriteDescriptorSet, 3>
+    std::array<vk::WriteDescriptorSet, 4>
     getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                            vk::DescriptorBufferInfo &outUpdateBufferInfo,
                            vk::WriteDescriptorSetAccelerationStructureKHR &outDescASInfo,
-                           vk::DescriptorBufferInfo &outSpheresBufferInfo);
+                           vk::DescriptorBufferInfo &outSpheresBufferInfo,
+                           vk::DescriptorBufferInfo &outCacheBufferInfo);
 
 private:
     void createBuffers();

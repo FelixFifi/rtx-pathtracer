@@ -56,3 +56,8 @@ struct updateCommand {
     bool isModify;
     uint iSphere;
 };
+
+struct cacheData {
+    vec3 color;
+    vec3 normal;
+};

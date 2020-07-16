@@ -51,9 +51,11 @@ void IrradianceCache::createBuffers() {
 
     std::vector<Sphere> spheres(maxSpheres);
     std::vector<Aabb> aabbs(maxSpheres);
+    std::vector<CacheData> cacheValues(maxSpheres);
     for (int i = 0; i < maxSpheres; ++i) {
         spheres[i] = tmp;
         aabbs[i] = aabb;
+        cacheValues[i] = {};
     }
 
     vk::BufferUsageFlags usage =
@@ -61,6 +63,7 @@ void IrradianceCache::createBuffers() {
     vk::MemoryPropertyFlagBits memoryFlags = vk::MemoryPropertyFlagBits::eDeviceLocal;
     vulkanOps->createBufferFromData(spheres, usage, memoryFlags, spheresBuffer, spheresBufferMemory);
     vulkanOps->createBufferFromData(aabbs, usage, memoryFlags, aabbsBuffer, aabbsBufferMemory);
+    vulkanOps->createBufferFromData(cacheValues, usage, memoryFlags, cacheBuffer, cacheBufferMemory);
 
     UpdateCommandsHeader header{};
     header.maxCommands = maxCommands;
@@ -151,7 +154,7 @@ void IrradianceCache::updateSpheres() {
     rtBuilder.updateTlasMatrices(instances);
 }
 
-std::array<vk::DescriptorSetLayoutBinding, 3> IrradianceCache::getDescriptorSetLayouts() {
+std::array<vk::DescriptorSetLayoutBinding, 4> IrradianceCache::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding bufferBindingUpdate{10, vk::DescriptorType::eStorageBuffer, 1,
                                                        vk::ShaderStageFlagBits::eRaygenKHR};
     vk::DescriptorSetLayoutBinding bindingAS{11, vk::DescriptorType::eAccelerationStructureKHR, 1,
@@ -159,15 +162,19 @@ std::array<vk::DescriptorSetLayoutBinding, 3> IrradianceCache::getDescriptorSetL
     vk::DescriptorSetLayoutBinding bufferSpheres{12, vk::DescriptorType::eStorageBuffer, 1,
                                                  vk::ShaderStageFlagBits::eIntersectionKHR |
                                                  vk::ShaderStageFlagBits::eClosestHitKHR};
+    vk::DescriptorSetLayoutBinding bufferCache{13, vk::DescriptorType::eStorageBuffer, 1,
+                                                 vk::ShaderStageFlagBits::eRaygenKHR |
+                                                 vk::ShaderStageFlagBits::eIntersectionKHR};
 
 
-    return {bufferBindingUpdate, bindingAS, bufferSpheres};
+    return {bufferBindingUpdate, bindingAS, bufferSpheres, bufferCache};
 }
 
-std::array<vk::DescriptorPoolSize, 3> IrradianceCache::getDescriptorPoolSizes() {
+std::array<vk::DescriptorPoolSize, 4> IrradianceCache::getDescriptorPoolSizes() {
     return {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eAccelerationStructureKHR, 1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1),
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
     };
 }
@@ -178,11 +185,12 @@ std::array<vk::DescriptorPoolSize, 3> IrradianceCache::getDescriptorPoolSizes() 
  * @param outBufferInfos Necessary as their memory location is used in the write descriptor sets
  * @return
  */
-std::array<vk::WriteDescriptorSet, 3>
+std::array<vk::WriteDescriptorSet, 4>
 IrradianceCache::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                         vk::DescriptorBufferInfo &outUpdateBufferInfo,
                                         vk::WriteDescriptorSetAccelerationStructureKHR &outDescASInfo,
-                                        vk::DescriptorBufferInfo &outSpheresBufferInfo) {
+                                        vk::DescriptorBufferInfo &outSpheresBufferInfo,
+                                        vk::DescriptorBufferInfo &outCacheBufferInfo) {
 
     outDescASInfo.setAccelerationStructureCount(1);
     outDescASInfo.setPAccelerationStructures(&accelerationStructure);
@@ -196,14 +204,19 @@ IrradianceCache::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
     vk::WriteDescriptorSet writeSpheres{descriptorSet, 12, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
                                         &outSpheresBufferInfo};
 
+    outCacheBufferInfo = vk::DescriptorBufferInfo(cacheBuffer, 0, VK_WHOLE_SIZE);
+    vk::WriteDescriptorSet writeCache{descriptorSet, 13, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
+                                        &outCacheBufferInfo};
 
-    std::array<vk::WriteDescriptorSet, 3> writes;
+
+    std::array<vk::WriteDescriptorSet, 4> writes;
     writes[0] = vk::WriteDescriptorSet(descriptorSet, 11, 0, 1, vk::DescriptorType::eAccelerationStructureKHR);
     writes[0].setPNext(&outDescASInfo);
 
     writes[1] = writeUpdates;
 
     writes[2] = writeSpheres;
+    writes[3] = writeCache;
 
     return writes;
 }
@@ -217,10 +230,12 @@ void IrradianceCache::cleanUp() {
 
     device.free(aabbsBufferMemory);
     device.free(spheresBufferMemory);
+    device.free(cacheBufferMemory);
     device.free(updateCommandsBufferMemory);
 
     device.destroy(spheresBuffer);
     device.destroy(aabbsBuffer);
+    device.destroy(cacheBuffer);
     device.destroy(updateCommandsBuffer);
 
     device.destroy(compPool);

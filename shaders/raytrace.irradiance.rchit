@@ -19,9 +19,7 @@ void main()
 
     info.worldPos = pos;
     info.normal = normal;
-    info.textureUV = vec2(0, 0);
-    info.matIndex = s.materialIndex;
     info.t = gl_HitTEXT;
     info.isMiss = false;
-    info.instanceIndex = gl_InstanceID;
+    info.instanceIndex = gl_PrimitiveID;
 }

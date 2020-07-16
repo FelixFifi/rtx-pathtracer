@@ -159,7 +159,7 @@ void RayTracingApp::createDecriptorSetLayout() {
 
     auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
     auto irradianceBindings = irradianceCache.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 13> bindings = {uniformBufferLayoutBinding,
+    std::array<vk::DescriptorSetLayoutBinding, 14> bindings = {uniformBufferLayoutBinding,
                                                                sceneBindings[0],
                                                                sceneBindings[1],
                                                                sceneBindings[2],
@@ -171,7 +171,8 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                accumulateImageLayoutBinding,
                                                                irradianceBindings[0],
                                                                irradianceBindings[1],
-                                                               irradianceBindings[2]};
+                                                               irradianceBindings[2],
+                                                               irradianceBindings[3]};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -182,7 +183,7 @@ void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
     auto irradiancePoolSizes = irradianceCache.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 13> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 14> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -196,7 +197,8 @@ void RayTracingApp::createDescriptorPool() {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1),
             irradiancePoolSizes[0],
             irradiancePoolSizes[1],
-            irradiancePoolSizes[2]
+            irradiancePoolSizes[2],
+            irradiancePoolSizes[3]
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -227,6 +229,7 @@ void RayTracingApp::createDescriptorSets() {
     std::vector<vk::DescriptorImageInfo> textureInfos;
     vk::DescriptorBufferInfo spheresBufferInfo;
     vk::DescriptorBufferInfo irradianceSpheresBufferInfo;
+    vk::DescriptorBufferInfo irradianceCacheBufferInfo;
 
     auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                           indexBufferInfos, materialBufferInfo,
@@ -237,7 +240,7 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorBufferInfo updateCommandsInfo;
     vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
     auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, updateCommandsInfo, asInfo,
-                                                                   irradianceSpheresBufferInfo);
+                                                                   irradianceSpheresBufferInfo, irradianceCacheBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                 0,
@@ -245,7 +248,7 @@ void RayTracingApp::createDescriptorSets() {
                                                                                 vk::DescriptorType::eStorageImage,
                                                                                 &accumulateImageInfo,
                                                                                 nullptr, nullptr);
-    std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 4> descriptorWrites = {
+    std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 5> descriptorWrites = {
             vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                    vk::DescriptorType::eUniformBuffer, nullptr,
                                    &bufferInfo, nullptr),
@@ -260,7 +263,8 @@ void RayTracingApp::createDescriptorSets() {
             accumulateImageWrite,
             irradianceWrites[0],
             irradianceWrites[1],
-            irradianceWrites[2]
+            irradianceWrites[2],
+            irradianceWrites[3]
     };
 
     device.updateDescriptorSets(descriptorWrites, nullptr);

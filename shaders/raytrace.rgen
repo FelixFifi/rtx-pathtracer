@@ -6,6 +6,7 @@
 
 #include "raycommon.glsl"
 #include "wavefront.glsl"
+#include "transform.glsl"
 #include "random.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
@@ -54,8 +55,10 @@ layout(binding = 8, set = 1, std430) buffer Spheres { sphere spheres[]; };
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
 layout(binding = 9, set = 1, rgba32f) uniform image2D accumulateImage;
 layout(binding = 10, set = 1, scalar) buffer UpdateCommands { updateCommandsHeader header;
-    updateCommand commands[];};
+    updateCommand commands[]; };
 layout(binding = 11, set = 1) uniform accelerationStructureEXT irradianceAS;
+layout(binding = 12, set = 1, std430) buffer CacheSpheres { sphere cacheSpheres[]; };
+layout(binding = 13, set = 1, scalar) buffer Cache { cacheData cache[]; };
 
 layout(binding = 0, set = 1)
 uniform CameraMatrices{
@@ -70,120 +73,6 @@ layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
 layout(location = 2) rayPayloadEXT hitInfo infoIrradiance;
 //@formatter:on
 
-uint seed;
-
-// Random float [-1, 1)
-float getRandomNegPos() {
-    return rnd(seed) * 2 - 1;
-}
-
-// Random int [0, max]
-int getRandomInteger(int max) {
-    return int(rnd(seed) * (max + 1));
-}
-
-// Rendering Vorlesung - Nori src/common.cpp
-void coordinateAxis(in vec3 z, out vec3 x, out vec3 y) {
-    if (abs(z.x) > abs(z.y)) {
-        float invLen = 1.0f / sqrt(z.x * z.x + z.z * z.z);
-        y = vec3(z.z * invLen, 0.0f, -z.x * invLen);
-    } else {
-        float invLen = 1.0f / sqrt(z.y * z.y + z.z * z.z);
-        y = vec3(0.0f, z.z * invLen, -z.y * invLen);
-    }
-    x = cross(y, z);
-}
-
-vec3 toLocal(vec3 v, vec3 x, vec3 y, vec3 z) {
-    return vec3(dot(v, x), dot(v, y), dot(v, z));
-}
-
-vec3 toLocal(vec3 v, vec3 n) {
-    vec3 x, y;
-    coordinateAxis(n, x, y);
-
-    return toLocal(v, x, y, n);
-}
-
-vec3 toWorld(vec3 v, vec3 x, vec3 y, vec3 z) {
-    return v.x * x + v.y * y + v.z * z;
-}
-
-vec3 toWorld(vec3 v, vec3 n) {
-    vec3 x, y;
-    coordinateAxis(n, x, y);
-
-    return toWorld(v, x, y, n);
-}
-
-// https://math.stackexchange.com/a/1163278
-vec3 randomOnUnitSphere() {
-    vec3 res;
-    do {
-        res = vec3(rnd(seed), rnd(seed), rnd(seed));
-    } while (length(res) > 1);
-
-    res = normalize(res);
-    return res;
-}
-
-// PDF 1 / (2pi)
-vec3 randomInHemisphere(vec3 normal) {
-    vec3 res;
-    do {
-        res = vec3(getRandomNegPos(), getRandomNegPos(), getRandomNegPos());
-    } while (length(res) > 1);
-
-    res = normalize(res);
-
-    if (dot(normal, res) < 0) {
-        res = res - normal * 2 * dot(normal, res);
-    }
-    return res;
-}
-
-// PDF cos(theta) / pi
-vec3 randomInHemisphereCosine(vec3 normal) {
-    float u = rnd(seed);
-    float sqrt_u = sqrt(u);
-    float phi = 2 * M_PI * rnd(seed);
-
-    vec3 local = vec3(sqrt_u * cos(phi), sqrt_u * sin(phi), sqrt(1 - u));
-
-    return toWorld(local, normal);
-}
-
-// (p + 1) * dot(reflected, res)^p/(2pi)
-vec3 randomInHemisphereCosinePower(vec3 reflected, float p) {
-    float u = rnd(seed);
-    float cosTheta = pow(u, 1.0 / (p + 1));
-    float phi = 2 * M_PI * rnd(seed);
-
-    float sinTheta = sqrt(1 - cosTheta * cosTheta);
-
-    vec3 local = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-    return toWorld(local, reflected);
-}
-
-vec3 randomOnSphere(sphere s, out vec3 normal) {
-    do {
-        normal = vec3(getRandomNegPos(), getRandomNegPos(), getRandomNegPos());
-    } while (length(normal) > 1);
-    normal = normalize(normal);
-
-    return s.center + normal * s.radius;
-}
-
-vec3 randomBeckmannNormal(Material mat, vec3 normal) {
-    float thetaM = atan(sqrt(- mat.roughness * mat.roughness * log(1 - rnd(seed))));
-    float phiM = 2 * M_PI * rnd(seed);
-
-    float cosThetaNM = cos(thetaM);
-
-    vec3 localM = vec3(sin(thetaM) * cos(phiM), sin(thetaM) * sin(phiM), cosThetaNM);
-
-    return toWorld(localM, normal);
-}
 
 // Rendering Vorlesung - Nori src/common.cpp
 float fresnel(in float eta, in float cosThetaI) {
@@ -425,7 +314,7 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
         Vertex v2 = vertices[iModel].v[ind.z];
 
         // Uniform random point on triangle
-        vec2 randomXY = vec2(rnd(seed), rnd(seed));
+        vec2 randomXY = vec2(rnd(), rnd());
         float sqrtx = sqrt(randomXY.x);
         float sqrty = sqrt(randomXY.y);
         vec3 barycentrics = vec3(1.0 - sqrtx, sqrtx * (1.0 - randomXY.y), randomXY.y * sqrtx);
@@ -484,7 +373,7 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 ne
         }
 
         float pdf;
-        if (rnd(seed) * sumSpecDiff > lDiffuse) {
+        if (rnd() * sumSpecDiff > lDiffuse) {
             // Cosine power/phong lobe
             vec3 reflected = reflect(direction, normal);
 
@@ -617,6 +506,39 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
     return neeResult;
 }
 
+void calculateCacheData(vec3 origin, vec3 normal, uint cacheIndex) {
+    const int n = 5;
+
+    vec3 color = vec3(0, 0, 0);
+    for (int j = 1; j < n; j++) {
+        for (int k = 1; k < 2 * n; k++) {
+            float theta = asin( sqrt( (j - rnd()) / n));
+            float phi = M_PI * (k - rnd()) / n;
+
+            vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
+
+            traceRayEXT(topLevelAS, // acceleration structure
+            rayFlags, // rayFlags
+            0xFF, // cullMask
+            0, // sbtRecordOffset
+            0, // sbtRecordStride
+            0, // missIndex
+            origin.xyz, // ray origin
+            tMin, // ray min range
+            direction.xyz, // ray direction
+            tMax, // ray max range
+            0// payload (location = 0)
+            );
+
+            if (info.isMiss) {
+                color += vec3(1,1,1);
+            }
+        }
+    }
+
+    cache[cacheIndex].color = color / (2 * n * n);
+}
+
 void main() {
     // Init seed
     seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
@@ -673,13 +595,11 @@ void main() {
                 );
 
                 if (!infoIrradiance.isMiss) {
-                    result = vec3(0, 1, 0) * dot(infoIrradiance.normal, -direction);
+                    result = cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
                     iSample = samplesPerPixel;
                     break;
                 }
             }
-
-
 
 
             // Miss => Directional light / skybox
@@ -712,19 +632,20 @@ void main() {
                 }
                 // Then continue as diffuse
                 case MAT_DIFFUSE:// Diffuse
-                if (rnd(seed) < 0.000001) {
-                    uint iCommand = header.nextCommandSlot;
+                if (rnd() < 0.000001) {
+                    uint iCommand = atomicAdd(header.nextCommandSlot, 1);
 
                     if (iCommand < header.maxCommands) {
                         header.nextCommandSlot += 1;
                         commands[iCommand].center = origin;
                         commands[iCommand].radius = 0.1;
                         commands[iCommand].isFilled = true;
-                        commands[iCommand].iSphere = header.nextSphereSlot;
-                        header.nextSphereSlot += 1;
-                    }
 
-                    sampleResult += vec3(0,0,100);
+                        uint iCache = atomicAdd(header.nextSphereSlot, 1);
+                        commands[iCommand].iSphere = iCache;
+
+                        calculateCacheData(origin, normal, iCache);
+                    }
                 }
 
                 case MAT_PHONG:// Phong
@@ -767,7 +688,7 @@ void main() {
                     float cosTheta = dot(-direction, normal);
                     float fresnel = fresnel(eta, cosTheta);
 
-                    if (rnd(seed) > fresnel) {
+                    if (rnd() > fresnel) {
                         // Refract
                         direction = refract(direction, normal, eta);
                     } else {
@@ -811,7 +732,7 @@ void main() {
             if (pushC.enableRR && iDepth > 5) {
                 float p = (throughput.x + throughput.y + throughput.z) / 3.0;
                 // Russian roulette
-                if (rnd(seed) > p) {
+                if (rnd() > p) {
                     break;
                 } else {
                     throughput *= 1.0 / p;
