@@ -2,6 +2,7 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
 
 #include "raycommon.glsl"
 #include "wavefront.glsl"
@@ -52,7 +53,9 @@ layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer{
 layout(binding = 8, set = 1, std430) buffer Spheres { sphere spheres[]; };
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
 layout(binding = 9, set = 1, rgba32f) uniform image2D accumulateImage;
-
+layout(binding = 10, set = 1, scalar) buffer UpdateCommands { updateCommandsHeader header;
+    updateCommand commands[];};
+layout(binding = 11, set = 1) uniform accelerationStructureEXT irradianceAS;
 
 layout(binding = 0, set = 1)
 uniform CameraMatrices{
@@ -64,6 +67,7 @@ uniform CameraMatrices{
 
 layout(location = 0) rayPayloadEXT hitInfo info;
 layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
+layout(location = 2) rayPayloadEXT hitInfo infoIrradiance;
 //@formatter:on
 
 uint seed;
@@ -653,6 +657,31 @@ void main() {
             tMax, // ray max range
             0// payload (location = 0)
             );
+
+            if (pushC.showIrradianceCache && iDepth == 0) {
+                traceRayEXT(irradianceAS, // acceleration structure
+                rayFlags, // rayFlags
+                0xFF, // cullMask
+                0, // sbtRecordOffset
+                0, // sbtRecordStride
+                0, // missIndex
+                origin.xyz, // ray origin
+                tMin, // ray min range
+                direction.xyz, // ray direction
+                info.t, // ray max range
+                2// payload (location = 2)
+                );
+
+                if (!infoIrradiance.isMiss) {
+                    result = vec3(0, 1, 0) * dot(infoIrradiance.normal, -direction);
+                    iSample = samplesPerPixel;
+                    break;
+                }
+            }
+
+
+
+
             // Miss => Directional light / skybox
             if (info.isMiss) {
                 sampleResult += throughput * info.missColor;
@@ -683,6 +712,21 @@ void main() {
                 }
                 // Then continue as diffuse
                 case MAT_DIFFUSE:// Diffuse
+                if (rnd(seed) < 0.000001) {
+                    uint iCommand = header.nextCommandSlot;
+
+                    if (iCommand < header.maxCommands) {
+                        header.nextCommandSlot += 1;
+                        commands[iCommand].center = origin;
+                        commands[iCommand].radius = 0.1;
+                        commands[iCommand].isFilled = true;
+                        commands[iCommand].iSphere = header.nextSphereSlot;
+                        header.nextSphereSlot += 1;
+                    }
+
+                    sampleResult += vec3(0,0,100);
+                }
+
                 case MAT_PHONG:// Phong
                 vec3 newDirection;
                 float pdf = sampleBSDF(mat, direction, normal, newDirection);

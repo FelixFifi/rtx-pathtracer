@@ -23,6 +23,7 @@ static const int BINDINGS_COUNT = 8;
 #include <json.hpp>
 #include <tinyxml2.h>
 #include "Model.h"
+#include "Sphere.h"
 
 
 enum EMatType {
@@ -88,23 +89,6 @@ struct Texture {
     }
 };
 
-struct Aabb {
-    glm::vec3 min;
-    glm::vec3 max;
-};
-
-struct alignas(16) Sphere {
-    glm::vec3 center;
-    float radius;
-    int matertialIndex;
-    int iLight = -1;
-
-    Aabb getAabb() const {
-        const glm::vec3 &r = glm::vec3(radius, radius, radius);
-        return {center - r, center + r};
-    }
-};
-
 class SceneLoader {
 private:
     std::string objectBaseDir;
@@ -120,6 +104,11 @@ private:
     std::vector<Texture> textures;
     std::map<std::string, int> pathTextureIdMapping;
 
+    uint32_t spheresIndex = -1;
+public:
+    uint32_t getSpheresIndex() const;
+
+private:
 
     std::shared_ptr<VulkanOps> vulkanOps;
 
@@ -151,6 +140,7 @@ public:
     vk::DeviceMemory aabbBufferMemory;
 
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
+    std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
 public:
     SceneLoader() = default;
     SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
@@ -235,8 +225,6 @@ private:
     void parseXmlShapes(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedMaterials);
 
     Texture generateDefaultTexture() const;
-
-    nvvkpp::RaytracingBuilderKHR::Blas spheresToBlas();
 };
 
 

@@ -31,9 +31,6 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
-
-    createComputeDescriptorSet();
-    createComputePipeline();
     createAccumulateImage();
     createUniformBuffers();
     loadScene();
@@ -67,6 +64,8 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     raytrace(cmdBuf);
     vulkanOps->endSingleTimeCommands(cmdBuf);
+
+    irradianceCache.updateSpheres();
 
     cameraController.resetStatus();
 
@@ -104,8 +103,10 @@ void RayTracingApp::sceneSwitcher(int num) {
     cameraController.vfov = sceneLoader.vfov;
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
+    irradianceCache.cleanUp();
+    irradianceCache = IrradianceCache(1000, 10, vulkanOps, physicalDevice, graphicsQueueIndex);
+
     recreateDescriptorSets();
-    updateCompDescriptorSet();
 
     if (rtDescSet) {
         updateRtDescriptorSet(0);
@@ -151,21 +152,26 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                               1, vk::ShaderStageFlagBits::eRaygenKHR,
                                                               nullptr);
 
-    vk::DescriptorSetLayoutBinding accumulateImageLayoutBinding(ACCUMULATE_IMAGE_BINDING, vk::DescriptorType::eStorageImage, 1,
+    vk::DescriptorSetLayoutBinding accumulateImageLayoutBinding(ACCUMULATE_IMAGE_BINDING,
+                                                                vk::DescriptorType::eStorageImage, 1,
                                                                 vk::ShaderStageFlagBits::eRaygenKHR);
 
 
     auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 10> bindings = {uniformBufferLayoutBinding,
-                                                              sceneBindings[0],
-                                                              sceneBindings[1],
-                                                              sceneBindings[2],
-                                                              sceneBindings[3],
-                                                              sceneBindings[4],
-                                                              sceneBindings[5],
-                                                              sceneBindings[6],
-                                                              sceneBindings[7],
-                                                              accumulateImageLayoutBinding};
+    auto irradianceBindings = irradianceCache.getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, 13> bindings = {uniformBufferLayoutBinding,
+                                                               sceneBindings[0],
+                                                               sceneBindings[1],
+                                                               sceneBindings[2],
+                                                               sceneBindings[3],
+                                                               sceneBindings[4],
+                                                               sceneBindings[5],
+                                                               sceneBindings[6],
+                                                               sceneBindings[7],
+                                                               accumulateImageLayoutBinding,
+                                                               irradianceBindings[0],
+                                                               irradianceBindings[1],
+                                                               irradianceBindings[2]};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -174,8 +180,9 @@ void RayTracingApp::createDecriptorSetLayout() {
 
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
+    auto irradiancePoolSizes = irradianceCache.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 10> poolSizes = {
+    std::array<vk::DescriptorPoolSize, 13> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -186,7 +193,10 @@ void RayTracingApp::createDescriptorPool() {
             vertexIndexMaterialPoolSizes[5],
             vertexIndexMaterialPoolSizes[6],
             vertexIndexMaterialPoolSizes[7],
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1)
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1),
+            irradiancePoolSizes[0],
+            irradiancePoolSizes[1],
+            irradiancePoolSizes[2]
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -203,47 +213,57 @@ void RayTracingApp::createDescriptorSets() {
 
     descriptorSet = device.allocateDescriptorSets(allocInfo)[0];
 
-    for (size_t i = 0; i < 1; i++) {
-        vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
-        vk::DescriptorImageInfo accumulateImageInfo({}, accumulateImageView,
-                                                    vk::ImageLayout::eGeneral);
+    vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
+    vk::DescriptorImageInfo accumulateImageInfo({}, accumulateImageView,
+                                                vk::ImageLayout::eGeneral);
 
 
-        std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
-        std::vector<vk::DescriptorBufferInfo> indexBufferInfos;
-        vk::DescriptorBufferInfo materialBufferInfo;
-        vk::DescriptorBufferInfo instanceInfoBufferInfo;
-        vk::DescriptorBufferInfo lightBufferInfo;
-        vk::DescriptorBufferInfo lightSamplersBufferInfo;
-        std::vector<vk::DescriptorImageInfo> textureInfos;
-        vk::DescriptorBufferInfo spheresBufferInfo;
+    std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
+    std::vector<vk::DescriptorBufferInfo> indexBufferInfos;
+    vk::DescriptorBufferInfo materialBufferInfo;
+    vk::DescriptorBufferInfo instanceInfoBufferInfo;
+    vk::DescriptorBufferInfo lightBufferInfo;
+    vk::DescriptorBufferInfo lightSamplersBufferInfo;
+    std::vector<vk::DescriptorImageInfo> textureInfos;
+    vk::DescriptorBufferInfo spheresBufferInfo;
+    vk::DescriptorBufferInfo irradianceSpheresBufferInfo;
 
-        auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
-                                                              indexBufferInfos, materialBufferInfo,
-                                                              instanceInfoBufferInfo, lightBufferInfo,
-                                                              lightSamplersBufferInfo, textureInfos,
-                                                              spheresBufferInfo);
+    auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
+                                                          indexBufferInfos, materialBufferInfo,
+                                                          instanceInfoBufferInfo, lightBufferInfo,
+                                                          lightSamplersBufferInfo, textureInfos,
+                                                          spheresBufferInfo);
 
-        std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 1> descriptorWrites = {};
+    vk::DescriptorBufferInfo updateCommandsInfo;
+    vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
+    auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, updateCommandsInfo, asInfo,
+                                                                   irradianceSpheresBufferInfo);
 
-        descriptorWrites[0] = vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
-                                                     vk::DescriptorType::eUniformBuffer, nullptr,
-                                                     &bufferInfo, nullptr);
-        descriptorWrites[1] = sceneWrites[0];1
-        descriptorWrites[2] = sceneWrites[1];
-        descriptorWrites[3] = sceneWrites[2];
-        descriptorWrites[4] = sceneWrites[3];
-        descriptorWrites[5] = sceneWrites[4];
-        descriptorWrites[6] = sceneWrites[5];
-        descriptorWrites[7] = sceneWrites[6];
-        descriptorWrites[8] = sceneWrites[7];
-        descriptorWrites[ACCUMULATE_IMAGE_BINDING] = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING, 0, 1,
-                                                                            vk::DescriptorType::eStorageImage,
-                                                                            &accumulateImageInfo,
-                                                                            nullptr, nullptr);
+    const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
+                                                                                0,
+                                                                                1,
+                                                                                vk::DescriptorType::eStorageImage,
+                                                                                &accumulateImageInfo,
+                                                                                nullptr, nullptr);
+    std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 4> descriptorWrites = {
+            vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
+                                   vk::DescriptorType::eUniformBuffer, nullptr,
+                                   &bufferInfo, nullptr),
+            sceneWrites[0],
+            sceneWrites[1],
+            sceneWrites[2],
+            sceneWrites[3],
+            sceneWrites[4],
+            sceneWrites[5],
+            sceneWrites[6],
+            sceneWrites[7],
+            accumulateImageWrite,
+            irradianceWrites[0],
+            irradianceWrites[1],
+            irradianceWrites[2]
+    };
 
-        device.updateDescriptorSets(descriptorWrites, nullptr);
-    }
+    device.updateDescriptorSets(descriptorWrites, nullptr);
 }
 
 void RayTracingApp::updateUniformBuffer(uint32_t currentImage) {
@@ -342,6 +362,8 @@ void RayTracingApp::createRtPipeline() {
     auto shadowMissCode = readFile("shaders/raytrace.shadow.rmiss.spv");
     auto sphereIntCode = readFile("shaders/raytrace.sphere.rint.spv");
     auto sphereChitCode = readFile("shaders/raytrace.sphere.rchit.spv");
+    auto irradianceIntCode = readFile("shaders/raytrace.irradiance.rint.spv");
+    auto irradianceChitCode = readFile("shaders/raytrace.irradiance.rchit.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -350,6 +372,8 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule shadowMissShaderModule = vulkanOps->createShaderModule(shadowMissCode);
     vk::ShaderModule sphereIntShaderModule = vulkanOps->createShaderModule(sphereIntCode);
     vk::ShaderModule sphereChitShaderModule = vulkanOps->createShaderModule(sphereChitCode);
+    vk::ShaderModule irradianceIntShaderModule = vulkanOps->createShaderModule(irradianceIntCode);
+    vk::ShaderModule irradianceChitShaderModule = vulkanOps->createShaderModule(irradianceChitCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -393,8 +417,8 @@ void RayTracingApp::createRtPipeline() {
 
     // Hit Group 1 - Intersection + Closest Hit
     vk::RayTracingShaderGroupCreateInfoKHR hg1{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
-                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
-                                              VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
     stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, sphereChitShaderModule, "main"});
     hg1.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
 
@@ -402,13 +426,24 @@ void RayTracingApp::createRtPipeline() {
     hg1.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg1);
 
+    // Hit Group 2 - Intersection + Closest Hit
+    vk::RayTracingShaderGroupCreateInfoKHR hg2{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, irradianceChitShaderModule, "main"});
+    hg2.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, irradianceIntShaderModule, "main"});
+    hg2.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg2);
+
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 
     // Push constant: we want to be able to update constants used by the shaders
     vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eRaygenKHR
                                        | vk::ShaderStageFlagBits::eClosestHitKHR
-                                         | vk::ShaderStageFlagBits::eMissKHR | vk::ShaderStageFlagBits::eAnyHitKHR,
+                                       | vk::ShaderStageFlagBits::eMissKHR | vk::ShaderStageFlagBits::eAnyHitKHR,
                                        0, sizeof(RtPushConstant)};
     pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
     pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
@@ -440,6 +475,8 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(shadowMissShaderModule);
     device.destroy(sphereIntShaderModule);
     device.destroy(sphereChitShaderModule);
+    device.destroy(irradianceIntShaderModule);
+    device.destroy(irradianceChitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -460,71 +497,6 @@ void RayTracingApp::createRtShaderBindingTable() {
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
 }
 
-void RayTracingApp::createComputeDescriptorSet() {
-    vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;
-    vk::DescriptorPoolSize poolSizeSpheres{type, 1};
-    vk::DescriptorPoolSize poolSizeAabbs{type, 1};
-
-    std::array<vk::DescriptorPoolSize, 2> poolSizes{poolSizeSpheres, poolSizeAabbs};
-
-    vk::DescriptorPoolCreateInfo poolInfo{{}, 1, 2, poolSizes.data()};
-    compPool = device.createDescriptorPool(poolInfo);
-
-    uint32_t bindingSpheres = 0;
-    uint32_t bindingAabbs = 1;
-    vk::DescriptorSetLayoutBinding bufferBindingSphere{bindingSpheres, type, 1, vk::ShaderStageFlagBits::eCompute};
-    vk::DescriptorSetLayoutBinding bufferBindingAabbs{bindingAabbs, type, 1, vk::ShaderStageFlagBits::eCompute};
-    std::array<vk::DescriptorSetLayoutBinding, 2> bindings{bufferBindingSphere, bufferBindingAabbs};
-
-    vk::DescriptorSetLayoutCreateInfo layoutInfo{{}, bindings.size(), bindings.data()};
-    compSetLayout = device.createDescriptorSetLayout(layoutInfo);
-
-    vk::DescriptorSetAllocateInfo allocateInfo{compPool, 1, &compSetLayout};
-    compSet = device.allocateDescriptorSets(allocateInfo)[0];
-}
-
-void RayTracingApp::updateCompDescriptorSet()  {
-    vk::DescriptorBufferInfo sphereBufferInfo{sceneLoader.sphereBuffer, 0, VK_WHOLE_SIZE};
-    vk::DescriptorBufferInfo aabbsBufferInfo{sceneLoader.aabbBuffer, 0, VK_WHOLE_SIZE};
-
-    vk::WriteDescriptorSet writeSpheres{compSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &sphereBufferInfo};
-    vk::WriteDescriptorSet writeAabbs{compSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &aabbsBufferInfo};
-
-    std::array<vk::WriteDescriptorSet, 2> writes{writeSpheres, writeAabbs};
-
-    device.updateDescriptorSets(writes, nullptr);
-}
-
-void RayTracingApp::createComputePipeline() {
-    vk::PipelineLayoutCreateInfo layoutCreateInfo{{}, 1, &compSetLayout, 0, nullptr};
-    compPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
-
-    auto compCode = readFile("shaders/sphere_mod.comp.spv");
-    vk::ShaderModule compShaderModule = vulkanOps->createShaderModule(compCode);
-
-    vk::PipelineShaderStageCreateInfo shaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eCompute, compShaderModule, "main"};
-
-    vk::ComputePipelineCreateInfo computePipelineCreateInfo{{}, shaderStageCreateInfo, compPipelineLayout};
-    compPipeline = device.createComputePipeline({}, computePipelineCreateInfo);
-
-    device.destroy(compShaderModule);
-}
-
-void RayTracingApp::updateSpheres() {
-    if (sceneLoader.spheres.empty())  {
-        return;
-    }
-
-    vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
-
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, compPipeline);
-    cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, compPipelineLayout, 0, compSet, {});
-
-    cmdBuf.dispatch(sceneLoader.spheres.size(), 1, 1);
-
-    vulkanOps->endSingleTimeCommands(cmdBuf);
-    hasInputChanged = true;
-}
 
 void RayTracingApp::imGuiWindowSetup() {
     ImGui::Begin("Raytrace Window");
@@ -539,8 +511,12 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
-    hasInputChanged |= ImGui::Checkbox("Enable average instead of mix", reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
-    hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)", reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
+    hasInputChanged |= ImGui::Checkbox("Enable average instead of mix",
+                                       reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
+    hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
+                                       reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
+    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
 
     ImGui::Checkbox("Take picture", &takePicture);
 
@@ -553,8 +529,6 @@ void RayTracingApp::imGuiWindowSetup() {
 
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     rtPushConstants.randomUInt = static_cast<uint>(glm::linearRand(0.0f, 1.0f) * std::numeric_limits<uint>::max());
-
-//    updateSpheres();
 
     if (accumulateResults && !hasInputChanged && !cameraController.hasCameraChanged() && !autoRotate) {
         rtPushConstants.previousFrames += 1;
@@ -598,11 +572,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 }
 
 void RayTracingApp::cleanup() {
-
-    device.destroy(compPool);
-    device.destroy(compSetLayout);
-    device.destroy(compPipeline);
-    device.destroy(compPipelineLayout);
+    irradianceCache.cleanUp();
 
     device.destroy(accumulateImageSampler);
     device.destroy(accumulateImageView);

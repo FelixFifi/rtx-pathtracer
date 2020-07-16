@@ -33,6 +33,7 @@
 #include "Model.h"
 #include "CameraController.h"
 #include "SceneLoader.h"
+#include "IrradianceCache.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
@@ -80,6 +81,7 @@ public:
         int enableNEE = 1; // GLSL has 4 byte bool
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 1;
+        int showIrradianceCache = 0;
     } rtPushConstants;
 
 private:
@@ -95,6 +97,7 @@ private:
     bool takePicture = false;
 
     CameraController cameraController;
+    IrradianceCache irradianceCache;
 
     // Vulkan
     vk::Buffer uniformBuffer;
@@ -104,13 +107,6 @@ private:
     vk::DescriptorPool descriptorPool;
     vk::DescriptorSet descriptorSet;
 
-
-    vk::DescriptorSetLayout compSetLayout;
-    vk::DescriptorPool compPool;
-    vk::DescriptorSet compSet;
-
-    vk::PipelineLayout compPipelineLayout;
-    vk::Pipeline compPipeline;
 
     vk::Image accumulateImage;
     vk::DeviceMemory accumulateImageMemory;
@@ -180,14 +176,6 @@ private:
     void sceneSwitcher(int num);
 
     void cleanupRtPipeline();
-
-    void updateSpheres();
-
-    void createComputeDescriptorSet();
-
-    void updateCompDescriptorSet();
-
-    void createComputePipeline();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

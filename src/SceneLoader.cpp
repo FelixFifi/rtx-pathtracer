@@ -677,7 +677,8 @@ std::string SceneLoader::toObjPath(const std::string &path) {
 }
 
 void SceneLoader::createSpheresBuffer() {
-    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress;
+    vk::BufferUsageFlags usage =
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress;
 
     if (spheres.empty()) {
         std::vector<Sphere> alibiSphere{{}};
@@ -777,7 +778,8 @@ std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
             areas = std::vector<float>(emissiveFacesPerModel[iModel].size());
 
             for (int iEmissiveFace = 0; iEmissiveFace < emissiveFacesPerModel[iModel].size(); ++iEmissiveFace) {
-                areas[iEmissiveFace] = model.getFaceArea(emissiveFacesPerModel[iModel][iEmissiveFace], instance.transform);
+                areas[iEmissiveFace] = model.getFaceArea(emissiveFacesPerModel[iModel][iEmissiveFace],
+                                                         instance.transform);
             }
 
             WeightedSampler faceSampler(areas);
@@ -864,7 +866,7 @@ std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> SceneLoader::getDescr
                                                    vk::ShaderStageFlagBits::eMissKHR, nullptr);
     vk::DescriptorSetLayoutBinding spheresBufferBinding(8, vk::DescriptorType::eStorageBuffer, 1,
                                                         vk::ShaderStageFlagBits::eIntersectionKHR |
-                                                        vk::ShaderStageFlagBits::eClosestHitKHR|
+                                                        vk::ShaderStageFlagBits::eClosestHitKHR |
                                                         vk::ShaderStageFlagBits::eRaygenKHR);
 
     return {vertexBufferBinding, indexBufferBinding, materialBufferBinding, instanceInfoBufferBinding,
@@ -923,7 +925,9 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
     outTexturesInfos.reserve(textures.size());
 
     if (models.empty()) {
-        std::vector<Vertex> vertices{{}, {}, {}};
+        std::vector<Vertex> vertices{{},
+                                     {},
+                                     {}};
         std::vector<uint32_t> indices{0, 1, 2};
 
         defaultModels.emplace_back(vertices, indices, vulkanOps);
@@ -942,7 +946,6 @@ SceneLoader::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
             outIndexBufferInfos.push_back(indexBufferInfo);
         }
     }
-
 
 
     for (const auto &texture: textures) {
@@ -1032,45 +1035,6 @@ nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::modelToBlas(const Model &model) 
     return blas;
 }
 
-nvvkpp::RaytracingBuilderKHR::Blas SceneLoader::spheresToBlas() {
-    // Setting up the creation info of acceleration structure
-    vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
-    asCreate.setGeometryType(vk::GeometryTypeKHR::eAabbs);
-    asCreate.setIndexType(vk::IndexType::eNoneKHR);
-    asCreate.setVertexFormat(vk::Format::eUndefined);
-    asCreate.setMaxPrimitiveCount(spheres.size());
-    asCreate.setMaxVertexCount(0);
-    asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
-
-    // Building part
-    vk::DeviceAddress aabbAddress = device.getBufferAddressKHR({aabbBuffer});
-
-    vk::AccelerationStructureGeometryAabbsDataKHR aabbsData;
-    aabbsData.setData(aabbAddress);
-    aabbsData.setStride(sizeof(Aabb));
-
-    // Setting up the build info of the acceleration
-    vk::AccelerationStructureGeometryKHR asGeom;
-    asGeom.setGeometryType(asCreate.geometryType);
-    asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
-    asGeom.geometry.setAabbs(aabbsData);
-
-    // The primitive itself
-    vk::AccelerationStructureBuildOffsetInfoKHR offset;
-    offset.setFirstVertex(0);
-    offset.setPrimitiveCount(asCreate.maxPrimitiveCount);
-    offset.setPrimitiveOffset(0);
-    offset.setTransformOffset(0);
-
-    // Our blas is only one geometry, but could be made of many geometries
-    nvvkpp::RaytracingBuilderKHR::Blas blas{};
-    blas.asGeometry.emplace_back(asGeom);
-    blas.asCreateGeometryInfo.emplace_back(asCreate);
-    blas.asBuildOffsetInfo.emplace_back(offset);
-
-    return blas;
-}
-
 void SceneLoader::createBottomLevelAS() {
     allBlas.clear();
     allBlas.reserve(models.size());
@@ -1080,14 +1044,14 @@ void SceneLoader::createBottomLevelAS() {
     }
 
     if (!spheres.empty()) {
-        allBlas.emplace_back(spheresToBlas());
+        spheresIndex = allBlas.size();
+        allBlas.emplace_back(spheresToBlas(device, spheres.size(), aabbBuffer));
     }
 
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
 }
 
 void SceneLoader::createTopLevelAS() {
-    std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
     tlas.reserve(models.size() + 1);
 
     for (int i = 0; i < static_cast<int>(instances.size()); ++i) {
@@ -1107,7 +1071,7 @@ void SceneLoader::createTopLevelAS() {
         nvvkpp::RaytracingBuilderKHR::Instance spheresInst;
         spheresInst.transform = glm::value_ptr(glm::mat4(1.0f));
         spheresInst.instanceId = instances.size();
-        spheresInst.blasId = models.size(); // After models
+        spheresInst.blasId = spheresIndex;
         spheresInst.flags = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
         spheresInst.hitGroupId = 1;
         spheresInst.mask = 0xFF;
@@ -1159,4 +1123,8 @@ void SceneLoader::cleanup() {
 
 size_t SceneLoader::getModelCount() {
     return models.size();
+}
+
+uint32_t SceneLoader::getSpheresIndex() const {
+    return spheresIndex;
 }

@@ -27,6 +27,7 @@ struct pushConstant
     bool enableNEE;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
+    bool showIrradianceCache;
 };
 
 struct sphere {
@@ -39,4 +40,19 @@ struct sphere {
 struct aabb {
     vec3 min;
     vec3 max;
+};
+
+struct updateCommandsHeader {
+    uint maxCommands;
+    uint nextCommandSlot;
+    uint nextSphereSlot;
+    uint maxSpheres;
+};
+
+struct updateCommand {
+    vec3 center;
+    float radius;
+    bool isFilled;
+    bool isModify;
+    uint iSphere;
 };

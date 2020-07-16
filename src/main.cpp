@@ -7,12 +7,7 @@ int main() {
     const int HEIGHT = 512;
     RayTracingApp app(WIDTH, HEIGHT);
 
-    try {
-        app.run();
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
+    app.run();
     app.cleanup();
 
     return EXIT_SUCCESS;

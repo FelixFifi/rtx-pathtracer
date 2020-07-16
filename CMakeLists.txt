@@ -31,7 +31,9 @@ add_executable(rtx_raytracer
         src/SceneLoader.cpp
         src/WeightedSampler.cpp
         src/CommonOps.cpp
-        ${EXTERNAL} src/MitsubaXML.h)
+        src/IrradianceCache.cpp
+        src/Sphere.cpp
+        ${EXTERNAL})
 
 target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS} /usr/local/lib/libIlmImf-2_5.so /usr/local/lib/libHalf-2_5.so)
 
