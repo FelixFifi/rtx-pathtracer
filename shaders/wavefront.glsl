@@ -37,6 +37,7 @@ struct Light {
     float sampleProb;
     float area;
     bool isSphere;
+    bool isEnvMap;
 };
 
 struct FaceSample {

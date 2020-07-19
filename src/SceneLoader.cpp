@@ -353,6 +353,10 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
 
             textures[0].sampler = device.createSampler(samplerCreateInfo);
 
+            Light light;
+            light.isEnvMap = true;
+
+            lights.push_back(light);
         }
     }
 }
@@ -735,8 +739,8 @@ void SceneLoader::createLightsBuffers() {
 }
 
 bool lightCompareModelsFirst(Light l1, Light l2) {
-    bool isModel1 = !(l1.isPointLight || l1.isSphere);
-    bool isModel2 = !(l2.isPointLight || l2.isSphere);
+    bool isModel1 = !(l1.isPointLight || l1.isSphere || l1.isEnvMap);
+    bool isModel2 = !(l2.isPointLight || l2.isSphere || l1.isEnvMap);
 
     return isModel1 || !isModel2;
 }
@@ -763,7 +767,7 @@ void SceneLoader::createLightSamplersBuffer() {
 std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
     std::vector<FaceSample> randomTriIndicesPerLight;
     for (auto &light : lights) {
-        if (light.isPointLight) {
+        if (light.isPointLight || light.isEnvMap) {
             continue;
         } else if (light.isSphere) {
             float radius = spheres[light.instanceIndex].radius;

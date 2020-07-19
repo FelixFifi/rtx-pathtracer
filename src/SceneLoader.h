@@ -67,6 +67,7 @@ struct alignas(16) Light {
     float sampleProb;
     float area;
     int isSphere;
+    int isEnvMap = 0;
 };
 
 struct FaceSample {
@@ -103,6 +104,8 @@ private:
     std::vector<std::vector<int>> emissiveFacesPerModel;
     std::vector<Texture> textures;
     std::map<std::string, int> pathTextureIdMapping;
+
+    bool hasEnvMap = false;
 
     uint32_t spheresIndex = -1;
 public:

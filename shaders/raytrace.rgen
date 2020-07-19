@@ -10,6 +10,7 @@
 #include "random.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
+#define M_INV_2PI 1.0 / (2 * M_PI)
 #define E 2.7182818284590452353602874713527
 
 #define MAT_DIFFUSE 0
@@ -257,7 +258,7 @@ float powerHeuristic(in float pdf1, in float pdf2) {
  * @param lightDistance
  * @return
  */
-float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out float lightDistance) {
+float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 lightColor, out float lightDistance) {
     // Next event estimation
     // Sample random light
 
@@ -266,6 +267,7 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
     Light light;
 
     iRandomLight = getRandomInteger(SIZE_LIGHT_RANDOM - 1);
+
     iLight = randomLigthIndex[iRandomLight];
     light = lights[iLight];
 
@@ -295,6 +297,20 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
 
         return light.sampleProb * lightDistance * lightDistance /
         cosThetaLight / light.area;
+    }  else if (light.isEnvMap) {
+        // Env Map
+        vec3 lightDir = randomInHemisphere(normal);
+
+
+        float atan = atan(lightDir.x, -lightDir.z);
+        float u = atan * M_INV_2PI;
+        float v = acos(lightDir.y) / M_PI;
+
+        vec2 envMapUV = vec2(u, v);
+        lightColor = texture(textureSamplers[0], envMapUV).xyz;
+        lightDistance = tMax;
+
+        return light.sampleProb * 2 * M_PI;
     } else {
         // Area light
         int iModel = instanceInfos[light.instanceIndex].modelIndex;
@@ -469,7 +485,7 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFa
     }
 }
 
-vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
+vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal) {
     switch (mat.type) {
         case MAT_DIFFUSE:
         case MAT_PHONG:
@@ -481,16 +497,14 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
         return vec3(0, 0, 0);
     }
 
-
     vec3 neeResult = vec3(0, 0, 0);
 
     // Sample random light
     vec3 lightDir;
     vec3 lightColor;
     float lightDistance;
-    float pdfLights = sampleLights(origin, lightDir, lightColor, lightDistance);
+    float pdfLights = sampleLights(origin, normal, lightDir, lightColor, lightDistance);
 
-    vec3 normal = info.normal;
     vec2 textureUV = info.textureUV;
 
     // Check if shadowed
@@ -573,6 +587,7 @@ bool hasDiscreteDirection(Material mat) {
 
 void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
     const int n = 10;
+    cache[cacheIndex].normal = normal;
 
     vec3 color = vec3(0, 0, 0);
     for (int j = 1; j < n; j++) {
@@ -582,7 +597,7 @@ void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
-            bool follow = false;
+            bool follow = true;
             int followCount = 0;
 
             vec3 throughput = vec3(1.0, 1.0, 1.0);
@@ -613,13 +628,17 @@ void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
                         vec3 newDirection;
                         float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
 
+                        if (pdf <= 0.0) {
+                            break;
+                        }
+
                         throughput *= evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
 
                         direction = newDirection;
                         followCount++;
                     } else {
                         for (int i = 0; i < 10; i++) {
-                            color += 0.1 * throughput * nextEventEstimation(mat, origin, direction);
+                            color += 0.1 * throughput * nextEventEstimation(mat, origin, direction, normal);
                         }
                         follow = false;
                     }
@@ -628,7 +647,7 @@ void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
         }
     }
 
-    cache[cacheIndex].color = color * 10 / (2 * n * n);
+    cache[cacheIndex].color = color / (2 * n * n);
 }
 
 void main() {
@@ -687,6 +706,12 @@ void main() {
                 );
 
                 if (!infoIrradiance.isMiss) {
+//                    if (dot(direction, cache[infoIrradiance.instanceIndex].normal) > 0) {
+//                        result = vec3(1, 0, 0);
+//                        iSample = samplesPerPixel;
+//                        break;
+//                    }
+
                     result = cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
                     iSample = samplesPerPixel;
                     break;
@@ -707,8 +732,8 @@ void main() {
             vec2 textureUV = info.textureUV;
             float cosThetaWi = -dot(direction, normal);
 
-            if (pushC.enableNEE && lightCount > 0) {
-                sampleResult += throughput * nextEventEstimation(mat, origin, direction);
+            if (pushC.enableNEE) {
+                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
             }
 
             switch (mat.type) {

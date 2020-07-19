@@ -15,7 +15,7 @@ layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 void main()
 {
     info.normal = -gl_WorldRayDirectionEXT;
-    info.t = -1.0;
+    info.t = gl_RayTmaxEXT;
     info.isMiss = true;
 
     vec3 udir = normalize(gl_WorldRayDirectionEXT);
