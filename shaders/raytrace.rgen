@@ -20,7 +20,7 @@
 #define MAT_CONDUCTOR 5
 #define MAT_ROUGH_CONDUCTOR 6
 
-
+#define MAX_DISCRETE_FOLLOW 5
 
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
@@ -353,7 +353,7 @@ float sampleLights(in vec3 origin, out vec3 lightDir, out vec3 lightColor, out f
  * @param vec3
  * @return pdf
  */
-float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 newDirection) {
+float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool frontFace, out vec3 newDirection) {
     switch (mat.type) {
         case MAT_ROUGH_CONDUCTOR:
         vec3 worldM = randomBeckmannNormal(mat, normal);
@@ -392,6 +392,31 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 ne
             return pdfBSDF(mat, normal, -direction, newDirection);
         }
 
+
+        case MAT_SPECULAR:
+        case MAT_CONDUCTOR:
+        newDirection = reflect(direction, normal);
+        return 1.0;
+
+        case MAT_DIELECTRIC:
+        float eta = mat.refractionIndexInv;
+
+        if (!frontFace) {
+            eta = mat.refractionIndex;
+        }
+        float cosTheta = dot(-direction, normal);
+        float fresnel = fresnel(eta, cosTheta);
+
+        if (rnd() > fresnel) {
+            // Refract
+            newDirection = refract(direction, normal, eta);
+            return 1.0 - fresnel;
+        } else {
+            // Reflect
+            newDirection = reflect(direction, normal);
+            return fresnel;
+        }
+
         case MAT_DIFFUSE:
         default :
         // Cosine Hemisphere
@@ -400,7 +425,10 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, out vec3 ne
     }
 }
 
-vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo) {
+/**
+ * For discrete direction material, assume that wo is one of the correct directions
+ */
+vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFace) {
     switch (mat.type) {
         case MAT_DIFFUSE:
         case MAT_PHONG:
@@ -409,6 +437,32 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo) {
 
         case MAT_ROUGH_CONDUCTOR:
         return roughConductor(mat, normal, wi, wo);
+
+        case MAT_DIELECTRIC:
+        {
+            float cosTheta = dot(normal, wo);
+
+            float eta = mat.refractionIndexInv;
+
+            if (!frontFace) {
+                eta = mat.refractionIndex;
+            }
+
+            if (cosTheta < 0) {
+                // Refraction
+                return mat.specular * (1 - fresnel(eta, cosTheta));
+            } else {
+                // Reflect
+                return mat.specular * fresnel(eta, cosTheta);
+            }
+        }
+        case MAT_CONDUCTOR:
+        {
+            float cosTheta = dot(wi, normal);
+            return fresnelConductor(cosTheta, mat.eta, mat.k).xxx;
+        }
+        case MAT_SPECULAR:
+        return mat.specular;
 
         default :
         return vec3(0, 0, 0);
@@ -460,10 +514,10 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
         if (pushC.enableMIS) {
             // MIS
             float pdfMat = pdfBSDF(mat, normal, -direction, lightDir);
-            neeResult += evalBsdf(mat, textureUV, normal, -direction, lightDir) *
+            neeResult += evalBsdf(mat, textureUV, normal, -direction, lightDir, info.isFrontFace) *
             lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
         } else {
-            neeResult = evalBsdf(mat, textureUV, normal, -direction, lightDir)
+            neeResult = evalBsdf(mat, textureUV, normal, -direction, lightDir, info.isFrontFace)
             * lightColor / pdfLights;
         }
     }
@@ -471,7 +525,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
     if (pushC.enableMIS) {
         // Direct light check with BSDF sample
         vec3 bsdfDir;
-        float pdfMat = sampleBSDF(mat, direction, normal, bsdfDir);
+        float pdfMat = sampleBSDF(mat, direction, normal, info.isFrontFace, bsdfDir);
 
         if (pdfMat > 0)  {
             traceRayEXT(topLevelAS, // acceleration structure
@@ -496,7 +550,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
                 lightColor = matSample.lightColor;
                 pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
 
-                neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir) *
+                neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir, info.isFrontFace) *
                 lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
             }
 
@@ -506,37 +560,75 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction) {
     return neeResult;
 }
 
-void calculateCacheData(vec3 origin, vec3 normal, uint cacheIndex) {
-    const int n = 5;
+bool hasDiscreteDirection(Material mat) {
+    switch (mat.type) {
+        case MAT_DIELECTRIC:
+        case MAT_SPECULAR:
+        case MAT_CONDUCTOR:
+        return true;
+        default :
+        return false;
+    }
+}
+
+void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
+    const int n = 10;
 
     vec3 color = vec3(0, 0, 0);
     for (int j = 1; j < n; j++) {
         for (int k = 1; k < 2 * n; k++) {
-            float theta = asin( sqrt( (j - rnd()) / n));
+            float theta = asin(sqrt((j - rnd()) / n));
             float phi = M_PI * (k - rnd()) / n;
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
-            traceRayEXT(topLevelAS, // acceleration structure
-            rayFlags, // rayFlags
-            0xFF, // cullMask
-            0, // sbtRecordOffset
-            0, // sbtRecordStride
-            0, // missIndex
-            origin.xyz, // ray origin
-            tMin, // ray min range
-            direction.xyz, // ray direction
-            tMax, // ray max range
-            0// payload (location = 0)
-            );
+            bool follow = false;
+            int followCount = 0;
 
-            if (info.isMiss) {
-                color += vec3(1,1,1);
-            }
+            vec3 throughput = vec3(1.0, 1.0, 1.0);
+
+            do {
+                traceRayEXT(topLevelAS, // acceleration structure
+                rayFlags, // rayFlags
+                0xFF, // cullMask
+                0, // sbtRecordOffset
+                0, // sbtRecordStride
+                0, // missIndex
+                origin.xyz, // ray origin
+                tMin, // ray min range
+                direction.xyz, // ray direction
+                10, // ray max range
+                0// payload (location = 0)
+                );
+
+
+                if (info.isMiss) {
+                    color += throughput * info.missColor;
+                    follow = false;
+                } else {
+                    Material mat = mats[info.matIndex];
+                    origin = info.worldPos;
+                    normal = info.normal;
+                    if (hasDiscreteDirection(mat)) {
+                        vec3 newDirection;
+                        float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+
+                        throughput *= evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
+
+                        direction = newDirection;
+                        followCount++;
+                    } else {
+                        for (int i = 0; i < 10; i++) {
+                            color += 0.1 * throughput * nextEventEstimation(mat, origin, direction);
+                        }
+                        follow = false;
+                    }
+                }
+            } while (follow && followCount <= MAX_DISCRETE_FOLLOW);
         }
     }
 
-    cache[cacheIndex].color = color / (2 * n * n);
+    cache[cacheIndex].color = color * 10 / (2 * n * n);
 }
 
 void main() {
@@ -610,12 +702,6 @@ void main() {
 
             origin = info.worldPos;
 
-            bool frontFace = true;
-            if (dot(direction, info.normal) > 0.0) {
-                info.normal = -info.normal;
-                frontFace = false;
-            }
-
             Material mat = mats[info.matIndex];
             vec3 normal = info.normal;
             vec2 textureUV = info.textureUV;
@@ -650,17 +736,13 @@ void main() {
 
                 case MAT_PHONG:// Phong
                 vec3 newDirection;
-                float pdf = sampleBSDF(mat, direction, normal, newDirection);
+                float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
 
                 // Absorbed rays
                 if (pdf == 0) {
                     iDepth = maxDepth + 1;
                     break;
                 }
-
-                normal = normalize(normal);
-                direction = normalize(direction);
-                newDirection = normalize(newDirection);
 
                 throughput *= phong(mat, textureUV, normal, -direction, newDirection) / pdf;
 
@@ -682,7 +764,7 @@ void main() {
 
                     float eta = mat.refractionIndexInv;
 
-                    if (!frontFace) {
+                    if (!info.isFrontFace) {
                         eta = mat.refractionIndex;
                     }
                     float cosTheta = dot(-direction, normal);

@@ -5,7 +5,8 @@ struct hitInfo
     vec2 textureUV;
     int matIndex;
     float t;
-    bool isMiss;// TODO: Find more consistent handling of miss
+    bool isMiss;
+    bool isFrontFace;
     vec3 missColor;
     uint instanceIndex;
 };

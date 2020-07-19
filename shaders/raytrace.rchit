@@ -40,8 +40,15 @@ void main()
 
     vec2 textureUV = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
 
+    if (dot(gl_WorldRayDirectionEXT, normal) < 0) {
+        info.isFrontFace = true;
+        info.normal = normal;
+    } else {
+        info.isFrontFace = false;
+        info.normal = -normal;
+    }
+
     info.worldPos = worldPos;
-    info.normal = normal;
     info.textureUV = textureUV;
     info.matIndex = v0.materialIndex;
     info.t = gl_HitTEXT;
