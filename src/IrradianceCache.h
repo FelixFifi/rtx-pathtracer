@@ -18,12 +18,14 @@
 struct CacheHeader {
     uint32_t nextCacheSlot = 0;
     uint32_t maxCaches;
+    uint32_t nextUpdateSlot = 0;
 };
 
 struct CacheData {
     glm::vec3 color;
     glm::vec3 normal;
-    float harmonicR;
+    float harmonicR = -1;
+    uint numUpdates = 0;
 };
 
 class IrradianceCache {

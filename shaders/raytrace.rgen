@@ -603,11 +603,10 @@ bool hasDiscreteDirection(Material mat) {
 }
 
 /**
-* returns the radius of the sphere
+* returns the harmonicR
 */
-float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex, out vec3 calculatedColor) {
+float calculateCacheData(uint cacheIndex, in vec3 origin, in vec3 normal, out vec3 calculatedColor) {
     const int n = 20;
-    cache[cacheIndex].normal = normal;
 
     float invDistanceSum = 0;
     int numDistances = 0;
@@ -683,7 +682,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex, out ve
         }
     }
 
-    cache[cacheIndex].color = M_PI * color / (2 * n * n);
+    calculatedColor = M_PI * color / (2 * n * n);
 
     float harmonicR;
     if (invDistanceSum == 0 || numDistances == 0) {
@@ -692,9 +691,61 @@ float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex, out ve
         harmonicR = 1.0 / (invDistanceSum / numDistances);
     }
 
-    cache[cacheIndex].harmonicR = harmonicR;
+    return harmonicR;
+}
 
-    return pushC.irradianceA * harmonicR;
+/**
+* Updates color and radius of cache entry
+*/
+void updateIrradianceCache() {
+    uint cacheIndex = atomicAdd(header.nextUpdateSlot, 1);
+    if (cacheIndex >= header.nextCacheSlot) {
+        header.nextUpdateSlot = 0;
+        return;
+    }
+
+    if (cache[cacheIndex].numUpdates < 1) {
+        return;
+    }
+
+    vec3 calculatedColor;
+    float harmonicR = calculateCacheData(cacheIndex, cacheSpheres[cacheIndex].center, cache[cacheIndex].normal, calculatedColor);
+
+    uint numUpdates = cache[cacheIndex].numUpdates;
+
+    float a = numUpdates / (numUpdates + 1);
+    cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
+    float mixedHarmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
+    cache[cacheIndex].harmonicR = mixedHarmonicR;
+
+    float radius = pushC.irradianceA * harmonicR;
+
+    cacheSpheres[cacheIndex].radius = radius;
+    cacheAabbs[cacheIndex].min = cacheSpheres[cacheIndex].center - radius.xxx;
+    cacheAabbs[cacheIndex].max = cacheSpheres[cacheIndex].center + radius.xxx;
+}
+
+bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
+    uint cacheIndex = atomicAdd(header.nextCacheSlot, 1);
+
+    if (cacheIndex > header.maxCaches) {
+        return false;
+    }
+
+    cache[cacheIndex].normal = normal;
+    float harmonicR = calculateCacheData(cacheIndex, origin, normal, calculatedColor);
+    cache[cacheIndex].color = calculatedColor;
+    cache[cacheIndex].harmonicR = harmonicR;
+    cache[cacheIndex].numUpdates = 1;
+
+    cacheSpheres[cacheIndex].center = origin;
+
+    float radius = pushC.irradianceA * harmonicR;
+    cacheSpheres[cacheIndex].radius = pushC.irradianceA * harmonicR;
+    cacheAabbs[cacheIndex].min = origin - radius.xxx;
+    cacheAabbs[cacheIndex].max = origin + radius.xxx;
+
+    return true;
 }
 
 /**
@@ -741,6 +792,9 @@ void main() {
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
+    if (rnd() < 0.0001) {
+        updateIrradianceCache();
+    }
 
 
     const int samplesPerPixel = pushC.samplesPerPixel;
@@ -840,18 +894,10 @@ void main() {
                             // All irradiance cache values are only available in the next frame,
                             // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
 
-                            if (!pushC.enableNEE) {
-                                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
-                            }
-
-                            uint iCache = atomicAdd(header.nextCacheSlot, 1);
-                            if (iCache < header.maxCaches) {
-                                cacheSpheres[iCache].center = origin;
-                                float radius = calculateCacheData(origin, normal, iCache, irradianceColor);
-
-                                cacheSpheres[iCache].radius = radius;
-                                cacheAabbs[iCache].min = origin - radius.xxx;
-                                cacheAabbs[iCache].max = origin + radius.xxx;
+                            if (createIrradianceCache(origin, normal, irradianceColor)) {
+                                if (!pushC.enableNEE) {
+                                    sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                                }
 
                                 sampleResult += throughput * diffuse(mat, textureUV, normal) * irradianceColor;
 

@@ -48,12 +48,14 @@ struct aabb {
 struct cacheHeader {
     uint nextCacheSlot;
     uint maxCaches;
+    uint nextUpdateSlot;
 };
 
 struct cacheData {
     vec3 color;
     vec3 normal;
     float harmonicR;
+    uint numUpdates;
 };
 
 #define MAX_CACHES 10
