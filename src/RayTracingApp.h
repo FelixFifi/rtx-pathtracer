@@ -38,9 +38,9 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
-        "scenes/matpreview.xml",
         "scenes/mi.xml",
         "scenes/veach-mis.json",
         "scenes/cornell-dielectric-path.json",
@@ -75,13 +75,15 @@ public:
         uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 15;
+        int maxDepth = 1;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
         int enableAverageInsteadOfMix = 0;
-        int enableMIS = 1;
+        int enableMIS = 0;
         int showIrradianceCache = 0;
+        int useIrradianceCache = 0;
+        float irradianceA = 0.5;
     } rtPushConstants;
 
 private:
@@ -91,7 +93,7 @@ private:
     SceneLoader sceneLoader;
 
     bool autoRotate = false;
-    bool accumulateResults = true;
+    bool accumulateResults = false;
     bool hasInputChanged = false;
 
     bool takePicture = false;

@@ -240,14 +240,15 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorBufferInfo updateCommandsInfo;
     vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
     auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, updateCommandsInfo, asInfo,
-                                                                   irradianceSpheresBufferInfo, irradianceCacheBufferInfo);
+                                                                   irradianceSpheresBufferInfo,
+                                                                   irradianceCacheBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
-                                                                                0,
-                                                                                1,
-                                                                                vk::DescriptorType::eStorageImage,
-                                                                                &accumulateImageInfo,
-                                                                                nullptr, nullptr);
+                                                                               0,
+                                                                               1,
+                                                                               vk::DescriptorType::eStorageImage,
+                                                                               &accumulateImageInfo,
+                                                                               nullptr, nullptr);
     std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 5> descriptorWrites = {
             vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                    vk::DescriptorType::eUniformBuffer, nullptr,
@@ -367,7 +368,9 @@ void RayTracingApp::createRtPipeline() {
     auto sphereIntCode = readFile("shaders/raytrace.sphere.rint.spv");
     auto sphereChitCode = readFile("shaders/raytrace.sphere.rchit.spv");
     auto irradianceIntCode = readFile("shaders/raytrace.irradiance.rint.spv");
-    auto irradianceChitCode = readFile("shaders/raytrace.irradiance.rchit.spv");
+    auto irradianceAhitCode = readFile("shaders/raytrace.irradiance.rahit.spv");
+    auto irradianceVisualizeIntCode = readFile("shaders/raytrace.irradiance.visualize.rint.spv");
+    auto irradianceVisualizeChitCode = readFile("shaders/raytrace.irradiance.visualize.rchit.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -377,7 +380,9 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule sphereIntShaderModule = vulkanOps->createShaderModule(sphereIntCode);
     vk::ShaderModule sphereChitShaderModule = vulkanOps->createShaderModule(sphereChitCode);
     vk::ShaderModule irradianceIntShaderModule = vulkanOps->createShaderModule(irradianceIntCode);
-    vk::ShaderModule irradianceChitShaderModule = vulkanOps->createShaderModule(irradianceChitCode);
+    vk::ShaderModule irradianceAhitShaderModule = vulkanOps->createShaderModule(irradianceAhitCode);
+    vk::ShaderModule irradianceVisualizeIntShaderModule = vulkanOps->createShaderModule(irradianceVisualizeIntCode);
+    vk::ShaderModule irradianceVisualizeChitShaderModule = vulkanOps->createShaderModule(irradianceVisualizeChitCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -430,16 +435,27 @@ void RayTracingApp::createRtPipeline() {
     hg1.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg1);
 
-    // Hit Group 2 - Intersection + Closest Hit
+    // Hit Group 2 - Irradiance Intersection + Closest Hit
     vk::RayTracingShaderGroupCreateInfoKHR hg2{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
                                                VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
                                                VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
-    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, irradianceChitShaderModule, "main"});
-    hg2.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+    stages.push_back({{}, vk::ShaderStageFlagBits::eAnyHitKHR, irradianceAhitShaderModule, "main"});
+    hg2.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
 
     stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, irradianceIntShaderModule, "main"});
     hg2.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg2);
+
+    // Hit Group 3 - Irradiance visualization Intersection + Closest Hit
+    vk::RayTracingShaderGroupCreateInfoKHR hg3{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, irradianceVisualizeChitShaderModule, "main"});
+    hg3.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, irradianceVisualizeIntShaderModule, "main"});
+    hg3.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg3);
 
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
@@ -480,7 +496,9 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(sphereIntShaderModule);
     device.destroy(sphereChitShaderModule);
     device.destroy(irradianceIntShaderModule);
-    device.destroy(irradianceChitShaderModule);
+    device.destroy(irradianceAhitShaderModule);
+    device.destroy(irradianceVisualizeIntShaderModule);
+    device.destroy(irradianceVisualizeChitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -521,6 +539,9 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
     hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
+    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
+    hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
 
     ImGui::Checkbox("Take picture", &takePicture);
 

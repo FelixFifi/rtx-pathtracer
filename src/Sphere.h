@@ -32,6 +32,7 @@ struct alignas(16) Sphere {
 };
 
 
-nvvkpp::RaytracingBuilderKHR::Blas spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer);
+nvvkpp::RaytracingBuilderKHR::Blas
+spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer, vk::GeometryFlagBitsKHR flags);
 
 #endif //RTX_RAYTRACER_SPHERE_H

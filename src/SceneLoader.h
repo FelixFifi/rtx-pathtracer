@@ -36,6 +36,13 @@ enum EMatType {
     eRoughConductor = 6
 };
 
+enum ELightType {
+    eArea = 0,
+    ePointLight = 1,
+    eSphere = 2,
+    eEnvMap = 3,
+};
+
 struct alignas(16) Material {
     alignas(16) glm::vec3 lightColor;
     alignas(16) glm::vec3 diffuse;
@@ -62,12 +69,10 @@ struct alignas(16) Instance {
 struct alignas(16) Light {
     alignas(16) glm::vec3 color; // Does not need to be set for area lights. Is taken from material
     alignas(16) glm::vec3 pos; // Only for point lights
-    int isPointLight; // Bool as integer, because glsl uses ints to represent booleans
     uint instanceIndex;
     float sampleProb;
     float area;
-    int isSphere;
-    int isEnvMap = 0;
+    int type;
 };
 
 struct FaceSample {

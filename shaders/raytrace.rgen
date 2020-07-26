@@ -21,6 +21,11 @@
 #define MAT_CONDUCTOR 5
 #define MAT_ROUGH_CONDUCTOR 6
 
+#define LIGHT_AREA 0
+#define LIGHT_POINT_LIGHT 1
+#define LIGHT_SPHERE 2
+#define LIGHT_ENV_MAP 3
+
 #define MAX_DISCRETE_FOLLOW 5
 
 #define SIZE_LIGHT_RANDOM 10000
@@ -35,8 +40,7 @@ const uint rayFlags = 0;
 const uint shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
 //@formater:off
-layout(push_constant)
-uniform PushConstant{ pushConstant pushC; };
+layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
@@ -72,6 +76,7 @@ uniform CameraMatrices{
 layout(location = 0) rayPayloadEXT hitInfo info;
 layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
 layout(location = 2) rayPayloadEXT hitInfo infoIrradiance;
+layout(location = 3) rayPayloadEXT cacheHits cacheInfo;
 //@formatter:on
 
 
@@ -271,7 +276,7 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
     iLight = randomLigthIndex[iRandomLight];
     light = lights[iLight];
 
-    if (light.isPointLight) {
+    if (light.type == LIGHT_POINT_LIGHT) {
         // Point light
         vec3 toLight = light.pos - origin;
         lightDistance = length(toLight);
@@ -279,7 +284,7 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
 
         lightColor = light.color / (lightDistance * lightDistance);
         return light.sampleProb;
-    } else if (light.isSphere) {
+    } else if (light.type == LIGHT_SPHERE) {
         // Sphere
         sphere s = spheres[light.instanceIndex];
 
@@ -297,9 +302,9 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
 
         return light.sampleProb * lightDistance * lightDistance /
         cosThetaLight / light.area;
-    }  else if (light.isEnvMap) {
+    } else if (light.type == LIGHT_ENV_MAP) {
         // Env Map
-        vec3 lightDir = randomInHemisphere(normal);
+        lightDir = randomInHemisphere(normal);
 
 
         float atan = atan(lightDir.x, -lightDir.z);
@@ -310,6 +315,8 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
         lightColor = texture(textureSamplers[0], envMapUV).xyz;
         lightDistance = tMax;
 
+        float cosThetaLight = dot(-lightDir, normal);
+        // TODO: PDF envmap
         return light.sampleProb * 2 * M_PI;
     } else {
         // Area light
@@ -509,7 +516,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
 
     // Check if shadowed
     shadowInfo.isShadowed = true;
-    if (dot(lightDir, normal) > 0) {
+    if (dot(lightDir, normal) > 0 && pdfLights > 0) {
         traceRayEXT(topLevelAS, // acceleration structure
         shadowRayFlags, // rayFlags
         0xFF, // cullMask
@@ -519,7 +526,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
         origin.xyz, // ray origin
         tMin, // ray min range
         lightDir, // ray direction
-        lightDistance - 0.0001, // ray max range
+        lightDistance * (1 - 0.0001), // ray max range
         1// payload (location = 1)
         );
     }
@@ -585,17 +592,27 @@ bool hasDiscreteDirection(Material mat) {
     }
 }
 
-void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
+/**
+* returns the radius of the sphere
+*/
+float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
     const int n = 10;
     cache[cacheIndex].normal = normal;
 
+    float invDistanceSum = 0;
+    int numDistances = 0;
+
+    vec3 hitNormal, hitOrigin;
+
     vec3 color = vec3(0, 0, 0);
-    for (int j = 1; j < n; j++) {
-        for (int k = 1; k < 2 * n; k++) {
+    for (int j = 0; j < n; j++) {
+        for (int k = 0; k < 2 * n; k++) {
             float theta = asin(sqrt((j - rnd()) / n));
             float phi = M_PI * (k - rnd()) / n;
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
+
+            hitOrigin = origin;
 
             bool follow = true;
             int followCount = 0;
@@ -609,36 +626,45 @@ void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
                 0, // sbtRecordOffset
                 0, // sbtRecordStride
                 0, // missIndex
-                origin.xyz, // ray origin
+                hitOrigin.xyz, // ray origin
                 tMin, // ray min range
                 direction.xyz, // ray direction
-                10, // ray max range
+                tMax, // ray max range
                 0// payload (location = 0)
                 );
 
 
-                if (info.isMiss) {
+                if (info.isMiss && followCount > 0) {
                     color += throughput * info.missColor;
                     follow = false;
+                } else if (info.isMiss) {
+                    // Direct miss => does not count
+                    follow = false;
                 } else {
+                    // For average distance calculation
+                    if (followCount == 0) {
+                        invDistanceSum += 1.0 / info.t;
+                        numDistances++;
+                    }
+
                     Material mat = mats[info.matIndex];
-                    origin = info.worldPos;
-                    normal = info.normal;
+                    hitOrigin = info.worldPos;
+                    hitNormal = info.normal;
                     if (hasDiscreteDirection(mat)) {
                         vec3 newDirection;
-                        float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+                        float pdf = sampleBSDF(mat, direction, hitOrigin, info.isFrontFace, newDirection);
 
                         if (pdf <= 0.0) {
                             break;
                         }
 
-                        throughput *= evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
+                        throughput *= evalBsdf(mat, info.textureUV, hitNormal, -direction, newDirection, info.isFrontFace) / pdf;
 
                         direction = newDirection;
                         followCount++;
                     } else {
                         for (int i = 0; i < 10; i++) {
-                            color += 0.1 * throughput * nextEventEstimation(mat, origin, direction, normal);
+                            color += 0.1 * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
                         }
                         follow = false;
                     }
@@ -647,7 +673,18 @@ void calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
         }
     }
 
-    cache[cacheIndex].color = color / (2 * n * n);
+    cache[cacheIndex].color = M_PI * color / (2 * n * n);
+
+    float harmonicR;
+    if (invDistanceSum == 0 || numDistances == 0) {
+        harmonicR = tMax;
+    } else {
+        harmonicR = 1.0 / (invDistanceSum / numDistances);
+    }
+
+    cache[cacheIndex].harmonicR = harmonicR;
+
+    return pushC.irradianceA * harmonicR;
 }
 
 void main() {
@@ -695,7 +732,7 @@ void main() {
                 traceRayEXT(irradianceAS, // acceleration structure
                 rayFlags, // rayFlags
                 0xFF, // cullMask
-                0, // sbtRecordOffset
+                1, // sbtRecordOffset
                 0, // sbtRecordStride
                 0, // missIndex
                 origin.xyz, // ray origin
@@ -706,15 +743,7 @@ void main() {
                 );
 
                 if (!infoIrradiance.isMiss) {
-//                    if (dot(direction, cache[infoIrradiance.instanceIndex].normal) > 0) {
-//                        result = vec3(1, 0, 0);
-//                        iSample = samplesPerPixel;
-//                        break;
-//                    }
-
-                    result = cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
-                    iSample = samplesPerPixel;
-                    break;
+                    sampleResult += cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
                 }
             }
 
@@ -726,9 +755,44 @@ void main() {
             }
 
             origin = info.worldPos;
-
             Material mat = mats[info.matIndex];
             vec3 normal = info.normal;
+
+            if (pushC.useIrradiance) {
+                cacheInfo.nextSlot = 0;
+                cacheInfo.origin = origin;
+                cacheInfo.normal = normal;
+
+                traceRayEXT(irradianceAS, // acceleration structure
+                rayFlags, // rayFlags
+                0xFF, // cullMask
+                0, // sbtRecordOffset
+                0, // sbtRecordStride
+                0, // missIndex
+                origin.xyz, // ray origin
+                0, // ray min range
+                direction.xyz, // ray direction
+                tMin, // ray max range
+                3// payload (location = 3)
+                );
+
+                uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
+                vec3 color = vec3(0, 0, 0);
+                float sumWeight = 0;
+                for (int iCache = 0; iCache < numCaches; iCache++) {
+                    color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
+                    sumWeight += cacheInfo.weights[iCache];
+                }
+
+                if (numCaches > 0) {
+                    result = color / sumWeight;
+                }
+                result += nextEventEstimation(mat, origin, direction, normal);
+                iSample = samplesPerPixel;
+                break;
+            }
+
+
             vec2 textureUV = info.textureUV;
             float cosThetaWi = -dot(direction, normal);
 
@@ -749,13 +813,12 @@ void main() {
                     if (iCommand < header.maxCommands) {
                         header.nextCommandSlot += 1;
                         commands[iCommand].center = origin;
-                        commands[iCommand].radius = 0.1;
                         commands[iCommand].isFilled = true;
 
                         uint iCache = atomicAdd(header.nextSphereSlot, 1);
                         commands[iCommand].iSphere = iCache;
 
-                        calculateCacheData(origin, normal, iCache);
+                        commands[iCommand].radius = calculateCacheData(origin, normal, iCache);
                     }
                 }
 

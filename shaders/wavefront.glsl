@@ -32,12 +32,10 @@ struct InstanceInfo {
 struct Light {
     vec3 color;
     vec3 pos;
-    bool isPointLight;
     uint instanceIndex;
     float sampleProb;
     float area;
-    bool isSphere;
-    bool isEnvMap;
+    int type;
 };
 
 struct FaceSample {

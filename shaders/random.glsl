@@ -75,7 +75,7 @@ vec3 randomInHemisphere(vec3 normal) {
     res = normalize(res);
 
     if (dot(normal, res) < 0) {
-        res = res - normal * 2 * dot(normal, res);
+        res = reflect(res, normal);
     }
     return res;
 }

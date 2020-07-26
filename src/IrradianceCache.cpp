@@ -24,7 +24,7 @@ IrradianceCache::IrradianceCache(uint32_t maxSpheres, uint32_t maxCommands, std:
 void IrradianceCache::createAccelerationStructure() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
 
-    allBlas.emplace_back(spheresToBlas(device, maxSpheres, aabbsBuffer));
+    allBlas.emplace_back(spheresToBlas(device, maxSpheres, aabbsBuffer, vk::GeometryFlagBitsKHR::eNoDuplicateAnyHitInvocation));
 
     const vk::BuildAccelerationStructureFlagsKHR &asFlags =
             vk::BuildAccelerationStructureFlagBitsKHR::eAllowUpdate |
@@ -161,10 +161,12 @@ std::array<vk::DescriptorSetLayoutBinding, 4> IrradianceCache::getDescriptorSetL
                                              vk::ShaderStageFlagBits::eRaygenKHR};
     vk::DescriptorSetLayoutBinding bufferSpheres{12, vk::DescriptorType::eStorageBuffer, 1,
                                                  vk::ShaderStageFlagBits::eIntersectionKHR |
-                                                 vk::ShaderStageFlagBits::eClosestHitKHR};
+                                                 vk::ShaderStageFlagBits::eClosestHitKHR |
+                                                 vk::ShaderStageFlagBits::eAnyHitKHR};
     vk::DescriptorSetLayoutBinding bufferCache{13, vk::DescriptorType::eStorageBuffer, 1,
                                                  vk::ShaderStageFlagBits::eRaygenKHR |
-                                                 vk::ShaderStageFlagBits::eIntersectionKHR};
+                                                 vk::ShaderStageFlagBits::eIntersectionKHR |
+                                                 vk::ShaderStageFlagBits::eAnyHitKHR};
 
 
     return {bufferBindingUpdate, bindingAS, bufferSpheres, bufferCache};

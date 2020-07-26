@@ -14,8 +14,16 @@ void main()
     float radius = spheres[gl_PrimitiveID].radius;
 
     vec3 oc = gl_WorldRayOriginEXT - center;
+    float dotDOC = dot(gl_WorldRayDirectionEXT, oc);
+    float rootTerm = dotDOC * dotDOC - dot(oc, oc) + radius * radius;
 
-    if (length(oc) <= radius) {
-        reportIntersectionEXT(0, 0);
+    if (rootTerm < 0) {
+        return;
     }
+
+    float root = sqrt(rootTerm);
+    float t1 = - dotDOC + root;
+    float t2 = - dotDOC - root;
+    reportIntersectionEXT(t1, 0);
+    reportIntersectionEXT(t2, 0);
 }

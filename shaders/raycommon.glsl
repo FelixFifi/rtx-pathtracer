@@ -29,6 +29,8 @@ struct pushConstant
     bool enableAverageInsteadOfMix;
     bool enableMIS;
     bool showIrradianceCache;
+    bool useIrradiance;
+    float irradianceA;
 };
 
 struct sphere {
@@ -61,4 +63,15 @@ struct updateCommand {
 struct cacheData {
     vec3 color;
     vec3 normal;
+    float harmonicR;
+};
+
+#define MAX_CACHES 10
+
+struct cacheHits {
+    vec3 origin;
+    vec3 normal;
+    uint nextSlot;
+    vec3 cacheValues[MAX_CACHES];
+    float weights[MAX_CACHES];
 };

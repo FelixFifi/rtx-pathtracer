@@ -354,7 +354,7 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
             textures[0].sampler = device.createSampler(samplerCreateInfo);
 
             Light light;
-            light.isEnvMap = true;
+            light.type = ELightType::eEnvMap;
 
             lights.push_back(light);
         }
@@ -440,8 +440,7 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
 
             if (!emissiveFaces.empty()) {
                 Light light{};
-                light.isPointLight = 0;
-                light.isSphere = 0;
+                light.type = eArea;
                 light.instanceIndex = instanceIndex;
 
                 lights.push_back(light);
@@ -458,9 +457,8 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
 
             if (materials[matIndex].type == eLight) {
                 Light light{};
-                light.isPointLight = 0;
+                light.type = eSphere;
                 light.instanceIndex = spheres.size();
-                light.isSphere = 1;
 
                 lights.push_back(light);
                 sphere.iLight = lights.size() - 1;
@@ -595,7 +593,7 @@ void SceneLoader::parsePointLights(const json &j) {
 
         for (auto jLight : jLights) {
             Light light{};
-            light.isPointLight = true;
+            light.type = ePointLight;
             std::vector<float> color = jLight["color"];
             light.color = {color[0], color[1], color[2]};
 
@@ -619,7 +617,7 @@ void SceneLoader::parseInstances(const json &j, std::map<std::string, int> &name
         // if any of the model faces are emissive -> add light struct
         if (!emissiveFacesPerModel[instance.iModel].empty()) {
             Light light{};
-            light.isPointLight = false;
+            light.type = eArea;
             light.instanceIndex = instances.size();
             lights.push_back(light);
 
@@ -738,11 +736,11 @@ void SceneLoader::createLightsBuffers() {
                                      vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
 }
 
-bool lightCompareModelsFirst(Light l1, Light l2) {
-    bool isModel1 = !(l1.isPointLight || l1.isSphere || l1.isEnvMap);
-    bool isModel2 = !(l2.isPointLight || l2.isSphere || l1.isEnvMap);
+bool lightCompareAreaLightsFirst(Light l1, Light l2) {
+    bool isArea1 = l1.type == eArea;
+    bool isArea2 = l2.type == eArea;
 
-    return isModel1 || !isModel2;
+    return isArea1 || !isArea2;
 }
 
 /**
@@ -751,7 +749,7 @@ bool lightCompareModelsFirst(Light l1, Light l2) {
  */
 void SceneLoader::createLightSamplersBuffer() {
     // Sort lights, so that model lights are before spheres and point lights, as they don't need random face indices
-    std::sort(lights.begin(), lights.end(), lightCompareModelsFirst);
+    std::sort(lights.begin(), lights.end(), lightCompareAreaLightsFirst);
 
     std::vector<int> randomLightIndex = getLightSamplingVector();
 
@@ -767,9 +765,9 @@ void SceneLoader::createLightSamplersBuffer() {
 std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
     std::vector<FaceSample> randomTriIndicesPerLight;
     for (auto &light : lights) {
-        if (light.isPointLight || light.isEnvMap) {
+        if (light.type == ePointLight || light.type == eEnvMap) {
             continue;
-        } else if (light.isSphere) {
+        } else if (light.type == eSphere) {
             float radius = spheres[light.instanceIndex].radius;
 
             light.area = 4 * glm::pi<float>() * radius * radius;
@@ -811,6 +809,18 @@ std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {
 
 
     }
+
+    // Dummy data
+    if (randomTriIndicesPerLight.empty()) {
+        randomTriIndicesPerLight = std::vector<FaceSample>(SIZE_TRI_RANDOM);
+        for (int i = 0; i < SIZE_TRI_RANDOM; ++i) {
+            int sample = 0;
+
+            FaceSample faceSample{};
+            randomTriIndicesPerLight[i] = faceSample;
+        }
+    }
+
     return randomTriIndicesPerLight;
 }
 
@@ -1049,7 +1059,7 @@ void SceneLoader::createBottomLevelAS() {
 
     if (!spheres.empty()) {
         spheresIndex = allBlas.size();
-        allBlas.emplace_back(spheresToBlas(device, spheres.size(), aabbBuffer));
+        allBlas.emplace_back(spheresToBlas(device, spheres.size(), aabbBuffer, vk::GeometryFlagBitsKHR::eOpaque));
     }
 
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);

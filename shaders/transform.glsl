@@ -38,5 +38,5 @@ vec3 toWorld(vec3 v, vec3 n) {
 }
 
 vec3 sphericalToCartesian(float theta, float phi) {
-    return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), theta);
+    return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 }

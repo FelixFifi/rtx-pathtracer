@@ -4,7 +4,8 @@
 
 #include "Sphere.h"
 
-nvvkpp::RaytracingBuilderKHR::Blas spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer) {
+nvvkpp::RaytracingBuilderKHR::Blas
+spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer, vk::GeometryFlagBitsKHR flags) {
     // Setting up the creation info of acceleration structure
     vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
     asCreate.setGeometryType(vk::GeometryTypeKHR::eAabbs);
@@ -24,7 +25,7 @@ nvvkpp::RaytracingBuilderKHR::Blas spheresToBlas(vk::Device device, uint32_t sph
     // Setting up the build info of the acceleration
     vk::AccelerationStructureGeometryKHR asGeom;
     asGeom.setGeometryType(asCreate.geometryType);
-    asGeom.setFlags(vk::GeometryFlagBitsKHR::eOpaque);
+    asGeom.setFlags(flags);
     asGeom.geometry.setAabbs(aabbsData);
 
     // The primitive itself
