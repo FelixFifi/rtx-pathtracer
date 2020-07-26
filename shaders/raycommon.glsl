@@ -45,19 +45,9 @@ struct aabb {
     vec3 max;
 };
 
-struct updateCommandsHeader {
-    uint maxCommands;
-    uint nextCommandSlot;
-    uint nextSphereSlot;
-    uint maxSpheres;
-};
-
-struct updateCommand {
-    vec3 center;
-    float radius;
-    bool isFilled;
-    bool isModify;
-    uint iSphere;
+struct cacheHeader {
+    uint nextCacheSlot;
+    uint maxCaches;
 };
 
 struct cacheData {

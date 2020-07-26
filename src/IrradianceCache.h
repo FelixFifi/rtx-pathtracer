@@ -15,31 +15,20 @@
 #include "VulkanOps.h"
 #include <memory>
 
-struct UpdateCommandsHeader {
-    uint32_t maxCommands;
-    uint32_t nextCommandSlot = 0;
-    uint32_t nextSphereSlot = 0;
-    uint32_t maxSpheres;
-};
-
-struct UpdateCommad {
-    glm::vec3 center;
-    float radius;
-    int isFilled = 0;
-    int isModify;
-    uint32_t iSphere;
+struct CacheHeader {
+    uint32_t nextCacheSlot = 0;
+    uint32_t maxCaches;
 };
 
 struct CacheData {
     glm::vec3 color;
     glm::vec3 normal;
+    float harmonicR;
 };
 
 class IrradianceCache {
 private:
-    uint32_t maxSpheres;
-    uint32_t maxCommands;
-
+    uint32_t maxCaches;
 
     std::shared_ptr<VulkanOps> vulkanOps;
     nvvkpp::RaytracingBuilderKHR rtBuilder;
@@ -53,22 +42,12 @@ private:
     vk::Buffer cacheBuffer;
     vk::DeviceMemory cacheBufferMemory;
 
-    vk::Buffer updateCommandsBuffer;
-    vk::DeviceMemory updateCommandsBufferMemory;
-
-    vk::DescriptorSetLayout compSetLayout;
-    vk::DescriptorPool compPool;
-    vk::DescriptorSet compSet;
-
-    vk::PipelineLayout compPipelineLayout;
-    vk::Pipeline compPipeline;
-
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
 public:
     IrradianceCache() = default;
 
-    IrradianceCache(uint32_t maxSpheres, uint32_t maxCommands, std::shared_ptr<VulkanOps> vulkanOps,
+    IrradianceCache(uint32_t maxCaches, std::shared_ptr<VulkanOps> vulkanOps,
                     vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex);
 
     void cleanUp();
@@ -79,23 +58,17 @@ public:
 
     std::array<vk::DescriptorPoolSize, 4> getDescriptorPoolSizes();
 
-    std::array<vk::WriteDescriptorSet, 4>
+    std::array<vk::WriteDescriptorSet ,4>
     getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
-                           vk::DescriptorBufferInfo &outUpdateBufferInfo,
                            vk::WriteDescriptorSetAccelerationStructureKHR &outDescASInfo,
                            vk::DescriptorBufferInfo &outSpheresBufferInfo,
-                           vk::DescriptorBufferInfo &outCacheBufferInfo);
+                           vk::DescriptorBufferInfo &outCacheBufferInfo,
+                           vk::DescriptorBufferInfo &outAabbsBufferInfo);
 
 private:
     void createBuffers();
 
     void createAccelerationStructure();
-
-    void createComputeDescriptorSet();
-
-    void updateComputeDescriptorSet();
-
-    void createComputePipeline();
 };
 
 

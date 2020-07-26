@@ -39,7 +39,7 @@ const float tMax = 1000000.0;
 const uint rayFlags = 0;
 const uint shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
-//@formater:off
+//@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
@@ -59,11 +59,11 @@ layout(binding = 6, set = 1, std430) buffer LightSamplerBuffer{
 layout(binding = 8, set = 1, std430) buffer Spheres { sphere spheres[]; };
 layout(binding = 7, set = 1) uniform sampler2D textureSamplers[];
 layout(binding = 9, set = 1, rgba32f) uniform image2D accumulateImage;
-layout(binding = 10, set = 1, scalar) buffer UpdateCommands { updateCommandsHeader header;
-    updateCommand commands[]; };
+// Irradiance Cache
+layout(binding = 10, set = 1, scalar) buffer Aabbs { aabb cacheAabbs[]; };
 layout(binding = 11, set = 1) uniform accelerationStructureEXT irradianceAS;
 layout(binding = 12, set = 1, std430) buffer CacheSpheres { sphere cacheSpheres[]; };
-layout(binding = 13, set = 1, scalar) buffer Cache { cacheData cache[]; };
+layout(binding = 13, set = 1, scalar) buffer Cache { cacheHeader header; cacheData cache[]; };
 
 layout(binding = 0, set = 1)
 uniform CameraMatrices{
@@ -152,6 +152,15 @@ float G1(in Material mat, in vec3 n, in vec3 m, in vec3 v) {
 
 float G(in Material mat, in vec3 i, in vec3 o, in vec3 n, in vec3 m) {
     return G1(mat, n, m, i) * G1(mat, n, m, o);
+}
+
+vec3 diffuse(in Material mat, in vec2 uv, in vec3 normal) {
+    if (mat.textureIdDiffuse != -1) {
+        return mat.diffuse * texture(textureSamplers[mat.textureIdDiffuse], info.textureUV).xyz /
+        M_PI;
+    } else {
+        return mat.diffuse / M_PI;
+    }
 }
 
 // Energy conserving phong method (Lewis ?)
@@ -317,7 +326,7 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
 
         float cosThetaLight = dot(-lightDir, normal);
         // TODO: PDF envmap
-        return light.sampleProb * 2 * M_PI;
+        return light.sampleProb * M_INV_2PI;
     } else {
         // Area light
         int iModel = instanceInfos[light.instanceIndex].modelIndex;
@@ -454,8 +463,9 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool fro
 vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFace) {
     switch (mat.type) {
         case MAT_DIFFUSE:
-        case MAT_PHONG:
         case MAT_LIGHT:
+        return dot(wo, normal) * diffuse(mat, uv, normal);
+        case MAT_PHONG:
         return phong(mat, uv, normal, wi, wo);
 
         case MAT_ROUGH_CONDUCTOR:
@@ -595,8 +605,8 @@ bool hasDiscreteDirection(Material mat) {
 /**
 * returns the radius of the sphere
 */
-float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
-    const int n = 10;
+float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex, out vec3 calculatedColor) {
+    const int n = 20;
     cache[cacheIndex].normal = normal;
 
     float invDistanceSum = 0;
@@ -677,7 +687,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
 
     float harmonicR;
     if (invDistanceSum == 0 || numDistances == 0) {
-        harmonicR = tMax;
+        harmonicR = 10;
     } else {
         harmonicR = 1.0 / (invDistanceSum / numDistances);
     }
@@ -685,6 +695,42 @@ float calculateCacheData(in vec3 origin, in vec3 normal, uint cacheIndex) {
     cache[cacheIndex].harmonicR = harmonicR;
 
     return pushC.irradianceA * harmonicR;
+}
+
+/**
+* returns true if cache hits found
+*/
+bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
+    cacheInfo.nextSlot = 0;
+    cacheInfo.origin = origin;
+    cacheInfo.normal = normal;
+
+    traceRayEXT(irradianceAS, // acceleration structure
+    rayFlags, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    0, // ray min range
+    normal.xyz, // ray direction
+    tMin, // ray max range
+    3// payload (location = 3)
+    );
+
+    uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
+    color = vec3(0, 0, 0);
+    float sumWeight = 0;
+    for (int iCache = 0; iCache < numCaches; iCache++) {
+        color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
+        sumWeight += cacheInfo.weights[iCache];
+    }
+
+    if (numCaches > 0) {
+        color = color / sumWeight;
+        return true;
+    }
+    return false;
 }
 
 void main() {
@@ -729,6 +775,8 @@ void main() {
             );
 
             if (pushC.showIrradianceCache && iDepth == 0) {
+                infoIrradiance.isMiss = true;
+
                 traceRayEXT(irradianceAS, // acceleration structure
                 rayFlags, // rayFlags
                 0xFF, // cullMask
@@ -744,6 +792,7 @@ void main() {
 
                 if (!infoIrradiance.isMiss) {
                     sampleResult += cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
+                    break;
                 }
             }
 
@@ -757,41 +806,6 @@ void main() {
             origin = info.worldPos;
             Material mat = mats[info.matIndex];
             vec3 normal = info.normal;
-
-            if (pushC.useIrradiance) {
-                cacheInfo.nextSlot = 0;
-                cacheInfo.origin = origin;
-                cacheInfo.normal = normal;
-
-                traceRayEXT(irradianceAS, // acceleration structure
-                rayFlags, // rayFlags
-                0xFF, // cullMask
-                0, // sbtRecordOffset
-                0, // sbtRecordStride
-                0, // missIndex
-                origin.xyz, // ray origin
-                0, // ray min range
-                direction.xyz, // ray direction
-                tMin, // ray max range
-                3// payload (location = 3)
-                );
-
-                uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
-                vec3 color = vec3(0, 0, 0);
-                float sumWeight = 0;
-                for (int iCache = 0; iCache < numCaches; iCache++) {
-                    color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
-                    sumWeight += cacheInfo.weights[iCache];
-                }
-
-                if (numCaches > 0) {
-                    result = color / sumWeight;
-                }
-                result += nextEventEstimation(mat, origin, direction, normal);
-                iSample = samplesPerPixel;
-                break;
-            }
-
 
             vec2 textureUV = info.textureUV;
             float cosThetaWi = -dot(direction, normal);
@@ -807,21 +821,59 @@ void main() {
                 }
                 // Then continue as diffuse
                 case MAT_DIFFUSE:// Diffuse
-                if (rnd() < 0.000001) {
-                    uint iCommand = atomicAdd(header.nextCommandSlot, 1);
+                {
 
-                    if (iCommand < header.maxCommands) {
-                        header.nextCommandSlot += 1;
-                        commands[iCommand].center = origin;
-                        commands[iCommand].isFilled = true;
+                    if (pushC.useIrradiance) {
+                        vec3 irradianceColor;
 
-                        uint iCache = atomicAdd(header.nextSphereSlot, 1);
-                        commands[iCommand].iSphere = iCache;
+                        if (queryIrradianceCache(origin, normal, irradianceColor)) {
+                            if (!pushC.enableNEE) {
+                                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                            }
 
-                        commands[iCommand].radius = calculateCacheData(origin, normal, iCache);
+                            sampleResult += throughput * diffuse(mat, textureUV, normal) * irradianceColor;
+
+                            // Stop ray here
+                            iDepth = maxDepth;
+                            break;
+                        } else if (rnd() < 0.0001) {
+                            // All irradiance cache values are only available in the next frame,
+                            // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
+
+                            if (!pushC.enableNEE) {
+                                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                            }
+
+                            uint iCache = atomicAdd(header.nextCacheSlot, 1);
+                            if (iCache < header.maxCaches) {
+                                cacheSpheres[iCache].center = origin;
+                                float radius = calculateCacheData(origin, normal, iCache, irradianceColor);
+
+                                cacheSpheres[iCache].radius = radius;
+                                cacheAabbs[iCache].min = origin - radius.xxx;
+                                cacheAabbs[iCache].max = origin + radius.xxx;
+
+                                sampleResult += throughput * diffuse(mat, textureUV, normal) * irradianceColor;
+
+                                // Stop ray here
+                                iDepth = maxDepth;
+                                break;
+                            }
+                        }
                     }
-                }
 
+                    vec3 newDirection;
+                    float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+
+                    float cosThetaWo = dot(newDirection, normal);
+
+                    throughput *= cosThetaWo * diffuse(mat, textureUV, normal) / pdf;
+
+                    direction = newDirection;
+                    addDirectLightHits = false;
+                    break;
+
+                }
                 case MAT_PHONG:// Phong
                 vec3 newDirection;
                 float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
@@ -845,7 +897,6 @@ void main() {
                     addDirectLightHits = true;
                     break;
                 }
-
                 case MAT_DIELECTRIC:// Transparent
                 {
                     throughput *= mat.specular;

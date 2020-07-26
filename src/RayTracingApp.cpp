@@ -104,7 +104,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
     irradianceCache.cleanUp();
-    irradianceCache = IrradianceCache(1000, 10, vulkanOps, physicalDevice, graphicsQueueIndex);
+    irradianceCache = IrradianceCache(1000, vulkanOps, physicalDevice, graphicsQueueIndex);
 
     recreateDescriptorSets();
 
@@ -230,18 +230,17 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorBufferInfo spheresBufferInfo;
     vk::DescriptorBufferInfo irradianceSpheresBufferInfo;
     vk::DescriptorBufferInfo irradianceCacheBufferInfo;
+    vk::DescriptorBufferInfo irradianceAabbsBufferInfo;
+    vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
 
     auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                           indexBufferInfos, materialBufferInfo,
                                                           instanceInfoBufferInfo, lightBufferInfo,
                                                           lightSamplersBufferInfo, textureInfos,
                                                           spheresBufferInfo);
-
-    vk::DescriptorBufferInfo updateCommandsInfo;
-    vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
-    auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, updateCommandsInfo, asInfo,
+    auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, asInfo,
                                                                    irradianceSpheresBufferInfo,
-                                                                   irradianceCacheBufferInfo);
+                                                                   irradianceCacheBufferInfo, irradianceAabbsBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                0,
