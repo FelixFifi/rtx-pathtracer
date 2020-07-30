@@ -3,19 +3,20 @@
 #extension GL_EXT_scalar_block_layout : enable
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+
 #include "wavefront.glsl"
 #include "raycommon.glsl"
 
-//@formater:off
+//@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
 layout(location = 3) rayPayloadInEXT cacheHits cacheInfo;
 layout(binding = 12, set = 1, std430) buffer Spheres { sphere cacheSpheres[]; };
 layout(binding = 13, set = 1, scalar) buffer Cache {  cacheHeader header; cacheData cache[]; };
-//@formater:on
+//@formatter:on
 
 float irradianceWeight(vec3 p, vec3 n, uint iIrradiance) {
-    return 1.0 / (length(p - cacheSpheres[iIrradiance].center)/cache[iIrradiance].harmonicR
+    return 1.0 / (length(p - cacheSpheres[iIrradiance].center) / cache[iIrradiance].harmonicR
                   + sqrt(1 - dot(n, cache[iIrradiance].normal)));
 }
 
@@ -23,15 +24,14 @@ bool visibilityCheck(vec3 p, vec3 n, uint iIrradiance) {
     return 0 <= dot(p - cacheSpheres[iIrradiance].center, (n + cache[iIrradiance].normal) / 2.0);
 }
 
-void main()
-{
+void main() {
     float weight = irradianceWeight(cacheInfo.origin, cacheInfo.normal, gl_PrimitiveID);
 
     if (isnan(weight) || isinf(weight)) {
         weight = 1000000;
     }
 
-    if (weight  <= 1.0 / pushC.irradianceA) {
+    if (weight <= 1.0 / pushC.irradianceA) {
         return;
     }
 

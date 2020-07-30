@@ -605,7 +605,7 @@ bool hasDiscreteDirection(Material mat) {
 /**
 * returns the harmonicR
 */
-float calculateCacheData(uint cacheIndex, in vec3 origin, in vec3 normal, out vec3 calculatedColor) {
+float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor) {
     const int n = 20;
 
     float invDistanceSum = 0;
@@ -686,7 +686,8 @@ float calculateCacheData(uint cacheIndex, in vec3 origin, in vec3 normal, out ve
 
     float harmonicR;
     if (invDistanceSum == 0 || numDistances == 0) {
-        harmonicR = 10;
+        // No hit => no light
+        return -1;
     } else {
         harmonicR = 1.0 / (invDistanceSum / numDistances);
     }
@@ -704,19 +705,21 @@ void updateIrradianceCache() {
         return;
     }
 
+    // unititialized
     if (cache[cacheIndex].numUpdates < 1) {
         return;
     }
 
     vec3 calculatedColor;
-    float harmonicR = calculateCacheData(cacheIndex, cacheSpheres[cacheIndex].center, cache[cacheIndex].normal, calculatedColor);
+    float harmonicR = calculateCacheData(cacheSpheres[cacheIndex].center, cache[cacheIndex].normal, calculatedColor);
 
     uint numUpdates = cache[cacheIndex].numUpdates;
 
-    float a = numUpdates / (numUpdates + 1);
+    float a = max(numUpdates / float(numUpdates + 1), 0.95);
     cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
     float mixedHarmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
     cache[cacheIndex].harmonicR = mixedHarmonicR;
+    cache[cacheIndex].numUpdates += 1;
 
     float radius = pushC.irradianceA * harmonicR;
 
@@ -726,6 +729,15 @@ void updateIrradianceCache() {
 }
 
 bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
+    if (header.nextCacheSlot > header.maxCaches) {
+        return false;
+    }
+    float harmonicR = calculateCacheData(origin, normal, calculatedColor);
+
+    if (harmonicR < 0) {
+        return false;
+    }
+
     uint cacheIndex = atomicAdd(header.nextCacheSlot, 1);
 
     if (cacheIndex > header.maxCaches) {
@@ -733,7 +745,6 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     }
 
     cache[cacheIndex].normal = normal;
-    float harmonicR = calculateCacheData(cacheIndex, origin, normal, calculatedColor);
     cache[cacheIndex].color = calculatedColor;
     cache[cacheIndex].harmonicR = harmonicR;
     cache[cacheIndex].numUpdates = 1;
