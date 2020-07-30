@@ -38,6 +38,7 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/irradianceCache.xml",
         "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
@@ -75,7 +76,7 @@ public:
         uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
-        int maxDepth = 1;
+        int maxDepth = 6;
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
@@ -84,6 +85,8 @@ public:
         int showIrradianceCache = 0;
         int useIrradianceCache = 0;
         float irradianceA = 0.5;
+        float irradianceUpdateProb = 0.0001;
+        float irradianceCreateProb = 0.0001;
     } rtPushConstants;
 
 private:

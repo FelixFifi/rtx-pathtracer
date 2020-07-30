@@ -541,6 +541,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
+    hasInputChanged |= ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.001, 0.01, "%.5f");
+    hasInputChanged |= ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.001, 0.01, "%.5f");
 
     ImGui::Checkbox("Take picture", &takePicture);
 

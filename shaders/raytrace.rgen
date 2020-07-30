@@ -154,7 +154,7 @@ float G(in Material mat, in vec3 i, in vec3 o, in vec3 n, in vec3 m) {
     return G1(mat, n, m, i) * G1(mat, n, m, o);
 }
 
-vec3 diffuse(in Material mat, in vec2 uv, in vec3 normal) {
+vec3 diffuse(in Material mat, in vec2 uv) {
     if (mat.textureIdDiffuse != -1) {
         return mat.diffuse * texture(textureSamplers[mat.textureIdDiffuse], info.textureUV).xyz /
         M_PI;
@@ -464,7 +464,7 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFa
     switch (mat.type) {
         case MAT_DIFFUSE:
         case MAT_LIGHT:
-        return dot(wo, normal) * diffuse(mat, uv, normal);
+        return dot(wo, normal) * diffuse(mat, uv);
         case MAT_PHONG:
         return phong(mat, uv, normal, wi, wo);
 
@@ -603,6 +603,42 @@ bool hasDiscreteDirection(Material mat) {
 }
 
 /**
+* returns true if cache hits found
+*/
+bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
+    cacheInfo.nextSlot = 0;
+    cacheInfo.origin = origin;
+    cacheInfo.normal = normal;
+
+    traceRayEXT(irradianceAS, // acceleration structure
+    rayFlags, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    0, // ray min range
+    normal.xyz, // ray direction
+    tMin, // ray max range
+    3// payload (location = 3)
+    );
+
+    uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
+    color = vec3(0, 0, 0);
+    float sumWeight = 0;
+    for (int iCache = 0; iCache < numCaches; iCache++) {
+        color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
+        sumWeight += cacheInfo.weights[iCache];
+    }
+
+    if (numCaches > 0) {
+        color = color / sumWeight;
+        return true;
+    }
+    return false;
+}
+
+/**
 * returns the harmonicR
 */
 float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor) {
@@ -625,6 +661,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
             bool follow = true;
             int followCount = 0;
+            bool addDirectLights = false;
 
             vec3 throughput = vec3(1.0, 1.0, 1.0);
 
@@ -643,22 +680,27 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                 );
 
 
-                if (info.isMiss && followCount > 0) {
-                    color += throughput * info.missColor;
-                    follow = false;
-                } else if (info.isMiss) {
+                if (info.isMiss) {
                     // Direct miss => does not count
+                    if (followCount > 0) {
+                        color += throughput * info.missColor;
+                    }
                     follow = false;
                 } else {
+                    Material mat = mats[info.matIndex];
+                    hitOrigin = info.worldPos;
+                    hitNormal = info.normal;
+
                     // For average distance calculation
                     if (followCount == 0) {
                         invDistanceSum += 1.0 / info.t;
                         numDistances++;
                     }
 
-                    Material mat = mats[info.matIndex];
-                    hitOrigin = info.worldPos;
-                    hitNormal = info.normal;
+                    if (addDirectLights && mat.type == MAT_LIGHT) {
+                        color += throughput * mat.lightColor;
+                    }
+
                     if (hasDiscreteDirection(mat)) {
                         vec3 newDirection;
                         float pdf = sampleBSDF(mat, direction, hitOrigin, info.isFrontFace, newDirection);
@@ -671,10 +713,21 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
                         direction = newDirection;
                         followCount++;
+                        addDirectLights = true;
                     } else {
-                        for (int i = 0; i < 10; i++) {
-                            color += 0.1 * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
+
+                        // If diffuse, then check if irradiance cache is nearby
+                        vec3 cacheColor;
+                        if (mat.type == MAT_DIFFUSE && queryIrradianceCache(hitOrigin, hitNormal, cacheColor)) {
+                            color += throughput * diffuse(mat, info.textureUV) * cacheColor;
+                        } else {
+                            int numNEE = 10;
+                            float factor = 1.0 / numNEE;
+                            for (int i = 0; i < numNEE; i++) {
+                                color += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
+                            }
                         }
+
                         follow = false;
                     }
                 }
@@ -715,17 +768,25 @@ void updateIrradianceCache() {
 
     uint numUpdates = cache[cacheIndex].numUpdates;
 
-    float a = max(numUpdates / float(numUpdates + 1), 0.95);
-    cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
-    float mixedHarmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
-    cache[cacheIndex].harmonicR = mixedHarmonicR;
-    cache[cacheIndex].numUpdates += 1;
+    float a = min(numUpdates / float(numUpdates + 1), 0.95);
 
-    float radius = pushC.irradianceA * harmonicR;
+    cache[cacheIndex].color = vec3(0.001) + mix(calculatedColor, cache[cacheIndex].color, a);
+
+    float radius;
+    if (harmonicR > 0) {
+        // harmonicR only gets updated if at least one object hit in hemisphere
+        float mixedHarmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
+        cache[cacheIndex].harmonicR = mixedHarmonicR;
+
+        radius = pushC.irradianceA * mixedHarmonicR;
+    } else {
+        radius = pushC.irradianceA * cache[cacheIndex].harmonicR;
+    }
 
     cacheSpheres[cacheIndex].radius = radius;
     cacheAabbs[cacheIndex].min = cacheSpheres[cacheIndex].center - radius.xxx;
     cacheAabbs[cacheIndex].max = cacheSpheres[cacheIndex].center + radius.xxx;
+    cache[cacheIndex].numUpdates += 1;
 }
 
 bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
@@ -759,42 +820,6 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     return true;
 }
 
-/**
-* returns true if cache hits found
-*/
-bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
-    cacheInfo.nextSlot = 0;
-    cacheInfo.origin = origin;
-    cacheInfo.normal = normal;
-
-    traceRayEXT(irradianceAS, // acceleration structure
-    rayFlags, // rayFlags
-    0xFF, // cullMask
-    0, // sbtRecordOffset
-    0, // sbtRecordStride
-    0, // missIndex
-    origin.xyz, // ray origin
-    0, // ray min range
-    normal.xyz, // ray direction
-    tMin, // ray max range
-    3// payload (location = 3)
-    );
-
-    uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
-    color = vec3(0, 0, 0);
-    float sumWeight = 0;
-    for (int iCache = 0; iCache < numCaches; iCache++) {
-        color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
-        sumWeight += cacheInfo.weights[iCache];
-    }
-
-    if (numCaches > 0) {
-        color = color / sumWeight;
-        return true;
-    }
-    return false;
-}
-
 void main() {
     // Init seed
     seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
@@ -803,7 +828,7 @@ void main() {
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
-    if (rnd() < 0.0001) {
+    if (pushC.useIrradiance && rnd() < pushC.irradianceUpdateProb) {
         updateIrradianceCache();
     }
 
@@ -896,12 +921,12 @@ void main() {
                                 sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
                             }
 
-                            sampleResult += throughput * diffuse(mat, textureUV, normal) * irradianceColor;
+                            sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
 
                             // Stop ray here
                             iDepth = maxDepth;
                             break;
-                        } else if (rnd() < 0.0001) {
+                        } else if (rnd() < pushC.irradianceCreateProb) {
                             // All irradiance cache values are only available in the next frame,
                             // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
 
@@ -910,7 +935,7 @@ void main() {
                                     sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
                                 }
 
-                                sampleResult += throughput * diffuse(mat, textureUV, normal) * irradianceColor;
+                                sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
 
                                 // Stop ray here
                                 iDepth = maxDepth;
@@ -924,7 +949,7 @@ void main() {
 
                     float cosThetaWo = dot(newDirection, normal);
 
-                    throughput *= cosThetaWo * diffuse(mat, textureUV, normal) / pdf;
+                    throughput *= cosThetaWo * diffuse(mat, textureUV) / pdf;
 
                     direction = newDirection;
                     addDirectLightHits = false;

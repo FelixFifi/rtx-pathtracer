@@ -31,6 +31,8 @@ struct pushConstant
     bool showIrradianceCache;
     bool useIrradiance;
     float irradianceA;
+    float irradianceUpdateProb;
+    float irradianceCreateProb;
 };
 
 struct sphere {

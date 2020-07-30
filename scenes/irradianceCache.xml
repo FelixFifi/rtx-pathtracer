@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<scene version="0.4.0">
+    <integrator type="path"/>
+
+    <shape type="sphere">
+        <point name="center" x="10" y="10" z="0"/>
+        <float name="radius" value=".9"/>
+
+        <emitter type="area">
+            <rgb name="radiance" value="500 500 500"/>
+        </emitter>
+
+        <bsdf type="diffuse">
+            <rgb name="reflectance" value="0,0,0"/>
+        </bsdf>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="diffuseIrradiance_floor.obj"/>
+
+        <bsdf type="diffuse">
+            <rgb name="reflectance" value="0.3 0.3 0.3"/>
+        </bsdf>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="diffuseIrradiance_rounded_box.obj"/>
+
+        <bsdf type="diffuse">
+            <rgb name="reflectance" value="0.3 0.3 0"/>
+        </bsdf>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="diffuseIrradiance_cylinder.obj"/>
+
+        <bsdf type="diffuse">
+            <rgb name="reflectance" value="0 0.3 0"/>
+        </bsdf>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="diffuseIrradiance_box.obj"/>
+
+        <bsdf type="diffuse">
+            <rgb name="reflectance" value="0.3 0 0"/>
+        </bsdf>
+    </shape>
+
+
+    <sensor type="perspective" id="Camera-camera">
+        <string name="fovAxis" value="smaller"/>
+        <float name="fov" value="45"/>
+        <transform name="toWorld">
+            <lookAt target="-3, 1, 0" origin="-3, 5, 10" up="0, 1, 0"/>
+        </transform>
+        <sampler type="independent">
+            <integer name="sampleCount" value="50"/>
+        </sampler>
+
+        <film type="hdrfilm" id="film">
+            <integer name="width" value="683"/>
+            <integer name="height" value="512"/>
+            <string name="pixelFormat" value="rgb"/>
+        </film>
+    </sensor>
+</scene>
