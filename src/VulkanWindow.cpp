@@ -319,7 +319,7 @@ void VulkanWindow::createInstance() {
     const char *name = "Hello Triangle";
     const char *engineName = "No Engine";
     vk::ApplicationInfo appInfo(name, VK_MAKE_VERSION(1, 0, 0), engineName,
-                                VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_0);
+                                VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_2);
 
 
     auto extensions = getRequiredInstanceExtensions();
