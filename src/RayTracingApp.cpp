@@ -5,6 +5,8 @@
 #include <imgui/imgui.h>
 #include <glm/gtc/random.hpp>
 #include <random>
+#include <ctime>
+#include <filesystem>
 #include "RayTracingApp.h"
 
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
@@ -73,7 +75,17 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     device.waitIdle();
 
     if (takePicture) {
-        postProcessing.saveOffscreenImage("test.exr");
+
+        std::time_t t = std::time(nullptr);   // get time now
+        std::tm *now = std::localtime(&t);
+
+        char *filepath = new char[64];
+
+        std::filesystem::create_directories("images/");
+
+        std::strftime(filepath, 64, "images/%F--%H-%M-%S.exr", now);
+
+        postProcessing.saveOffscreenImage(filepath);
         std::cout << "Wrote file" << std::endl;
         takePicture = false;
     }
@@ -545,7 +557,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
     hasInputChanged |= ImGui::Checkbox("Highlight Irradiance Cache Color",
                                        reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
-    hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale", &rtPushConstants.irradianceVisualizationScale, 0.0f, 50.0f);
+    hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale",
+                                          &rtPushConstants.irradianceVisualizationScale, 0.0f, 50.0f);
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
     hasInputChanged |= ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
                                          "%.6f");
