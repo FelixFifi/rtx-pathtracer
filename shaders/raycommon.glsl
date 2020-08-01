@@ -29,10 +29,13 @@ struct pushConstant
     bool enableAverageInsteadOfMix;
     bool enableMIS;
     bool showIrradianceCache;
+    bool showIrradianceCacheOnly;
     bool useIrradiance;
+    bool highlightIrradianceCacheColor;
     float irradianceA;
     float irradianceUpdateProb;
     float irradianceCreateProb;
+    float irradianceVisualizationScale;
 };
 
 struct sphere {

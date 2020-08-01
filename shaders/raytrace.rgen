@@ -720,13 +720,14 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                         vec3 cacheColor;
                         if (mat.type == MAT_DIFFUSE && queryIrradianceCache(hitOrigin, hitNormal, cacheColor)) {
                             color += throughput * diffuse(mat, info.textureUV) * cacheColor;
-                        } else {
-                            int numNEE = 10;
-                            float factor = 1.0 / numNEE;
-                            for (int i = 0; i < numNEE; i++) {
-                                color += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
-                            }
                         }
+
+                        int numNEE = 10;
+                        float factor = 1.0 / numNEE;
+                        for (int i = 0; i < numNEE; i++) {
+                            color += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
+                        }
+
 
                         follow = false;
                     }
@@ -770,7 +771,7 @@ void updateIrradianceCache() {
 
     float a = min(numUpdates / float(numUpdates + 1), 0.95);
 
-    cache[cacheIndex].color = vec3(0.001) + mix(calculatedColor, cache[cacheIndex].color, a);
+    cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
 
     float radius;
     if (harmonicR > 0) {
@@ -881,7 +882,7 @@ void main() {
                 );
 
                 if (!infoIrradiance.isMiss) {
-                    sampleResult += cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
+                    sampleResult += pushC.irradianceVisualizationScale * cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
                     break;
                 }
             }
@@ -900,7 +901,7 @@ void main() {
             vec2 textureUV = info.textureUV;
             float cosThetaWi = -dot(direction, normal);
 
-            if (pushC.enableNEE) {
+            if (pushC.enableNEE && !pushC.showIrradianceCacheOnly) {
                 sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
             }
 
@@ -917,11 +918,21 @@ void main() {
                         vec3 irradianceColor;
 
                         if (queryIrradianceCache(origin, normal, irradianceColor)) {
-                            if (!pushC.enableNEE) {
-                                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                            if (pushC.showIrradianceCacheOnly) {
+
+                                if (pushC.highlightIrradianceCacheColor) {
+                                    irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
+                                }
+
+                                sampleResult += pushC.irradianceVisualizationScale * throughput * irradianceColor;
+                            } else {
+                                if (!pushC.enableNEE && !pushC.showIrradianceCacheOnly) {
+                                    sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                                }
+
+                                sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
                             }
 
-                            sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
 
                             // Stop ray here
                             iDepth = maxDepth;
@@ -931,11 +942,17 @@ void main() {
                             // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
 
                             if (createIrradianceCache(origin, normal, irradianceColor)) {
-                                if (!pushC.enableNEE) {
-                                    sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                                if (pushC.showIrradianceCacheOnly) {
+                                    if (pushC.highlightIrradianceCacheColor) {
+                                        irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
+                                    }
+                                    sampleResult += pushC.irradianceVisualizationScale * throughput * irradianceColor;
+                                } else {
+                                    if (!pushC.enableNEE) {
+                                        sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
+                                    }
+                                    sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
                                 }
-
-                                sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
 
                                 // Stop ray here
                                 iDepth = maxDepth;

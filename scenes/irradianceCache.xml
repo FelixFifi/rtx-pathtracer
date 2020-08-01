@@ -8,7 +8,7 @@
         <float name="radius" value=".9"/>
 
         <emitter type="area">
-            <rgb name="radiance" value="500 500 500"/>
+            <rgb name="radiance" value="1000 1000 1000"/>
         </emitter>
 
         <bsdf type="diffuse">

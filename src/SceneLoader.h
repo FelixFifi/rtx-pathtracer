@@ -56,7 +56,7 @@ struct alignas(16) Material {
     float roughness;
     int textureIdDiffuse = -1;
     int textureIdSpecular = -1;
-    EMatType type;
+    int type;
 };
 
 struct alignas(16) Instance {

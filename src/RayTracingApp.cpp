@@ -240,7 +240,8 @@ void RayTracingApp::createDescriptorSets() {
                                                           spheresBufferInfo);
     auto irradianceWrites = irradianceCache.getWriteDescriptorSets(descriptorSet, asInfo,
                                                                    irradianceSpheresBufferInfo,
-                                                                   irradianceCacheBufferInfo, irradianceAabbsBufferInfo);
+                                                                   irradianceCacheBufferInfo,
+                                                                   irradianceAabbsBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                0,
@@ -536,13 +537,20 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
-    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
-                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
+    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
+    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache Only",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
+    hasInputChanged |= ImGui::Checkbox("Highlight Irradiance Cache Color",
+                                       reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
+    hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale", &rtPushConstants.irradianceVisualizationScale, 0.0f, 50.0f);
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
-    hasInputChanged |= ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.001, 0.01, "%.5f");
-    hasInputChanged |= ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.001, 0.01, "%.5f");
+    hasInputChanged |= ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
+                                         "%.6f");
+    hasInputChanged |= ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
+                                         "%.6f");
 
     ImGui::Checkbox("Take picture", &takePicture);
 
