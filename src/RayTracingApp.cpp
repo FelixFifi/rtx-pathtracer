@@ -104,7 +104,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
     irradianceCache.cleanUp();
-    irradianceCache = IrradianceCache(1000, vulkanOps, physicalDevice, graphicsQueueIndex);
+    irradianceCache = IrradianceCache(50000, vulkanOps, physicalDevice, graphicsQueueIndex);
 
     recreateDescriptorSets();
 

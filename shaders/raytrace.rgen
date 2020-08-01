@@ -882,7 +882,13 @@ void main() {
                 );
 
                 if (!infoIrradiance.isMiss) {
-                    sampleResult += pushC.irradianceVisualizationScale * cache[infoIrradiance.instanceIndex].color * dot(infoIrradiance.normal, -direction);
+                    vec3 irradianceColor = cache[infoIrradiance.instanceIndex].color;
+
+                    if (pushC.highlightIrradianceCacheColor) {
+                        irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
+                    }
+
+                    sampleResult += pushC.irradianceVisualizationScale * irradianceColor * dot(infoIrradiance.normal, -direction);
                     break;
                 }
             }
@@ -901,7 +907,7 @@ void main() {
             vec2 textureUV = info.textureUV;
             float cosThetaWi = -dot(direction, normal);
 
-            if (pushC.enableNEE && !pushC.showIrradianceCacheOnly) {
+            if (pushC.enableNEE && (!pushC.showIrradianceCacheOnly || !pushC.useIrradiance)) {
                 sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
             }
 

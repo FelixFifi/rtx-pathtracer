@@ -87,7 +87,7 @@ public:
         int useIrradianceCache = 0;
         int highlightIrradianceCacheColor = 0;
         float irradianceA = 0.5;
-        float irradianceUpdateProb = 0.0001;
+        float irradianceUpdateProb = 0.00001;
         float irradianceCreateProb = 0.0001;
         float irradianceVisualizationScale = 10;
     } rtPushConstants;
