@@ -1101,6 +1101,9 @@ const vk::AccelerationStructureKHR &SceneLoader::getAccelerationStructure() {
 }
 
 void SceneLoader::cleanup() {
+    if (models.empty() && spheres.empty()) {
+        return;
+    }
 
     for (auto &texture: textures) {
         texture.cleanup(device);

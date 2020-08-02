@@ -299,18 +299,27 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
 
         lightColor = mats[s.materialIndex].lightColor;
 
-
-        vec3 normal;
-        vec3 position = randomOnSphere(s, normal);
+        vec3 sphereNormal;
+        float area;
+        vec3 position;
+        if (pushC.useVisibleSphereSampling) {
+            // Only sample the visible side of the sphere
+            // => only half of the light area
+            area = light.area / 2.0;
+            position = randomOnSphereVisible(s, normal, sphereNormal);
+        } else {
+            area = light.area;
+            position = randomOnSphere(s, sphereNormal);
+        }
         vec3 toLight = position - origin;
 
         lightDistance = length(toLight);
         lightDir = normalize(toLight);
 
-        float cosThetaLight = dot(-lightDir, normal);
+        float cosThetaLight = dot(-lightDir, sphereNormal);
 
         return light.sampleProb * lightDistance * lightDistance /
-        cosThetaLight / light.area;
+        (cosThetaLight * area);
     } else if (light.type == LIGHT_ENV_MAP) {
         // Env Map
         lightDir = randomInHemisphere(normal);

@@ -103,9 +103,8 @@ void RayTracingApp::sceneSwitcher(int num) {
     int sceneCount = SCENES.size();
     int sceneIndex = std::min(num - 1, sceneCount - 1);
 
-    if (sceneLoader.getModelCount() > 0 || !sceneLoader.spheres.empty()) {
-        sceneLoader.cleanup();
-    }
+
+    sceneLoader.cleanup();
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
     sceneLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps,
@@ -564,6 +563,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                          "%.6f");
     hasInputChanged |= ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
                                          "%.6f");
+    hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
 
     ImGui::Checkbox("Take picture", &takePicture);
 

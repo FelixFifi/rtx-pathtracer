@@ -36,6 +36,7 @@ struct pushConstant
     float irradianceUpdateProb;
     float irradianceCreateProb;
     float irradianceVisualizationScale;
+    bool useVisibleSphereSampling;
 };
 
 struct sphere {

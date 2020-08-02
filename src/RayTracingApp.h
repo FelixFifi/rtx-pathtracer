@@ -90,6 +90,7 @@ public:
         float irradianceUpdateProb = 0.00001;
         float irradianceCreateProb = 0.0001;
         float irradianceVisualizationScale = 10;
+        int useVisibleSphereSampling = 1;
     } rtPushConstants;
 
 private:

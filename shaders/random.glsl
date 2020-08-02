@@ -58,7 +58,7 @@ int getRandomInteger(int max) {
 vec3 randomOnUnitSphere() {
     vec3 res;
     do {
-        res = vec3(rnd(seed), rnd(seed), rnd(seed));
+        res = vec3(getRandomNegPos(), getRandomNegPos(), getRandomNegPos());
     } while (length(res) > 1);
 
     res = normalize(res);
@@ -110,6 +110,16 @@ vec3 randomOnSphere(sphere s, out vec3 normal) {
     normal = normalize(normal);
 
     return s.center + normal * s.radius;
+}
+
+vec3 randomOnSphereVisible(sphere s, vec3 normal, out vec3 sphereNormal) {
+    sphereNormal = randomOnUnitSphere();
+
+    if (dot(normal, sphereNormal) > 0) {
+        sphereNormal *= -1;
+    }
+
+    return s.center + sphereNormal * s.radius;
 }
 
 vec3 randomBeckmannNormal(Material mat, vec3 normal) {
