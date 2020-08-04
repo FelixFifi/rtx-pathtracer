@@ -60,6 +60,8 @@ struct cacheHeader {
 struct cacheData {
     vec3 color;
     vec3 normal;
+    vec3 rotGrad;
+    vec3 transGrad;
     float harmonicR;
     uint numUpdates;
 };

@@ -24,6 +24,8 @@ struct CacheHeader {
 struct CacheData {
     glm::vec3 color;
     glm::vec3 normal;
+    glm::vec3 rotGrad;
+    glm::vec3 transGrad;
     float harmonicR = -1;
     uint numUpdates = 0;
 };

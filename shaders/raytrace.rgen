@@ -11,6 +11,7 @@
 
 #define M_PI 3.1415926535897932384626433832795
 #define M_INV_2PI 1.0 / (2 * M_PI)
+#define M_HALF_PI M_PI / 2.0
 #define E 2.7182818284590452353602874713527
 
 #define MAT_DIFFUSE 0
@@ -650,7 +651,7 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
 /**
 * returns the harmonicR
 */
-float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor) {
+float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor, out vec3 rotGrad, out vec3 transGrad) {
     const int n = 20;
 
     float invDistanceSum = 0;
@@ -658,11 +659,21 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
     vec3 hitNormal, hitOrigin;
 
+    rotGrad = vec3(0, 0, 0);
+    transGrad = vec3(0, 0, 0);
     vec3 color = vec3(0, 0, 0);
-    for (int j = 0; j < n; j++) {
-        for (int k = 0; k < 2 * n; k++) {
-            float theta = asin(sqrt((j - rnd()) / n));
-            float phi = M_PI * (k - rnd()) / n;
+    for (int k = 0; k < 2 * n; k++) {
+        float phi = M_PI * (k + rnd()) / (2 * n);
+
+        vec3 uk = toWorld(sphericalToCartesian(M_HALF_PI, phi), normal);
+        vec3 vk = toWorld(sphericalToCartesian(M_HALF_PI, 2 * M_PI * k / (2 * n) + M_HALF_PI), normal);
+        vec3 previousKLs[n];
+        float previousKRs[n];
+        float previousJR;
+        float previousJL;
+        for (int j = 0; j < n; j++) {
+            vec3 sampleColor = vec3(0, 0, 0);
+            float theta = asin(sqrt((j + rnd()) / n));
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
@@ -671,6 +682,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             bool follow = true;
             int followCount = 0;
             bool addDirectLights = false;
+            float r = tMax;
 
             vec3 throughput = vec3(1.0, 1.0, 1.0);
 
@@ -692,7 +704,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                 if (info.isMiss) {
                     // Direct miss => does not count
                     if (followCount > 0) {
-                        color += throughput * info.missColor;
+                        sampleColor += throughput * info.missColor;
                     }
                     follow = false;
                 } else {
@@ -704,10 +716,11 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                     if (followCount == 0) {
                         invDistanceSum += 1.0 / info.t;
                         numDistances++;
+                        r = info.t;
                     }
 
                     if (addDirectLights && mat.type == MAT_LIGHT) {
-                        color += throughput * mat.lightColor;
+                        sampleColor += throughput * mat.lightColor;
                     }
 
                     if (hasDiscreteDirection(mat)) {
@@ -728,13 +741,13 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                         // If diffuse, then check if irradiance cache is nearby
                         vec3 cacheColor;
                         if (mat.type == MAT_DIFFUSE && queryIrradianceCache(hitOrigin, hitNormal, cacheColor)) {
-                            color += throughput * diffuse(mat, info.textureUV) * cacheColor;
+                            sampleColor += throughput * diffuse(mat, info.textureUV) * cacheColor;
                         }
 
                         int numNEE = 10;
                         float factor = 1.0 / numNEE;
                         for (int i = 0; i < numNEE; i++) {
-                            color += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
+                            sampleColor += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
                         }
 
 
@@ -742,10 +755,35 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                     }
                 }
             } while (follow && followCount <= MAX_DISCRETE_FOLLOW);
+
+            color += sampleColor;
+
+            float L = length(sampleColor);
+            float previousJTheta = asin(sqrt(j / n));
+            float nextJTheta = asin(sqrt(j + 1 / n));
+            // Rotation gradient
+            rotGrad += -tan(theta) * L * vk;
+
+            // Translational gradient
+            if (j > 0) {
+                float cosPreviousTheta = cos(previousJTheta);
+                transGrad  += uk * 2 * M_PI / (2 * n) * sin(previousJTheta) * cosPreviousTheta * cosPreviousTheta / min(r, previousJR) * (L - previousJL);
+            }
+
+            transGrad += vk * sin(nextJTheta) - sin(previousJTheta) / min(r, previousKRs[j]) * (L - previousKLs[j]);
+
+
+            previousKLs[j] = sampleColor;
+            previousKRs[j] = r;
+            previousJL = L;
         }
     }
 
-    calculatedColor = M_PI * color / (2 * n * n);
+    float normFactor = M_PI / (2 * n * n);
+    calculatedColor = normFactor * color;
+    rotGrad *= normFactor;
+
+
 
     float harmonicR;
     if (invDistanceSum == 0 || numDistances == 0) {
@@ -773,14 +811,18 @@ void updateIrradianceCache() {
         return;
     }
 
+    vec3 rotGrad;
+    vec3 transGrad;
     vec3 calculatedColor;
-    float harmonicR = calculateCacheData(cacheSpheres[cacheIndex].center, cache[cacheIndex].normal, calculatedColor);
+    float harmonicR = calculateCacheData(cacheSpheres[cacheIndex].center, cache[cacheIndex].normal, calculatedColor, rotGrad, transGrad);
 
     uint numUpdates = cache[cacheIndex].numUpdates;
 
     float a = min(numUpdates / float(numUpdates + 1), 0.95);
 
     cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
+    cache[cacheIndex].rotGrad = mix(rotGrad, cache[cacheIndex].rotGrad, a);
+    cache[cacheIndex].transGrad = mix(transGrad, cache[cacheIndex].transGrad, a);
 
     float radius;
     if (harmonicR > 0) {
@@ -803,7 +845,9 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     if (header.nextCacheSlot > header.maxCaches) {
         return false;
     }
-    float harmonicR = calculateCacheData(origin, normal, calculatedColor);
+    vec3 rotGrad;
+    vec3 transGrad;
+    float harmonicR = calculateCacheData(origin, normal, calculatedColor, rotGrad, transGrad);
 
     if (harmonicR < 0) {
         return false;
@@ -818,6 +862,8 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     cache[cacheIndex].normal = normal;
     cache[cacheIndex].color = calculatedColor;
     cache[cacheIndex].harmonicR = harmonicR;
+    cache[cacheIndex].rotGrad = rotGrad;
+    cache[cacheIndex].transGrad = transGrad;
     cache[cacheIndex].numUpdates = 1;
 
     cacheSpheres[cacheIndex].center = origin;
