@@ -663,7 +663,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
         vec3 uk = toWorld(sphericalToCartesian(M_HALF_PI, phi), normal);
         vec3 vk = toWorld(sphericalToCartesian(M_HALF_PI, phi + M_HALF_PI), normal);
         vec3 previousVk = toWorld(sphericalToCartesian(M_HALF_PI, 2 * M_PI * k / N + M_HALF_PI), normal);
-        vec3 previousKLs[N];
+        float previousKLs[N];
         float previousKRs[N];
         float previousJR;
         float previousJL;
@@ -755,8 +755,8 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             color += sampleColor;
 
             float L = length(sampleColor);
-            float previousJTheta = asin(sqrt(j / N));
-            float nextJTheta = asin(sqrt(j + 1 / N));
+            float previousJTheta = asin(sqrt(j / float(M)));
+            float nextJTheta = asin(sqrt(j + 1 / float(M)));
             // Rotation gradient
             rotGrad += -tan(theta) * L * vk;
 
@@ -766,10 +766,11 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
                 transGrad  += uk * 2 * M_PI / N * sin(previousJTheta) * cosPreviousTheta * cosPreviousTheta / min(r, previousJR) * (L - previousJL);
             }
 
-            transGrad += previousVk * (sin(nextJTheta) - sin(previousJTheta)) / min(r, previousKRs[j]) * (L - previousKLs[j]);
+            if (k > 0) {
+                transGrad += previousVk ;// * (sin(nextJTheta) - sin(previousJTheta))/ min(r, previousKRs[j]) * (L - previousKLs[j]);
+            }
 
-
-            previousKLs[j] = sampleColor;
+            previousKLs[j] = L;
             previousKRs[j] = r;
             previousJL = L;
             previousJR = r;

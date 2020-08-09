@@ -36,10 +36,12 @@ void main() {
     }
 
     if (pushC.useIrradianceGradients) {
-        vec3 color = cache[gl_PrimitiveID].color;
-        vec3 adjustedColor = color
-            + cross(cache[gl_PrimitiveID].normal, cacheInfo.normal) * cache[gl_PrimitiveID].rotGrad
-            + (cacheInfo.origin - cacheSpheres[gl_PrimitiveID].center) * cache[gl_PrimitiveID].transGrad;
+        float E = length(cache[gl_PrimitiveID].color);
+        vec3 color = E != 0 ? normalize(cache[gl_PrimitiveID].color) : vec3(0,0,0);
+
+        vec3 adjustedColor = color * (E
+            + dot(cross(cache[gl_PrimitiveID].normal, cacheInfo.normal), cache[gl_PrimitiveID].rotGrad)
+            + dot(cacheInfo.origin - cacheSpheres[gl_PrimitiveID].center, cache[gl_PrimitiveID].transGrad));
         cacheInfo.cacheValueSum += weight * adjustedColor;
     } else {
         cacheInfo.cacheValueSum += weight * cache[gl_PrimitiveID].color;
