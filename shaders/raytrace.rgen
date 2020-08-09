@@ -652,7 +652,7 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
 * returns the harmonicR
 */
 float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor, out vec3 rotGrad, out vec3 transGrad) {
-    const int n = 20;
+    const int n = 10;
 
     float invDistanceSum = 0;
     int numDistances = 0;
@@ -776,6 +776,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             previousKLs[j] = sampleColor;
             previousKRs[j] = r;
             previousJL = L;
+            previousJR = r;
         }
     }
 
