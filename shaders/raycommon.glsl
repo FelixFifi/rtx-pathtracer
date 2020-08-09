@@ -17,8 +17,6 @@ struct shadowCheck {
 
 struct pushConstant
 {
-    vec4  skyColor1;
-    vec4  skyColor2;
     uint randomUInt;
     int   lightType;
     uint previousFrames;
@@ -36,6 +34,7 @@ struct pushConstant
     float irradianceUpdateProb;
     float irradianceCreateProb;
     float irradianceVisualizationScale;
+    bool useIrradianceGradients;
     bool useVisibleSphereSampling;
 };
 
@@ -66,12 +65,9 @@ struct cacheData {
     uint numUpdates;
 };
 
-#define MAX_CACHES 10
-
 struct cacheHits {
     vec3 origin;
     vec3 normal;
-    uint nextSlot;
-    vec3 cacheValues[MAX_CACHES];
-    float weights[MAX_CACHES];
+    float totalWeight;
+    vec3 cacheValueSum;
 };

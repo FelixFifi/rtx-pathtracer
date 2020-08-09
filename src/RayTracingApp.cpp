@@ -513,11 +513,13 @@ void RayTracingApp::createRtPipeline() {
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
-    auto groupCount = static_cast<uint64_t>(rtShaderGroups.size());
-    auto groupHandleSize = static_cast<uint64_t>(rtProperties.shaderGroupHandleSize); // Size of a program identifier
+    auto groupCount =
+            static_cast<uint32_t>(rtShaderGroups.size());
+    uint32_t groupHandleSize = rtProperties.shaderGroupHandleSize;  // Size of a program identifier
+    uint32_t baseAlignment   = rtProperties.shaderGroupBaseAlignment;  // Size of shader alignment
 
     // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
-    uint64_t sbtSize = groupCount * groupHandleSize;
+    uint32_t sbtSize = groupCount * baseAlignment;
 
     std::vector<uint8_t> shaderHandleStorage(sbtSize);
     device.getRayTracingShaderGroupHandlesKHR(rtPipeline, 0, groupCount, sbtSize,
@@ -525,9 +527,36 @@ void RayTracingApp::createRtShaderBindingTable() {
 
 
     // Write the handles in the SBT
-    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eRayTracingKHR;
+    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eRayTracingKHR | vk::BufferUsageFlagBits::eTransferDst;
     vulkanOps->createBufferFromData(shaderHandleStorage, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
+
+    vk::Buffer stagingBuffer;
+    vk::DeviceMemory stagingBufferMemory;
+
+    vulkanOps->createBuffer(sbtSize, vk::BufferUsageFlagBits::eTransferSrc,
+                            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                            stagingBuffer, stagingBufferMemory);
+
+    uint8_t *data;
+    data = reinterpret_cast<uint8_t*>(device.mapMemory(stagingBufferMemory, 0, sbtSize));
+
+    // Write the handles in the SBT
+    for(uint32_t g = 0; g < groupCount; g++)
+    {
+        memcpy(data, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);  // raygen
+        data += baseAlignment;
+    }
+
+    device.unmapMemory(stagingBufferMemory);
+
+    vulkanOps->createBuffer(sbtSize, usage,
+                            vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
+
+    vulkanOps->copyBuffer(stagingBuffer, rtSBTBuffer, sbtSize);
+
+    device.destroy(stagingBuffer);
+    device.freeMemory(stagingBufferMemory);
 }
 
 
@@ -535,8 +564,6 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::Begin("Raytrace Window");
 
     hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
-    hasInputChanged |= ImGui::InputFloat4("SkyColor1", &rtPushConstants.skyColor1.x, "%.2f");
-    hasInputChanged |= ImGui::InputFloat4("SkyColor2", &rtPushConstants.skyColor2.x, "%.2f");
     ImGui::Checkbox("Auto rotate", &autoRotate);
     ImGui::Spacing();
     ImGui::Checkbox("Accumulate results", &accumulateResults);
@@ -550,6 +577,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
+    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
     hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
     hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache Only",
@@ -595,7 +624,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
                                          | vk::ShaderStageFlagBits::eAnyHitKHR,
                                          0, rtPushConstants);
 
-    vk::DeviceSize progSize = rtProperties.shaderGroupHandleSize;  // Size of a program identifier
+    vk::DeviceSize progSize = rtProperties.shaderGroupBaseAlignment;  // Alignment of a program identifier
     vk::DeviceSize rayGenOffset = 0u * progSize;  // Start at the beginning of sbtBuffer
     vk::DeviceSize missOffset = 1u * progSize;  // Jump over raygen
     vk::DeviceSize missStride = progSize;

@@ -37,7 +37,7 @@ const float tMin = 0.001;
 const float tMax = 1000000.0;
 
 
-const uint rayFlags = 0;
+const uint rayFlags = gl_RayFlagsNoneEXT;
 const uint shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
 //@formatter:off
@@ -616,12 +616,13 @@ bool hasDiscreteDirection(Material mat) {
 * returns true if cache hits found
 */
 bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
-    cacheInfo.nextSlot = 0;
     cacheInfo.origin = origin;
     cacheInfo.normal = normal;
+    cacheInfo.cacheValueSum = vec3(0, 0, 0);
+    cacheInfo.totalWeight = 0;
 
     traceRayEXT(irradianceAS, // acceleration structure
-    rayFlags, // rayFlags
+    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
     0xFF, // cullMask
     0, // sbtRecordOffset
     0, // sbtRecordStride
@@ -633,18 +634,11 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
     3// payload (location = 3)
     );
 
-    uint numCaches = min(cacheInfo.nextSlot, MAX_CACHES);
-    color = vec3(0, 0, 0);
-    float sumWeight = 0;
-    for (int iCache = 0; iCache < numCaches; iCache++) {
-        color += cacheInfo.weights[iCache] * cacheInfo.cacheValues[iCache];
-        sumWeight += cacheInfo.weights[iCache];
-    }
-
-    if (numCaches > 0) {
-        color = color / sumWeight;
+    if (cacheInfo.totalWeight > 0) {
+        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
         return true;
     }
+
     return false;
 }
 
@@ -652,7 +646,8 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
 * returns the harmonicR
 */
 float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColor, out vec3 rotGrad, out vec3 transGrad) {
-    const int n = 10;
+    const int N = 20;
+    const int M = 10;
 
     float invDistanceSum = 0;
     int numDistances = 0;
@@ -662,18 +657,19 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
     rotGrad = vec3(0, 0, 0);
     transGrad = vec3(0, 0, 0);
     vec3 color = vec3(0, 0, 0);
-    for (int k = 0; k < 2 * n; k++) {
-        float phi = M_PI * (k + rnd()) / (2 * n);
+    for (int k = 0; k < N; k++) {
+        float phi = 2 * M_PI * (k + rnd()) / N;
 
         vec3 uk = toWorld(sphericalToCartesian(M_HALF_PI, phi), normal);
-        vec3 vk = toWorld(sphericalToCartesian(M_HALF_PI, 2 * M_PI * k / (2 * n) + M_HALF_PI), normal);
-        vec3 previousKLs[n];
-        float previousKRs[n];
+        vec3 vk = toWorld(sphericalToCartesian(M_HALF_PI, phi + M_HALF_PI), normal);
+        vec3 previousVk = toWorld(sphericalToCartesian(M_HALF_PI, 2 * M_PI * k / N + M_HALF_PI), normal);
+        vec3 previousKLs[N];
+        float previousKRs[N];
         float previousJR;
         float previousJL;
-        for (int j = 0; j < n; j++) {
+        for (int j = 0; j < M; j++) {
             vec3 sampleColor = vec3(0, 0, 0);
-            float theta = asin(sqrt((j + rnd()) / n));
+            float theta = asin(sqrt((j + rnd()) / M));
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
@@ -759,18 +755,18 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             color += sampleColor;
 
             float L = length(sampleColor);
-            float previousJTheta = asin(sqrt(j / n));
-            float nextJTheta = asin(sqrt(j + 1 / n));
+            float previousJTheta = asin(sqrt(j / N));
+            float nextJTheta = asin(sqrt(j + 1 / N));
             // Rotation gradient
             rotGrad += -tan(theta) * L * vk;
 
             // Translational gradient
             if (j > 0) {
                 float cosPreviousTheta = cos(previousJTheta);
-                transGrad  += uk * 2 * M_PI / (2 * n) * sin(previousJTheta) * cosPreviousTheta * cosPreviousTheta / min(r, previousJR) * (L - previousJL);
+                transGrad  += uk * 2 * M_PI / N * sin(previousJTheta) * cosPreviousTheta * cosPreviousTheta / min(r, previousJR) * (L - previousJL);
             }
 
-            transGrad += vk * sin(nextJTheta) - sin(previousJTheta) / min(r, previousKRs[j]) * (L - previousKLs[j]);
+            transGrad += previousVk * (sin(nextJTheta) - sin(previousJTheta)) / min(r, previousKRs[j]) * (L - previousKLs[j]);
 
 
             previousKLs[j] = sampleColor;
@@ -780,7 +776,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
         }
     }
 
-    float normFactor = M_PI / (2 * n * n);
+    float normFactor = M_PI / (M * N);
     calculatedColor = normFactor * color;
     rotGrad *= normFactor;
 
@@ -886,7 +882,7 @@ void main() {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
     if (pushC.useIrradiance && rnd() < pushC.irradianceUpdateProb) {
-        updateIrradianceCache();
+//        updateIrradianceCache();
     }
 
 
@@ -978,7 +974,6 @@ void main() {
 
                     if (pushC.useIrradiance) {
                         vec3 irradianceColor;
-
                         if (queryIrradianceCache(origin, normal, irradianceColor)) {
                             if (pushC.showIrradianceCacheOnly) {
 
@@ -994,7 +989,6 @@ void main() {
 
                                 sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
                             }
-
 
                             // Stop ray here
                             iDepth = maxDepth;
@@ -1015,7 +1009,6 @@ void main() {
                                     }
                                     sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
                                 }
-
                                 // Stop ray here
                                 iDepth = maxDepth;
                                 break;

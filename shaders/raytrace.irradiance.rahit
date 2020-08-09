@@ -17,7 +17,7 @@ layout(binding = 13, set = 1, scalar) buffer Cache {  cacheHeader header; cacheD
 
 float irradianceWeight(vec3 p, vec3 n, uint iIrradiance) {
     return 1.0 / (length(p - cacheSpheres[iIrradiance].center) / cache[iIrradiance].harmonicR
-                  + sqrt(1 - dot(n, cache[iIrradiance].normal)));
+    + sqrt(1 - dot(n, cache[iIrradiance].normal)));
 }
 
 bool visibilityCheck(vec3 p, vec3 n, uint iIrradiance) {
@@ -35,11 +35,15 @@ void main() {
         return;
     }
 
-    uint i = cacheInfo.nextSlot++;
-    if (i >= MAX_CACHES) {
-        return;
+    if (pushC.useIrradianceGradients) {
+        vec3 color = cache[gl_PrimitiveID].color;
+        vec3 adjustedColor = color
+            + cross(cache[gl_PrimitiveID].normal, cacheInfo.normal) * cache[gl_PrimitiveID].rotGrad
+            + (cacheInfo.origin - cacheSpheres[gl_PrimitiveID].center) * cache[gl_PrimitiveID].transGrad;
+        cacheInfo.cacheValueSum += weight * adjustedColor;
+    } else {
+        cacheInfo.cacheValueSum += weight * cache[gl_PrimitiveID].color;
     }
 
-    cacheInfo.cacheValues[i] = cache[gl_PrimitiveID].color;
-    cacheInfo.weights[i] = weight;
+    cacheInfo.totalWeight += weight;
 }

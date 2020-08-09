@@ -263,7 +263,7 @@ void PostProcessing::createGraphicsPipeline() {
                                                 &colorBlending,
                                                 nullptr, pipelineLayout, renderPass, 0);
 
-    graphicsPipeline = device.createGraphicsPipeline(nullptr, pipelineInfo);
+    graphicsPipeline = device.createGraphicsPipeline(nullptr, pipelineInfo).value;
 
     device.destroy(fragShaderModule);
     device.destroy(vertShaderModule);

@@ -71,8 +71,6 @@ public:
     void cleanup();
 
     struct RtPushConstant {
-        glm::vec4 skyColor1 = {0, 0, 0, 0};
-        glm::vec4 skyColor2 = {0, 0, 0, 0};
         uint randomUInt;
         int lightType = 0;
         uint previousFrames = -1;
@@ -90,6 +88,7 @@ public:
         float irradianceUpdateProb = 0.00001;
         float irradianceCreateProb = 0.0001;
         float irradianceVisualizationScale = 10;
+        int useIrradianceGradients = 0;
         int useVisibleSphereSampling = 1;
     } rtPushConstants;
 
