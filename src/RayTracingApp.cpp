@@ -528,8 +528,6 @@ void RayTracingApp::createRtShaderBindingTable() {
 
     // Write the handles in the SBT
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eRayTracingKHR | vk::BufferUsageFlagBits::eTransferDst;
-    vulkanOps->createBufferFromData(shaderHandleStorage, usage,
-                                    vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
 
     vk::Buffer stagingBuffer;
     vk::DeviceMemory stagingBufferMemory;
