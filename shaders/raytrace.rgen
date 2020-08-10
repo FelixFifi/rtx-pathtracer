@@ -33,7 +33,7 @@
 #define SIZE_TRI_RANDOM 10000
 
 
-const float tMin = 0.001;
+const float tMin = 0.0001;
 const float tMax = 1000000.0;
 
 
@@ -756,7 +756,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
             float L = length(sampleColor);
             float previousJTheta = asin(sqrt(j / float(M)));
-            float nextJTheta = asin(sqrt(j + 1 / float(M)));
+            float nextJTheta = asin(sqrt((j + 1) / float(M)));
             // Rotation gradient
             rotGrad += -tan(theta) * L * vk;
 
@@ -767,7 +767,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             }
 
             if (k > 0) {
-                transGrad += previousVk ;// * (sin(nextJTheta) - sin(previousJTheta))/ min(r, previousKRs[j]) * (L - previousKLs[j]);
+                transGrad += previousVk  * (sin(nextJTheta) - sin(previousJTheta)) / min(r, previousKRs[j]) * (L - previousKLs[j]);
             }
 
             previousKLs[j] = L;
@@ -883,7 +883,7 @@ void main() {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
     if (pushC.useIrradiance && rnd() < pushC.irradianceUpdateProb) {
-//        updateIrradianceCache();
+        updateIrradianceCache();
     }
 
 

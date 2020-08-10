@@ -586,9 +586,9 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale",
                                           &rtPushConstants.irradianceVisualizationScale, 0.0f, 50.0f);
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
-    hasInputChanged |= ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
+    ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
                                          "%.6f");
-    hasInputChanged |= ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
+    ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
                                          "%.6f");
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
