@@ -116,6 +116,7 @@ void RayTracingApp::sceneSwitcher(int num) {
 
     irradianceCache.cleanUp();
     irradianceCache = IrradianceCache(50000, vulkanOps, physicalDevice, graphicsQueueIndex);
+    currentPrepareFrames = 0;
 
     recreateDescriptorSets();
 
@@ -577,19 +578,18 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
-    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache",
-                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCache));
     hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache Only",
                                        reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
     hasInputChanged |= ImGui::Checkbox("Highlight Irradiance Cache Color",
                                        reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
     hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale",
-                                          &rtPushConstants.irradianceVisualizationScale, 0.0f, 50.0f);
+                                          &rtPushConstants.irradianceVisualizationScale, 0.0f, 20.0f);
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
     ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
                                          "%.6f");
     ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
                                          "%.6f");
+    ImGui::InputInt("Irradiance cache prepare frames", &irradianceCachePrepareFrames, 1, 10);
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
 
@@ -611,6 +611,14 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
         rtPushConstants.previousFrames = 0;
     }
 
+    // Irradiance cache needs a few iterations to create the initial irradiance caches
+    if (rtPushConstants.useIrradianceCache && currentPrepareFrames < irradianceCachePrepareFrames) {
+        rtPushConstants.isIrradiancePrepareFrame = 1;
+        rtPushConstants.previousFrames = -1;
+        currentPrepareFrames++;
+    } else {
+        rtPushConstants.isIrradiancePrepareFrame = 0;
+    }
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,

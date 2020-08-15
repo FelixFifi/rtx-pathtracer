@@ -80,15 +80,15 @@ public:
         int enableNEE = 1; // GLSL has 4 byte bool
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 0;
-        int showIrradianceCache = 0;
         int showIrradianceCacheOnly = 0;
         int useIrradianceCache = 0;
         int highlightIrradianceCacheColor = 0;
-        float irradianceA = 0.5;
+        float irradianceA = 0.2;
         float irradianceUpdateProb = 0.00001;
         float irradianceCreateProb = 0.0001;
-        float irradianceVisualizationScale = 10;
+        float irradianceVisualizationScale = 1.0;
         int useIrradianceGradients = 0;
+        int isIrradiancePrepareFrame = 0;
         int useVisibleSphereSampling = 1;
     } rtPushConstants;
 
@@ -106,6 +106,8 @@ private:
 
     CameraController cameraController;
     IrradianceCache irradianceCache;
+    int irradianceCachePrepareFrames = 10;
+    int currentPrepareFrames = 0;
 
     // Vulkan
     vk::Buffer uniformBuffer;

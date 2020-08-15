@@ -40,6 +40,16 @@ const float tMax = 1000000.0;
 const uint rayFlags = gl_RayFlagsNoneEXT;
 const uint shadowRayFlags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
+
+struct newIrradianceCacheInfo {
+    vec3 origin;
+    vec3 normal;
+};
+
+#define MAX_NEW_IRRADIANCE_ENTRIES 5
+newIrradianceCacheInfo newIrradianceCacheEntries[MAX_NEW_IRRADIANCE_ENTRIES];
+int nextNewIrradianceCacheSlot = 0;
+
 //@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
@@ -612,6 +622,129 @@ bool hasDiscreteDirection(Material mat) {
     }
 }
 
+bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color);
+
+vec3 multipleNEE(Material mat, vec3 origin, vec3 direction, vec3 normal, int numNEE) {
+    vec3 result = vec3(0, 0, 0);
+    for (int i = 0; i < numNEE; i++) {
+        result += nextEventEstimation(mat, origin, direction, normal);
+    }
+    return result / numNEE;
+}
+
+vec3 raytrace(vec3 origin, vec3 direction, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
+    bool follow = true;
+    int followCount = 0;
+    bool addNextDirectLights = false;
+    float r = tMax;
+    int depth = 0;
+    vec3 normal;
+    firstT = tMax;
+
+    vec3 throughput = vec3(1.0, 1.0, 1.0);
+    vec3 result = vec3(0.0, 0.0, 0.0);
+
+    do {
+        depth++;
+
+        traceRayEXT(topLevelAS, // acceleration structure
+        rayFlags, // rayFlags
+        0xFF, // cullMask
+        0, // sbtRecordOffset
+        0, // sbtRecordStride
+        0, // missIndex
+        origin.xyz, // ray origin
+        tMin, // ray min range
+        direction.xyz, // ray direction
+        tMax, // ray max range
+        0// payload (location = 0)
+        );
+
+
+        if (info.isMiss) {
+            if (addDirectLights || addNextDirectLights) {
+                result += throughput * info.missColor;
+            }
+            break;
+        }
+
+        // Get hit properties
+        Material mat = mats[info.matIndex];
+        origin = info.worldPos;
+        normal = info.normal;
+
+        // For average distance calculation
+        if (depth == 1) {
+            firstT = info.t;
+        }
+
+        // Light hit
+        if (mat.type == MAT_LIGHT && (addDirectLights || addNextDirectLights)) {
+            result += throughput * mat.lightColor;
+        }
+
+        if (hasDiscreteDirection(mat)) {
+            // The next direct light hit has to contribute, as mirrors would be black otherwise
+            addNextDirectLights = true;
+
+            // When there is a discrete direction, NEE is not possible and we should continue on, even if depth > maxDepth
+            follow = true;
+            if (depth >= maxDepth) {
+                followCount++;
+            }
+        } else {
+            follow = false;
+
+            if (useNEE) {
+                result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+            }
+
+            if (useIC) {
+                // If diffuse, then check if irradiance cache is nearby
+                vec3 irradianceColor;
+                if (mat.type == MAT_DIFFUSE) {
+                    if (queryIrradianceCache(origin, normal, irradianceColor)) {
+                        // Record found -> use it
+                        result += throughput * diffuse(mat, info.textureUV) * irradianceColor;
+
+                        // If IC values are used, then NEE is necessary for the complete light values
+                        if (!useNEE) {
+                            result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+                        }
+
+                        break;
+                    } else if (createIC && rnd() < pushC.irradianceCreateProb) {
+                        // No record found -> create one
+                        // All irradiance cache values are only available in the next frame,
+                        // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
+
+                        if (nextNewIrradianceCacheSlot < MAX_NEW_IRRADIANCE_ENTRIES) {
+                            newIrradianceCacheInfo newCacheInfo;
+                            newCacheInfo.origin = origin;
+                            newCacheInfo.normal = normal;
+
+                            newIrradianceCacheEntries[nextNewIrradianceCacheSlot] = newCacheInfo;
+                            nextNewIrradianceCacheSlot++;
+                        }
+                    }
+                }
+            }
+        }
+
+        vec3 newDirection;
+        float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+
+        if (pdf <= 0.0) {
+            break;
+        }
+        throughput *= evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
+
+        direction = newDirection;
+    } while (depth <= maxDepth || (follow && followCount <= maxFollowDiscrete));
+
+    return result;
+}
+
 /**
 * returns true if cache hits found
 */
@@ -651,6 +784,9 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
     float invDistanceSum = 0;
     int numDistances = 0;
+    int maxFollowDiscrete = 10;
+    int numNEE = 5;
+    bool createIC = true;
 
     vec3 hitNormal, hitOrigin;
 
@@ -668,95 +804,25 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
         float previousJR;
         float previousJL;
         for (int j = 0; j < M; j++) {
-            vec3 sampleColor = vec3(0, 0, 0);
             float theta = asin(sqrt((j + rnd()) / M));
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
-            hitOrigin = origin;
-
-            bool follow = true;
-            int followCount = 0;
             bool addDirectLights = false;
             float r = tMax;
 
-            vec3 throughput = vec3(1.0, 1.0, 1.0);
-
-            do {
-                traceRayEXT(topLevelAS, // acceleration structure
-                rayFlags, // rayFlags
-                0xFF, // cullMask
-                0, // sbtRecordOffset
-                0, // sbtRecordStride
-                0, // missIndex
-                hitOrigin.xyz, // ray origin
-                tMin, // ray min range
-                direction.xyz, // ray direction
-                tMax, // ray max range
-                0// payload (location = 0)
-                );
-
-
-                if (info.isMiss) {
-                    // Direct miss => does not count
-                    if (followCount > 0) {
-                        sampleColor += throughput * info.missColor;
-                    }
-                    follow = false;
-                } else {
-                    Material mat = mats[info.matIndex];
-                    hitOrigin = info.worldPos;
-                    hitNormal = info.normal;
-
-                    // For average distance calculation
-                    if (followCount == 0) {
-                        invDistanceSum += 1.0 / info.t;
-                        numDistances++;
-                        r = info.t;
-                    }
-
-                    if (addDirectLights && mat.type == MAT_LIGHT) {
-                        sampleColor += throughput * mat.lightColor;
-                    }
-
-                    if (hasDiscreteDirection(mat)) {
-                        vec3 newDirection;
-                        float pdf = sampleBSDF(mat, direction, hitOrigin, info.isFrontFace, newDirection);
-
-                        if (pdf <= 0.0) {
-                            break;
-                        }
-
-                        throughput *= evalBsdf(mat, info.textureUV, hitNormal, -direction, newDirection, info.isFrontFace) / pdf;
-
-                        direction = newDirection;
-                        followCount++;
-                        addDirectLights = true;
-                    } else {
-
-                        // If diffuse, then check if irradiance cache is nearby
-                        vec3 cacheColor;
-                        if (mat.type == MAT_DIFFUSE && queryIrradianceCache(hitOrigin, hitNormal, cacheColor)) {
-                            sampleColor += throughput * diffuse(mat, info.textureUV) * cacheColor;
-                        }
-
-                        int numNEE = 10;
-                        float factor = 1.0 / numNEE;
-                        for (int i = 0; i < numNEE; i++) {
-                            sampleColor += factor * throughput * nextEventEstimation(mat, hitOrigin, direction, hitNormal);
-                        }
-
-
-                        follow = false;
-                    }
-                }
-            } while (follow && followCount <= MAX_DISCRETE_FOLLOW);
-
+            vec3 sampleColor = raytrace(origin, direction, 1, maxFollowDiscrete, addDirectLights, true, numNEE, true, createIC, r);
             color += sampleColor;
+
+            if (r < tMax) {
+                invDistanceSum += 1.0 / r;
+                numDistances++;
+            }
 
             float L = length(sampleColor);
             float previousJTheta = asin(sqrt(j / float(M)));
             float nextJTheta = asin(sqrt((j + 1) / float(M)));
+
             // Rotation gradient
             rotGrad += -tan(theta) * L * vk;
 
@@ -874,6 +940,35 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     return true;
 }
 
+vec3 visualizeIC(vec3 origin, vec3 direction) {
+    traceRayEXT(topLevelAS, // acceleration structure
+    rayFlags, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    tMin, // ray min range
+    direction.xyz, // ray direction
+    tMax, // ray max range
+    0// payload (location = 0)
+    );
+
+    if (info.isMiss) {
+        return info.missColor;
+    }
+
+    vec3 icColor;
+    if (queryIrradianceCache(info.worldPos, info.normal, icColor)) {
+        if (pushC.highlightIrradianceCacheColor) {
+            icColor -= min(min(icColor.r, icColor.g), icColor.b).xxx;
+        }
+
+        return pushC.irradianceVisualizationScale * icColor;
+    }
+    return vec3(0, 0, 0);
+}
+
 void main() {
     // Init seed
     seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
@@ -882,18 +977,21 @@ void main() {
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
-    if (pushC.useIrradiance && rnd() < pushC.irradianceUpdateProb) {
+    if (pushC.useIrradianceCache && rnd() < pushC.irradianceUpdateProb) {
         updateIrradianceCache();
     }
 
-
-    const int samplesPerPixel = pushC.samplesPerPixel;
+    // Prepare frames should only have one sample per pixel
+    const int samplesPerPixel = pushC.isIrradiancePrepareFrame ? 1 : pushC.samplesPerPixel;
     const int maxDepth = pushC.maxDepth;
+    const int maxFollowDiscrete = 3;
+    const bool useNEE = pushC.enableNEE;
+    const bool addDirectLights = !useNEE;
+    const int numNEE = 1;
+
+    const bool useIC = pushC.useIrradianceCache;
 
     for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
-        vec3 sampleResult = vec3(0.0, 0.0, 0.0);
-        vec3 throughput = vec3(1.0, 1.0, 1.0);
-
         vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
         vec2 d = inUV * 2.0 - 1.0;
 
@@ -901,222 +999,12 @@ void main() {
         vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
         vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
 
-
-        bool addDirectLightHits = true;
-
-        for (int iDepth = 0; iDepth < maxDepth; ++iDepth) {
-            traceRayEXT(topLevelAS, // acceleration structure
-            rayFlags, // rayFlags
-            0xFF, // cullMask
-            0, // sbtRecordOffset
-            0, // sbtRecordStride
-            0, // missIndex
-            origin.xyz, // ray origin
-            tMin, // ray min range
-            direction.xyz, // ray direction
-            tMax, // ray max range
-            0// payload (location = 0)
-            );
-
-            if (pushC.showIrradianceCache && iDepth == 0) {
-                infoIrradiance.isMiss = true;
-
-                traceRayEXT(irradianceAS, // acceleration structure
-                rayFlags, // rayFlags
-                0xFF, // cullMask
-                1, // sbtRecordOffset
-                0, // sbtRecordStride
-                0, // missIndex
-                origin.xyz, // ray origin
-                tMin, // ray min range
-                direction.xyz, // ray direction
-                info.t, // ray max range
-                2// payload (location = 2)
-                );
-
-                if (!infoIrradiance.isMiss) {
-                    vec3 irradianceColor = cache[infoIrradiance.instanceIndex].color;
-
-                    if (pushC.highlightIrradianceCacheColor) {
-                        irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
-                    }
-
-                    sampleResult += pushC.irradianceVisualizationScale * irradianceColor * dot(infoIrradiance.normal, -direction);
-                    break;
-                }
-            }
-
-
-            // Miss => Directional light / skybox
-            if (info.isMiss) {
-                sampleResult += throughput * info.missColor;
-                break;
-            }
-
-            origin = info.worldPos;
-            Material mat = mats[info.matIndex];
-            vec3 normal = info.normal;
-
-            vec2 textureUV = info.textureUV;
-            float cosThetaWi = -dot(direction, normal);
-
-            if (pushC.enableNEE && (!pushC.showIrradianceCacheOnly || !pushC.useIrradiance)) {
-                sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
-            }
-
-            switch (mat.type) {
-                case MAT_LIGHT:// Light
-                if (!pushC.enableNEE || addDirectLightHits) {
-                    sampleResult += throughput * mat.lightColor;
-                }
-                // Then continue as diffuse
-                case MAT_DIFFUSE:// Diffuse
-                {
-
-                    if (pushC.useIrradiance) {
-                        vec3 irradianceColor;
-                        if (queryIrradianceCache(origin, normal, irradianceColor)) {
-                            if (pushC.showIrradianceCacheOnly) {
-
-                                if (pushC.highlightIrradianceCacheColor) {
-                                    irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
-                                }
-
-                                sampleResult += pushC.irradianceVisualizationScale * throughput * irradianceColor;
-                            } else {
-                                if (!pushC.enableNEE && !pushC.showIrradianceCacheOnly) {
-                                    sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
-                                }
-
-                                sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
-                            }
-
-                            // Stop ray here
-                            iDepth = maxDepth;
-                            break;
-                        } else if (rnd() < pushC.irradianceCreateProb) {
-                            // All irradiance cache values are only available in the next frame,
-                            // Therefore we need to limit the amount of cache entries created, as otherwise all rays would create one
-
-                            if (createIrradianceCache(origin, normal, irradianceColor)) {
-                                if (pushC.showIrradianceCacheOnly) {
-                                    if (pushC.highlightIrradianceCacheColor) {
-                                        irradianceColor -= min(min(irradianceColor.r, irradianceColor.g), irradianceColor.b).xxx;
-                                    }
-                                    sampleResult += pushC.irradianceVisualizationScale * throughput * irradianceColor;
-                                } else {
-                                    if (!pushC.enableNEE) {
-                                        sampleResult += throughput * nextEventEstimation(mat, origin, direction, normal);
-                                    }
-                                    sampleResult += throughput * diffuse(mat, textureUV) * irradianceColor;
-                                }
-                                // Stop ray here
-                                iDepth = maxDepth;
-                                break;
-                            }
-                        }
-                    }
-
-                    vec3 newDirection;
-                    float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
-
-                    float cosThetaWo = dot(newDirection, normal);
-
-                    throughput *= cosThetaWo * diffuse(mat, textureUV) / pdf;
-
-                    direction = newDirection;
-                    addDirectLightHits = false;
-                    break;
-
-                }
-                case MAT_PHONG:// Phong
-                vec3 newDirection;
-                float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
-
-                // Absorbed rays
-                if (pdf == 0) {
-                    iDepth = maxDepth + 1;
-                    break;
-                }
-
-                throughput *= phong(mat, textureUV, normal, -direction, newDirection) / pdf;
-
-                direction = newDirection;
-                addDirectLightHits = false;
-                break;
-                case MAT_SPECULAR:// Specular
-                {
-                    throughput *= mat.specular;
-
-                    direction = reflect(direction, normal);
-                    addDirectLightHits = true;
-                    break;
-                }
-                case MAT_DIELECTRIC:// Transparent
-                {
-                    throughput *= mat.specular;
-
-                    float eta = mat.refractionIndexInv;
-
-                    if (!info.isFrontFace) {
-                        eta = mat.refractionIndex;
-                    }
-                    float cosTheta = dot(-direction, normal);
-                    float fresnel = fresnel(eta, cosTheta);
-
-                    if (rnd() > fresnel) {
-                        // Refract
-                        direction = refract(direction, normal, eta);
-                    } else {
-                        // Reflect
-                        direction = reflect(direction, normal);
-                    }
-
-                    addDirectLightHits = true;
-                    break;
-                }
-
-                case MAT_CONDUCTOR:
-                {
-                    float cosTheta = dot(-direction, normal);
-                    throughput *= fresnelConductor(cosTheta, mat.eta, mat.k);
-
-                    direction = reflect(direction, normal);
-                    addDirectLightHits = true;
-                    break;
-                }
-
-                case MAT_ROUGH_CONDUCTOR:
-                {
-                    vec3 worldM = randomBeckmannNormal(mat, normal);
-
-                    newDirection = reflect(direction, worldM);
-
-                    float cosThetaIM = dot(-direction, worldM);
-                    float cosThetaIN = dot(-direction, normal);
-                    float cosThetaNM = dot(normal, worldM);
-
-                    // Eqn 41 https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf
-                    throughput *= fresnelConductor(cosThetaIM, mat.eta, mat.k) * G(mat, -direction, newDirection, normal, worldM) * cosThetaIM / (cosThetaIN * cosThetaNM);
-
-                    direction = newDirection;
-                    addDirectLightHits = true;
-                    break;
-                }
-            }
-
-            if (pushC.enableRR && iDepth > 5) {
-                float p = (throughput.x + throughput.y + throughput.z) / 3.0;
-                // Russian roulette
-                if (rnd() > p) {
-                    break;
-                } else {
-                    throughput *= 1.0 / p;
-                }
-            }
+        float firstT;
+        if (pushC.showIrradianceCacheOnly) {
+            result += visualizeIC(origin, direction);
+        } else {
+            result += raytrace(origin, direction, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
         }
-
-        result += sampleResult;
     }
 
     result /= samplesPerPixel;
@@ -1147,4 +1035,12 @@ void main() {
         }
     }
 
+
+    // Create IC entries
+    for (int i = 0; i < nextNewIrradianceCacheSlot; i++) {
+        newIrradianceCacheInfo newCacheInfo = newIrradianceCacheEntries[i];
+
+        vec3 color;
+        createIrradianceCache(newCacheInfo.origin, newCacheInfo.normal, color);
+    }
 }

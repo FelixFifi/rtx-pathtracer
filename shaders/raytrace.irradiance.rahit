@@ -21,7 +21,7 @@ float irradianceWeight(vec3 p, vec3 n, uint iIrradiance) {
 }
 
 bool visibilityCheck(vec3 p, vec3 n, uint iIrradiance) {
-    return 0 <= dot(p - cacheSpheres[iIrradiance].center, (n + cache[iIrradiance].normal) / 2.0);
+    return -0.001 <= dot(p - cacheSpheres[iIrradiance].center, (n + cache[iIrradiance].normal) / 2.0);
 }
 
 void main() {

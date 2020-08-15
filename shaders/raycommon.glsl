@@ -26,15 +26,15 @@ struct pushConstant
     bool enableNEE;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
-    bool showIrradianceCache;
     bool showIrradianceCacheOnly;
-    bool useIrradiance;
+    bool useIrradianceCache;
     bool highlightIrradianceCacheColor;
     float irradianceA;
     float irradianceUpdateProb;
     float irradianceCreateProb;
     float irradianceVisualizationScale;
     bool useIrradianceGradients;
+    bool isIrradiancePrepareFrame;
     bool useVisibleSphereSampling;
 };
 
