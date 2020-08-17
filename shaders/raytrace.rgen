@@ -786,8 +786,9 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
     float invDistanceSum = 0;
     int numDistances = 0;
     int maxFollowDiscrete = 10;
-    int numNEE = 5;
     bool createIC = true;
+    const bool addDirectLights = false;
+
 
     vec3 hitNormal, hitOrigin;
 
@@ -809,10 +810,9 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
             vec3 direction = toWorld(sphericalToCartesian(theta, phi), normal);
 
-            bool addDirectLights = false;
             float r = tMax;
 
-            vec3 sampleColor = raytrace(origin, direction, 1, maxFollowDiscrete, addDirectLights, true, numNEE, true, createIC, r);
+            vec3 sampleColor = raytrace(origin, direction, 1, maxFollowDiscrete, addDirectLights, true, pushC.irradianceNumNEE, true, createIC, r);
             color += sampleColor;
 
             if (r < tMax) {
@@ -892,13 +892,16 @@ void updateIrradianceCache() {
     float radius;
     if (harmonicR > 0) {
         // harmonicR only gets updated if at least one object hit in hemisphere
-        float mixedHarmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
-        cache[cacheIndex].harmonicR = mixedHarmonicR;
-
-        radius = pushC.irradianceA * mixedHarmonicR;
+        harmonicR = mix(harmonicR, cache[cacheIndex].harmonicR, a);
     } else {
-        radius = pushC.irradianceA * cache[cacheIndex].harmonicR;
+        harmonicR = cache[cacheIndex].harmonicR;
     }
+
+    // Lower bound for radius to prevent unlimited number of IC entries in corners
+    harmonicR = max(harmonicR, pushC.irradianceCacheMinRadius);
+    cache[cacheIndex].harmonicR = harmonicR;
+
+    radius = pushC.irradianceA * harmonicR;
 
     cacheSpheres[cacheIndex].radius = radius;
     cacheAabbs[cacheIndex].min = cacheSpheres[cacheIndex].center - radius.xxx;
@@ -923,6 +926,9 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     if (cacheIndex > header.maxCaches) {
         return false;
     }
+
+    // Lower bound for radius to prevent unlimited number of IC entries in corners
+    harmonicR = max(harmonicR, pushC.irradianceCacheMinRadius);
 
     cache[cacheIndex].normal = normal;
     cache[cacheIndex].color = calculatedColor;

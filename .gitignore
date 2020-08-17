@@ -3,4 +3,4 @@ cmake-build-*/
 sponza.*
 textures/textures/
 *.exr
-
+imgui.ini

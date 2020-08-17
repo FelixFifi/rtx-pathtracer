@@ -60,6 +60,10 @@ void RayTracingApp::run() {
 }
 
 void RayTracingApp::drawCallback(uint32_t imageIndex) {
+    if (needSceneReload) {
+        sceneSwitcher(currentScene);
+    }
+
     updateUniformBuffer(imageIndex);
 
     vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
@@ -67,7 +71,9 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     raytrace(cmdBuf);
     vulkanOps->endSingleTimeCommands(cmdBuf);
 
-    irradianceCache.updateSpheres();
+    if (rtPushConstants.useIrradianceCache) {
+        irradianceCache.updateSpheres();
+    }
 
     cameraController.resetStatus();
 
@@ -76,21 +82,26 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     if (takePicture) {
 
-        std::time_t t = std::time(nullptr);   // get time now
-        std::tm *now = std::localtime(&t);
+        takePictureCurrentTime();
 
-        char *filepath = new char[64];
-
-        std::filesystem::create_directories("images/");
-
-        std::strftime(filepath, 64, "images/%F--%H-%M-%S.exr", now);
-
-        postProcessing.saveOffscreenImage(filepath);
-        std::cout << "Wrote file" << std::endl;
         takePicture = false;
     }
 
     postProcessing.drawCallback(imageIndex);
+}
+
+void RayTracingApp::takePictureCurrentTime() {
+    time_t t = time(nullptr);   // get time now
+    tm *now = localtime(&t);
+
+    char *filepath = new char[64];
+
+    std::filesystem::create_directories("images/");
+
+    strftime(filepath, 64, "images/%F--%H-%M-%S.exr", now);
+
+    postProcessing.saveOffscreenImage(filepath);
+    std::cout << "Wrote file" << std::endl;
 }
 
 void RayTracingApp::sceneSwitcher(int num) {
@@ -98,6 +109,9 @@ void RayTracingApp::sceneSwitcher(int num) {
     if (num == 0) {
         num = 10;
     }
+
+    currentScene = num;
+    needSceneReload = false;
 
     // Don't load out of bounds
     int sceneCount = SCENES.size();
@@ -562,42 +576,57 @@ void RayTracingApp::createRtShaderBindingTable() {
 void RayTracingApp::imGuiWindowSetup() {
     ImGui::Begin("Raytrace Window");
 
-    hasInputChanged |= ImGui::InputInt("LightType", &rtPushConstants.lightType);
-    ImGui::Checkbox("Auto rotate", &autoRotate);
-    ImGui::Spacing();
-    ImGui::Checkbox("Accumulate results", &accumulateResults);
     hasInputChanged |= ImGui::InputInt("Samples per pixel", &rtPushConstants.samplesPerPixel, 1, 5);
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
+    ImGui::Checkbox("Accumulate results", &accumulateResults);
+    ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
-    hasInputChanged |= ImGui::Checkbox("Enable average instead of mix",
-                                       reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
-    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
-                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
-    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
-                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
-    hasInputChanged |= ImGui::Checkbox("Show Irradiance Cache Only",
-                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
-    hasInputChanged |= ImGui::Checkbox("Highlight Irradiance Cache Color",
-                                       reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
-    hasInputChanged |= ImGui::SliderFloat("Irradiance visualization scale",
-                                          &rtPushConstants.irradianceVisualizationScale, 0.0f, 20.0f);
-    hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
-    ImGui::InputFloat("Irradiance update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
-                                         "%.6f");
-    ImGui::InputFloat("Irradiance create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
-                                         "%.6f");
-    ImGui::InputInt("Irradiance cache prepare frames", &irradianceCachePrepareFrames, 1, 10);
+
+    ImGui::Checkbox("Auto rotate", &autoRotate);
+    ImGui::Spacing();
+    hasInputChanged |= ImGui::Checkbox("Enable average instead of mix",
+                                       reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
+
+    ImGui::Spacing();
 
     ImGui::Checkbox("Take picture", &takePicture);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
 
+    ImGui::End();
+
+
+    ImGui::Begin("Irradiance Cache");
+    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
+    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
+    hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
+
+    ImGui::Spacing();
+    ImGui::InputFloat("Update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
+                      "%.6f");
+    ImGui::InputFloat("Create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
+                      "%.6f");
+    ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
+    bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
+    needSceneReload |= irradianceCache.wasUpdated() && irNumNeeChanged;
+
+    ImGui::Spacing();
+    hasInputChanged |= ImGui::Checkbox("Show only IC",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
+    hasInputChanged |= ImGui::Checkbox("Highlight IC Color",
+                                       reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
+    hasInputChanged |= ImGui::SliderFloat("Visualization scale",
+                                          &rtPushConstants.irradianceVisualizationScale, 0.0f, 20.0f);
+    hasInputChanged |= ImGui::SliderFloat("IC min sphere radius",
+                                          &rtPushConstants.irradianceCacheMinRadius, 0.0f, 1);
 
     ImGui::End();
 }

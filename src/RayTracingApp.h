@@ -72,7 +72,6 @@ public:
 
     struct RtPushConstant {
         uint randomUInt;
-        int lightType = 0;
         uint previousFrames = -1;
         int maxDepth = 6;
         int samplesPerPixel = 1;
@@ -89,6 +88,8 @@ public:
         float irradianceVisualizationScale = 1.0;
         int useIrradianceGradients = 0;
         int isIrradiancePrepareFrame = 0;
+        int irradianceNumNEE = 1;
+        float irradianceCacheMinRadius = 0.1;
         int useVisibleSphereSampling = 1;
     } rtPushConstants;
 
@@ -101,6 +102,8 @@ private:
     bool autoRotate = false;
     bool accumulateResults = false;
     bool hasInputChanged = false;
+    bool needSceneReload = false;
+    int currentScene;
 
     bool takePicture = false;
 
@@ -186,6 +189,8 @@ private:
     void sceneSwitcher(int num);
 
     void cleanupRtPipeline();
+
+    void takePictureCurrentTime();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

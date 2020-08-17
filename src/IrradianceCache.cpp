@@ -71,6 +71,7 @@ void IrradianceCache::createBuffers() {
 void IrradianceCache::updateSpheres() {
     rtBuilder.updateBlas(0);
     rtBuilder.updateTlasMatrices(instances);
+    updated = true;
 }
 
 std::array<vk::DescriptorSetLayoutBinding, 4> IrradianceCache::getDescriptorSetLayouts() {
@@ -156,4 +157,8 @@ void IrradianceCache::cleanUp() {
     device.destroy(spheresBuffer);
     device.destroy(aabbsBuffer);
     device.destroy(cacheBuffer);
+}
+
+bool IrradianceCache::wasUpdated() const {
+    return updated;
 }

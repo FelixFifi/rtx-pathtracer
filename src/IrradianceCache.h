@@ -37,6 +37,12 @@ private:
     std::shared_ptr<VulkanOps> vulkanOps;
     nvvkpp::RaytracingBuilderKHR rtBuilder;
 
+    bool updated = false;
+public:
+    bool wasUpdated() const;
+
+private:
+
     vk::Device device;
 
     vk::Buffer spheresBuffer;

@@ -18,7 +18,6 @@ struct shadowCheck {
 struct pushConstant
 {
     uint randomUInt;
-    int   lightType;
     uint previousFrames;
     int maxDepth;
     int samplesPerPixel;
@@ -35,6 +34,8 @@ struct pushConstant
     float irradianceVisualizationScale;
     bool useIrradianceGradients;
     bool isIrradiancePrepareFrame;
+    int irradianceNumNEE;
+    float irradianceCacheMinRadius;
     bool useVisibleSphereSampling;
 };
 
