@@ -608,6 +608,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
+    hasInputChanged |= ImGui::Checkbox("Perform Visibility Check",
+                                       reinterpret_cast<bool *>(&rtPushConstants.irradianceCachePerformVisibilityCheck));
 
     ImGui::Spacing();
     ImGui::InputFloat("Update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,

@@ -36,6 +36,7 @@ struct pushConstant
     bool isIrradiancePrepareFrame;
     int irradianceNumNEE;
     float irradianceCacheMinRadius;
+    bool irradianceCachePerformVisibilityCheck;
     bool useVisibleSphereSampling;
 };
 

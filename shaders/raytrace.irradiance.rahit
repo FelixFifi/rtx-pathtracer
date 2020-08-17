@@ -31,7 +31,7 @@ void main() {
         weight = 1000000;
     }
 
-    if (weight <= 1.0 / pushC.irradianceA || !visibilityCheck(cacheInfo.origin, cacheInfo.normal, gl_PrimitiveID)) {
+    if (weight <= 1.0 / pushC.irradianceA || (pushC.irradianceCachePerformVisibilityCheck && !visibilityCheck(cacheInfo.origin, cacheInfo.normal, gl_PrimitiveID))) {
         return;
     }
 

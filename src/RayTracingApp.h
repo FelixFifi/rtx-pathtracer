@@ -90,6 +90,7 @@ public:
         int isIrradiancePrepareFrame = 0;
         int irradianceNumNEE = 1;
         float irradianceCacheMinRadius = 0.1;
+        int irradianceCachePerformVisibilityCheck = 1;
         int useVisibleSphereSampling = 1;
     } rtPushConstants;
 
