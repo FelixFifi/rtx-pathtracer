@@ -693,6 +693,7 @@ vec3 raytrace(vec3 origin, vec3 direction, int maxDepth, int maxFollowDiscrete, 
                 followCount++;
             }
         } else {
+            addNextDirectLights = false;
             follow = false;
 
             if (useNEE) {
