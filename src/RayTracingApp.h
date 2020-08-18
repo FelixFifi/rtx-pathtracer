@@ -80,6 +80,7 @@ public:
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 0;
         int showIrradianceCacheOnly = 0;
+        int showIrradianceGradients = 0;
         int useIrradianceCache = 0;
         int highlightIrradianceCacheColor = 0;
         float irradianceA = 0.2;
@@ -87,6 +88,7 @@ public:
         float irradianceCreateProb = 0.0001;
         float irradianceVisualizationScale = 1.0;
         int useIrradianceGradients = 0;
+        float irradianceGradientsMaxLength = 5;
         int isIrradiancePrepareFrame = 0;
         int irradianceNumNEE = 1;
         float irradianceCacheMinRadius = 0.1;

@@ -776,6 +776,37 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
     return false;
 }
 
+
+/**
+* returns true if cache hits found
+*/
+bool queryIrradianceCacheGradients(vec3 origin, vec3 normal, out vec3 color) {
+    cacheInfo.origin = origin;
+    cacheInfo.normal = normal;
+    cacheInfo.cacheValueSum = vec3(0, 0, 0);
+    cacheInfo.totalWeight = 0;
+
+    traceRayEXT(irradianceAS, // acceleration structure
+    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
+    0xFF, // cullMask
+    1, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    0, // ray min range
+    normal.xyz, // ray direction
+    tMin, // ray max range
+    3// payload (location = 3)
+    );
+
+    if (cacheInfo.totalWeight > 0) {
+        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
+        return true;
+    }
+
+    return false;
+}
+
 /**
 * returns the harmonicR
 */
@@ -786,7 +817,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
     float invDistanceSum = 0;
     int numDistances = 0;
     int maxFollowDiscrete = 10;
-    bool createIC = true;
+    bool createIC = false;
     const bool addDirectLights = false;
 
 
@@ -825,7 +856,11 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             float nextJTheta = asin(sqrt((j + 1) / float(M)));
 
             // Rotation gradient
-            rotGrad += -tan(theta) * L * vk;
+            float tanTheta = tan(theta);
+            if (isinf(tanTheta) || isnan(tanTheta)) {
+                tanTheta = 0;
+            }
+            rotGrad -= tanTheta * L * vk;
 
             // Translational gradient
             if (j > 0) {
@@ -861,6 +896,19 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
     return harmonicR;
 }
 
+void clampGradients(inout vec3 rotGrad, inout vec3 transGrad) {
+    // Gradients get scaled down if they surpass a maximum length
+    float lengthRot = length(rotGrad);
+    if (lengthRot > pushC.irradianceGradientsMaxLength) {
+        rotGrad *= pushC.irradianceGradientsMaxLength / lengthRot;
+    }
+
+    float lengthTrans = length(transGrad);
+    if (lengthTrans > pushC.irradianceGradientsMaxLength) {
+        transGrad *= pushC.irradianceGradientsMaxLength / lengthTrans;
+    }
+}
+
 /**
 * Updates color and radius of cache entry
 */
@@ -886,8 +934,12 @@ void updateIrradianceCache() {
     float a = min(numUpdates / float(numUpdates + 1), 0.95);
 
     cache[cacheIndex].color = mix(calculatedColor, cache[cacheIndex].color, a);
-    cache[cacheIndex].rotGrad = mix(rotGrad, cache[cacheIndex].rotGrad, a);
-    cache[cacheIndex].transGrad = mix(transGrad, cache[cacheIndex].transGrad, a);
+
+    rotGrad = mix(rotGrad, cache[cacheIndex].rotGrad, a);
+    transGrad = mix(transGrad, cache[cacheIndex].transGrad, a);
+    clampGradients(rotGrad, transGrad);
+    cache[cacheIndex].rotGrad = rotGrad;
+    cache[cacheIndex].transGrad = transGrad;
 
     float radius;
     if (harmonicR > 0) {
@@ -930,6 +982,8 @@ bool createIrradianceCache(vec3 origin, vec3 normal, out vec3 calculatedColor) {
     // Lower bound for radius to prevent unlimited number of IC entries in corners
     harmonicR = max(harmonicR, pushC.irradianceCacheMinRadius);
 
+    clampGradients(rotGrad, transGrad);
+
     cache[cacheIndex].normal = normal;
     cache[cacheIndex].color = calculatedColor;
     cache[cacheIndex].harmonicR = harmonicR;
@@ -966,12 +1020,23 @@ vec3 visualizeIC(vec3 origin, vec3 direction) {
     }
 
     vec3 icColor;
-    if (queryIrradianceCache(info.worldPos, info.normal, icColor)) {
-        if (pushC.highlightIrradianceCacheColor) {
-            icColor -= min(min(icColor.r, icColor.g), icColor.b).xxx;
-        }
+    if (pushC.showIrradianceGradients) {
+        // extra gradient visualization shader
+        if (queryIrradianceCacheGradients(info.worldPos, info.normal, icColor)) {
+            if (pushC.highlightIrradianceCacheColor) {
+                icColor -= min(min(icColor.r, icColor.g), icColor.b).xxx;
+            }
 
-        return pushC.irradianceVisualizationScale * icColor;
+            return pushC.irradianceVisualizationScale * icColor;
+        }
+    } else {
+        if (queryIrradianceCache(info.worldPos, info.normal, icColor)) {
+            if (pushC.highlightIrradianceCacheColor) {
+                icColor -= min(min(icColor.r, icColor.g), icColor.b).xxx;
+            }
+
+            return pushC.irradianceVisualizationScale * icColor;
+        }
     }
     return vec3(0, 0, 0);
 }

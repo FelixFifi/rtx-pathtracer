@@ -26,6 +26,7 @@ struct pushConstant
     bool enableAverageInsteadOfMix;
     bool enableMIS;
     bool showIrradianceCacheOnly;
+    bool showIrradianceGradients;
     bool useIrradianceCache;
     bool highlightIrradianceCacheColor;
     float irradianceA;
@@ -33,6 +34,7 @@ struct pushConstant
     float irradianceCreateProb;
     float irradianceVisualizationScale;
     bool useIrradianceGradients;
+    float irradianceGradientsMaxLength;
     bool isIrradiancePrepareFrame;
     int irradianceNumNEE;
     float irradianceCacheMinRadius;

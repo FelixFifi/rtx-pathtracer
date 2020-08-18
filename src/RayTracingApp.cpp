@@ -395,8 +395,7 @@ void RayTracingApp::createRtPipeline() {
     auto sphereChitCode = readFile("shaders/raytrace.sphere.rchit.spv");
     auto irradianceIntCode = readFile("shaders/raytrace.irradiance.rint.spv");
     auto irradianceAhitCode = readFile("shaders/raytrace.irradiance.rahit.spv");
-    auto irradianceVisualizeIntCode = readFile("shaders/raytrace.irradiance.visualize.rint.spv");
-    auto irradianceVisualizeChitCode = readFile("shaders/raytrace.irradiance.visualize.rchit.spv");
+    auto irradianceVisualizeAhitCode = readFile("shaders/raytrace.irradiance.visualize.rahit.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -407,8 +406,7 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule sphereChitShaderModule = vulkanOps->createShaderModule(sphereChitCode);
     vk::ShaderModule irradianceIntShaderModule = vulkanOps->createShaderModule(irradianceIntCode);
     vk::ShaderModule irradianceAhitShaderModule = vulkanOps->createShaderModule(irradianceAhitCode);
-    vk::ShaderModule irradianceVisualizeIntShaderModule = vulkanOps->createShaderModule(irradianceVisualizeIntCode);
-    vk::ShaderModule irradianceVisualizeChitShaderModule = vulkanOps->createShaderModule(irradianceVisualizeChitCode);
+    vk::ShaderModule irradianceVisualizeAhitShaderModule = vulkanOps->createShaderModule(irradianceVisualizeAhitCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -472,14 +470,14 @@ void RayTracingApp::createRtPipeline() {
     hg2.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg2);
 
-    // Hit Group 3 - Irradiance visualization Intersection + Closest Hit
+    // Hit Group 3 - Irradiance Any hit
     vk::RayTracingShaderGroupCreateInfoKHR hg3{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
                                                VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
                                                VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
-    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, irradianceVisualizeChitShaderModule, "main"});
-    hg3.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+    stages.push_back({{}, vk::ShaderStageFlagBits::eAnyHitKHR, irradianceVisualizeAhitShaderModule, "main"});
+    hg3.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
 
-    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, irradianceVisualizeIntShaderModule, "main"});
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, irradianceIntShaderModule, "main"});
     hg3.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg3);
 
@@ -523,8 +521,7 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(sphereChitShaderModule);
     device.destroy(irradianceIntShaderModule);
     device.destroy(irradianceAhitShaderModule);
-    device.destroy(irradianceVisualizeIntShaderModule);
-    device.destroy(irradianceVisualizeChitShaderModule);
+    device.destroy(irradianceVisualizeAhitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -616,13 +613,17 @@ void RayTracingApp::imGuiWindowSetup() {
                       "%.6f");
     ImGui::InputFloat("Create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
                       "%.6f");
+    ImGui::Spacing();
     ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
     bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
     needSceneReload |= irradianceCache.wasUpdated() && irNumNeeChanged;
+    hasInputChanged |= ImGui::SliderFloat("Gradients max length", &rtPushConstants.irradianceGradientsMaxLength, 0.0f, 50.0f);
 
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Show only IC",
                                        reinterpret_cast<bool *>(&rtPushConstants.showIrradianceCacheOnly));
+    hasInputChanged |= ImGui::Checkbox("Show IC Gradients",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showIrradianceGradients));
     hasInputChanged |= ImGui::Checkbox("Highlight IC Color",
                                        reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
     hasInputChanged |= ImGui::SliderFloat("Visualization scale",
