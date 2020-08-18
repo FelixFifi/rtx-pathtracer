@@ -50,6 +50,23 @@ struct newIrradianceCacheInfo {
 newIrradianceCacheInfo newIrradianceCacheEntries[MAX_NEW_IRRADIANCE_ENTRIES];
 int nextNewIrradianceCacheSlot = 0;
 
+// Store ray splits
+struct splitInfo {
+    vec3 origin;
+    vec3 normal;
+    vec3 wi;
+    vec3 throughput;
+    vec2 textureUV;
+    int matIndex;
+    int currentDepth;
+    bool isFrontFace;
+};
+
+// Queue with fixed max length
+#define MAX_SPLITS 10
+splitInfo splits[MAX_SPLITS];
+int nextSplitSlot = 0;
+
 //@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
@@ -632,12 +649,37 @@ vec3 multipleNEE(Material mat, vec3 origin, vec3 direction, vec3 normal, int num
     return result / numNEE;
 }
 
-vec3 raytrace(vec3 origin, vec3 direction, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
+/**
+* Stores the parameters to start a new split ray from that position.
+* @returns false if max splits reached
+*/
+bool split(vec3 origin, vec3 normal, vec3 wi, vec3 throughput, vec2 textureUV, int matIndex, int currentDepth, bool isFrontFace) {
+    if (nextSplitSlot >= MAX_SPLITS) {
+        return false;
+    }
+
+    splitInfo split;
+    split.origin = origin;
+    split.normal = normal;
+    split.wi = wi;
+    split.throughput = throughput;
+    split.textureUV = textureUV;
+    split.matIndex = matIndex;
+    split.currentDepth = currentDepth;
+    split.isFrontFace = isFrontFace;
+
+    splits[nextSplitSlot] = split;
+    nextSplitSlot++;
+
+    return true;
+}
+
+vec3 raytrace(vec3 origin, vec3 direction, int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
     bool follow = true;
     int followCount = 0;
     bool addNextDirectLights = false;
     float r = tMax;
-    int depth = 0;
+    int depth = currentDepth;
     vec3 normal;
     firstT = tMax;
 
@@ -728,6 +770,12 @@ vec3 raytrace(vec3 origin, vec3 direction, int maxDepth, int maxFollowDiscrete, 
                             nextNewIrradianceCacheSlot++;
                         }
                     }
+                }
+            }
+
+            if (depth == 1) {
+                if (split(origin, normal, -direction, 0.5 * throughput, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
+                    throughput *= 0.5;
                 }
             }
         }
@@ -843,7 +891,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
             float r = tMax;
 
-            vec3 sampleColor = raytrace(origin, direction, 1, maxFollowDiscrete, addDirectLights, true, pushC.irradianceNumNEE, true, createIC, r);
+            vec3 sampleColor = raytrace(origin, direction, 0, 1, maxFollowDiscrete, addDirectLights, true, pushC.irradianceNumNEE, true, createIC, r);
             color += sampleColor;
 
             if (r < tMax) {
@@ -1061,6 +1109,8 @@ void main() {
     const bool addDirectLights = !useNEE;
     const int numNEE = 1;
 
+    float firstT;
+
     const bool useIC = pushC.useIrradianceCache;
 
     for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
@@ -1070,13 +1120,27 @@ void main() {
         vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
         vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
         vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
-
-        float firstT;
         if (pushC.showIrradianceCacheOnly) {
             result += visualizeIC(origin, direction);
         } else {
-            result += raytrace(origin, direction, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
+            result += raytrace(origin, direction, 0, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
         }
+    }
+
+
+    for (int iSplit = 0; iSplit < nextSplitSlot; iSplit++) {
+        splitInfo split = splits[iSplit];
+
+        Material mat = mats[split.matIndex];
+        vec3 direction;
+        float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
+
+        if (pdf <= 0.0) {
+            break;
+        }
+        vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
+
+        result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
     }
 
     result /= samplesPerPixel;
