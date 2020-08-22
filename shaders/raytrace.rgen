@@ -27,6 +27,11 @@
 #define LIGHT_SPHERE 2
 #define LIGHT_ENV_MAP 3
 
+#define VISU_RAYTRACE 0
+#define VISU_DEPTH_MAX 1
+#define VISU_DEPTH_AVERAGE 2
+#define VISU_SPLITS 3
+
 #define MAX_DISCRETE_FOLLOW 5
 
 #define SIZE_LIGHT_RANDOM 10000
@@ -674,7 +679,7 @@ bool split(vec3 origin, vec3 normal, vec3 wi, vec3 throughput, vec2 textureUV, i
     return true;
 }
 
-vec3 raytrace(vec3 origin, vec3 direction, int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
+vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
     bool follow = true;
     int followCount = 0;
     bool addNextDirectLights = false;
@@ -791,6 +796,7 @@ vec3 raytrace(vec3 origin, vec3 direction, int currentDepth, int maxDepth, int m
         direction = newDirection;
     } while (depth <= maxDepth || (follow && followCount <= maxFollowDiscrete));
 
+    currentDepth = depth;
     return result;
 }
 
@@ -891,7 +897,8 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
 
             float r = tMax;
 
-            vec3 sampleColor = raytrace(origin, direction, 0, 1, maxFollowDiscrete, addDirectLights, true, pushC.irradianceNumNEE, true, createIC, r);
+            int currentDepth = 0;
+            vec3 sampleColor = raytrace(origin, direction, currentDepth, 1, maxFollowDiscrete, addDirectLights, true, pushC.irradianceNumNEE, true, createIC, r);
             color += sampleColor;
 
             if (r < tMax) {
@@ -1089,62 +1096,7 @@ vec3 visualizeIC(vec3 origin, vec3 direction) {
     return vec3(0, 0, 0);
 }
 
-void main() {
-    // Init seed
-    seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
-
-    vec3 result = vec3(0.0, 0.0, 0.0);
-
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-
-    if (pushC.useIrradianceCache && rnd() < pushC.irradianceUpdateProb) {
-        updateIrradianceCache();
-    }
-
-    // Prepare frames should only have one sample per pixel
-    const int samplesPerPixel = pushC.isIrradiancePrepareFrame ? 1 : pushC.samplesPerPixel;
-    const int maxDepth = pushC.maxDepth;
-    const int maxFollowDiscrete = 3;
-    const bool useNEE = pushC.enableNEE;
-    const bool addDirectLights = !useNEE;
-    const int numNEE = 1;
-
-    float firstT;
-
-    const bool useIC = pushC.useIrradianceCache;
-
-    for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
-        vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
-        vec2 d = inUV * 2.0 - 1.0;
-
-        vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
-        vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-        vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
-        if (pushC.showIrradianceCacheOnly) {
-            result += visualizeIC(origin, direction);
-        } else {
-            result += raytrace(origin, direction, 0, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
-        }
-    }
-
-
-    for (int iSplit = 0; iSplit < nextSplitSlot; iSplit++) {
-        splitInfo split = splits[iSplit];
-
-        Material mat = mats[split.matIndex];
-        vec3 direction;
-        float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
-
-        if (pdf <= 0.0) {
-            break;
-        }
-        vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
-
-        result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
-    }
-
-    result /= samplesPerPixel;
-
+void saveResult(vec3 result) {
     ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
 
     if (pushC.enableAverageInsteadOfMix) {
@@ -1170,7 +1122,103 @@ void main() {
             imageStore(image, imageUV, vec4(result, 1.0));
         }
     }
+}
 
+void main() {
+    // Init seed
+    seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
+
+    vec3 result = vec3(0.0, 0.0, 0.0);
+
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+
+    if (pushC.useIrradianceCache && rnd() < pushC.irradianceUpdateProb) {
+        updateIrradianceCache();
+    }
+
+    // Prepare frames should only have one sample per pixel
+    const int samplesPerPixel = pushC.isIrradiancePrepareFrame ? 1 : pushC.samplesPerPixel;
+    const int maxDepth = pushC.maxDepth;
+    const int maxFollowDiscrete = 3;
+    const bool useNEE = pushC.enableNEE;
+    const bool addDirectLights = !useNEE;
+    const int numNEE = 1;
+
+    int maxReachedDepth = 0;
+    int depthSum = 0;
+    int depthsCounter = 0;
+
+    float firstT;
+
+    const bool useIC = pushC.useIrradianceCache;
+
+    for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
+        vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
+        vec2 d = inUV * 2.0 - 1.0;
+
+        vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
+        vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+        vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+        if (pushC.showIrradianceCacheOnly) {
+            result += visualizeIC(origin, direction);
+        } else {
+            int currentDepth = 0;
+            result += raytrace(origin, direction, currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
+            maxReachedDepth = max(maxReachedDepth, currentDepth);
+            depthSum += currentDepth;
+            depthsCounter++;
+        }
+    }
+
+
+    for (int iSplit = 0; iSplit < nextSplitSlot; iSplit++) {
+        splitInfo split = splits[iSplit];
+
+        Material mat = mats[split.matIndex];
+        vec3 direction;
+        float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
+
+        if (pdf <= 0.0) {
+            break;
+        }
+        vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
+
+        result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, useNEE, numNEE, useIC, true, firstT);
+
+        maxReachedDepth = max(maxReachedDepth, split.currentDepth);
+        depthSum += split.currentDepth;
+        depthsCounter++;
+    }
+
+    result /= samplesPerPixel;
+
+
+    switch (pushC.visualizeMode) {
+        case VISU_RAYTRACE:
+        saveResult(result);
+        break;
+        case VISU_DEPTH_MAX:
+        {
+            float a = maxReachedDepth / float(maxDepth);
+            vec3 color = vec3(a,0,0);
+            saveResult(color);
+            break;
+        }
+        case VISU_DEPTH_AVERAGE:
+        {
+            float a = depthSum / float(depthsCounter) / float(maxDepth);
+            vec3 color = vec3(a,0,0);
+            saveResult(color);
+            break;
+        }
+        case VISU_SPLITS:
+        {
+            float a = nextSplitSlot / float(MAX_SPLITS);
+            vec3 color = vec3(a,0,0);
+            saveResult(color);
+            break;
+        }
+    }
 
     // Create IC entries
     for (int i = 0; i < nextNewIrradianceCacheSlot; i++) {

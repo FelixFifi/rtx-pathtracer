@@ -528,7 +528,7 @@ void RayTracingApp::createRtShaderBindingTable() {
     auto groupCount =
             static_cast<uint32_t>(rtShaderGroups.size());
     uint32_t groupHandleSize = rtProperties.shaderGroupHandleSize;  // Size of a program identifier
-    uint32_t baseAlignment   = rtProperties.shaderGroupBaseAlignment;  // Size of shader alignment
+    uint32_t baseAlignment = rtProperties.shaderGroupBaseAlignment;  // Size of shader alignment
 
     // Fetch all the shader handles used in the pipeline, so that they can be written in the SBT
     uint32_t sbtSize = groupCount * baseAlignment;
@@ -549,11 +549,10 @@ void RayTracingApp::createRtShaderBindingTable() {
                             stagingBuffer, stagingBufferMemory);
 
     uint8_t *data;
-    data = reinterpret_cast<uint8_t*>(device.mapMemory(stagingBufferMemory, 0, sbtSize));
+    data = reinterpret_cast<uint8_t *>(device.mapMemory(stagingBufferMemory, 0, sbtSize));
 
     // Write the handles in the SBT
-    for(uint32_t g = 0; g < groupCount; g++)
-    {
+    for (uint32_t g = 0; g < groupCount; g++) {
         memcpy(data, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);  // raygen
         data += baseAlignment;
     }
@@ -589,6 +588,19 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
 
+    hasInputChanged |= ImGui::Checkbox("Show:", &showOtherVisualizations);
+
+
+    hasInputChanged |= ImGui::RadioButton("Max Depth",&currentVisualizeMode, EDepthMax); ImGui::SameLine();
+    hasInputChanged |= ImGui::RadioButton("Average Depth",&currentVisualizeMode, EDepthAverage); ImGui::SameLine();
+    hasInputChanged |= ImGui::RadioButton("Splits",&currentVisualizeMode, ESplits);
+
+    rtPushConstants.visualizeMode = ERayTrace;
+
+    if (showOtherVisualizations) {
+        rtPushConstants.visualizeMode = currentVisualizeMode;
+    }
+
     ImGui::Spacing();
 
     ImGui::Checkbox("Take picture", &takePicture);
@@ -617,7 +629,8 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
     bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
     needSceneReload |= irradianceCache.wasUpdated() && irNumNeeChanged;
-    hasInputChanged |= ImGui::SliderFloat("Gradients max length", &rtPushConstants.irradianceGradientsMaxLength, 0.0f, 50.0f);
+    hasInputChanged |= ImGui::SliderFloat("Gradients max length", &rtPushConstants.irradianceGradientsMaxLength, 0.0f,
+                                          50.0f);
 
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Show only IC",

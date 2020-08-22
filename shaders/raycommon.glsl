@@ -25,6 +25,7 @@ struct pushConstant
     bool enableNEE;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
+    int visualizeMode;
     bool showIrradianceCacheOnly;
     bool showIrradianceGradients;
     bool useIrradianceCache;

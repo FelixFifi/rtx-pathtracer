@@ -55,6 +55,13 @@ static const int MAX_RECURSION = 2;
 
 static const int ACCUMULATE_IMAGE_BINDING = 9;
 
+enum VisualizationMode {
+    ERayTrace = 0,
+    EDepthMax = 1,
+    EDepthAverage = 2,
+    ESplits = 3
+};
+
 struct CameraMatrices {
     glm::mat4 view;
     glm::mat4 proj;
@@ -79,6 +86,7 @@ public:
         int enableNEE = 1; // GLSL has 4 byte bool
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 0;
+        int visualizeMode = ERayTrace;
         int showIrradianceCacheOnly = 0;
         int showIrradianceGradients = 0;
         int useIrradianceCache = 0;
@@ -107,6 +115,8 @@ private:
     bool hasInputChanged = false;
     bool needSceneReload = false;
     int currentScene;
+    bool showOtherVisualizations = false;
+    int currentVisualizeMode = 1;
 
     bool takePicture = false;
 
