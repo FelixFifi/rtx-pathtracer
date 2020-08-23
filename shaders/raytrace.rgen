@@ -635,19 +635,26 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
             0// payload (location = 0)
             );
 
-            // Check if a light was hit at all
-            Material matSample = mats[info.matIndex];
-            if (!info.isMiss && matSample.type == 3) {
-                int iLight = instanceInfos[info.instanceIndex].iLight;
-                Light light = lights[iLight];
-
-                lightColor = matSample.lightColor;
-                pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
+            if (info.isMiss) {
+                lightColor = info.missColor;
+                pdfLights = M_INV_2PI;
 
                 neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir, info.isFrontFace) *
                 lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
-            }
+            } else {
+                // Check if a light was hit at all
+                Material matSample = mats[info.matIndex];
+                if (matSample.type == MAT_LIGHT) {
+                    int iLight = instanceInfos[info.instanceIndex].iLight;
+                    Light light = lights[iLight];
 
+                    lightColor = matSample.lightColor;
+                    pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
+
+                    neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir, info.isFrontFace) *
+                    lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
+                }
+            }
 
         }
     }
@@ -801,11 +808,11 @@ vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth,
                 }
             }
 
-//            if (depth == 1) {
-//                if (split(origin, normal, -direction, 0.5 * throughput, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
-//                    throughput *= 0.5;
-//                }
-//            }
+            //            if (depth == 1) {
+            //                if (split(origin, normal, -direction, 0.5 * throughput, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
+            //                    throughput *= 0.5;
+            //                }
+            //            }
         }
 
         vec3 newDirection;
@@ -1224,21 +1231,21 @@ void main() {
         case VISU_DEPTH_MAX:
         {
             float a = maxReachedDepth / float(maxDepth);
-            vec3 color = vec3(a,0,0);
+            vec3 color = vec3(a, 0, 0);
             saveResult(color);
             break;
         }
         case VISU_DEPTH_AVERAGE:
         {
             float a = depthSum / float(depthsCounter) / float(maxDepth);
-            vec3 color = vec3(a,0,0);
+            vec3 color = vec3(a, 0, 0);
             saveResult(color);
             break;
         }
         case VISU_SPLITS:
         {
             float a = nextSplitSlot / float(MAX_SPLITS);
-            vec3 color = vec3(a,0,0);
+            vec3 color = vec3(a, 0, 0);
             saveResult(color);
             break;
         }
