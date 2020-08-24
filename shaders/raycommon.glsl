@@ -20,11 +20,14 @@ struct pushConstant
     uint randomUInt;
     uint previousFrames;
     int maxDepth;
+    int maxFollowDiscrete;
     int samplesPerPixel;
     bool enableRR;
     bool enableNEE;
+    int numNEE;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
+    bool storeEstimate;
     int visualizeMode;
     bool showIrradianceCacheOnly;
     bool showIrradianceGradients;

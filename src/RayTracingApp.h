@@ -54,12 +54,14 @@ const std::vector<std::string> SCENES{
 static const int MAX_RECURSION = 2;
 
 static const int ACCUMULATE_IMAGE_BINDING = 9;
+static const int ESTIMATE_IMAGE_BINDING = 14;
 
 enum VisualizationMode {
     ERayTrace = 0,
     EDepthMax = 1,
     EDepthAverage = 2,
-    ESplits = 3
+    ESplits = 3,
+    EEstimate = 4
 };
 
 struct CameraMatrices {
@@ -81,11 +83,14 @@ public:
         uint randomUInt;
         uint previousFrames = -1;
         int maxDepth = 6;
+        int maxFollowDiscrete = 3;  // TODO: Option to estimate surface after > maxFollow as diffuse
         int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
+        int numNEE = 1;
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 0;
+        int storeEstimate = 0;
         int visualizeMode = ERayTrace;
         int showIrradianceCacheOnly = 0;
         int showIrradianceGradients = 0;
@@ -126,6 +131,9 @@ private:
     int irradianceCachePrepareFrames = 10;
     int currentPrepareFrames = 0;
 
+    RtPushConstant backupPushConstant;
+    bool loadBackupNextIteration = false;
+
     // Vulkan
     vk::Buffer uniformBuffer;
     vk::DeviceMemory uniformBufferMemory;
@@ -138,7 +146,10 @@ private:
     vk::Image accumulateImage;
     vk::DeviceMemory accumulateImageMemory;
     vk::ImageView accumulateImageView;
-    vk::Sampler accumulateImageSampler;
+
+    vk::Image estimateImage;
+    vk::DeviceMemory estimateImageMemory;
+    vk::ImageView estimateImageView;
 
     // From window
     std::shared_ptr<VulkanOps> vulkanOps;
@@ -198,13 +209,15 @@ private:
 
     void imGuiWindowSetup();
 
-    void createAccumulateImage();
+    void createVulkanImages();
 
     void sceneSwitcher(int num);
 
     void cleanupRtPipeline();
 
     void takePictureCurrentTime();
+
+    void setEstimateRTSettings();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

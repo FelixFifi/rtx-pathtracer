@@ -33,14 +33,15 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
-    createAccumulateImage();
+    createVulkanImages();
     createUniformBuffers();
     loadScene();
 
     initRayTracing();
 }
 
-void RayTracingApp::createAccumulateImage() {
+void RayTracingApp::createVulkanImages() {
+    // Accumulate image
     vk::Format format = vk::Format::eR32G32B32A32Sfloat;
     vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eStorage;
     vulkanOps->createImage(offscreenExtent.width, offscreenExtent.height, format, vk::ImageTiling::eOptimal, usage,
@@ -49,6 +50,14 @@ void RayTracingApp::createAccumulateImage() {
     accumulateImageView = vulkanOps->createImageView(accumulateImage, format, vk::ImageAspectFlagBits::eColor);
 
     vulkanOps->transitionImageLayout(accumulateImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+
+    // Estimate image
+    vulkanOps->createImage(offscreenExtent.width, offscreenExtent.height, format, vk::ImageTiling::eOptimal, usage,
+                           vk::MemoryPropertyFlagBits::eDeviceLocal, estimateImage, estimateImageMemory);
+
+    estimateImageView = vulkanOps->createImageView(estimateImage, format, vk::ImageAspectFlagBits::eColor);
+
+    vulkanOps->transitionImageLayout(estimateImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 }
 
 void RayTracingApp::loadScene() {
@@ -181,11 +190,14 @@ void RayTracingApp::createDecriptorSetLayout() {
     vk::DescriptorSetLayoutBinding accumulateImageLayoutBinding(ACCUMULATE_IMAGE_BINDING,
                                                                 vk::DescriptorType::eStorageImage, 1,
                                                                 vk::ShaderStageFlagBits::eRaygenKHR);
+    vk::DescriptorSetLayoutBinding estimateImageLayoutBinding(ESTIMATE_IMAGE_BINDING,
+                                                                vk::DescriptorType::eStorageImage, 1,
+                                                                vk::ShaderStageFlagBits::eRaygenKHR);
 
 
     auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
     auto irradianceBindings = irradianceCache.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, 14> bindings = {uniformBufferLayoutBinding,
+    std::array<vk::DescriptorSetLayoutBinding, ESTIMATE_IMAGE_BINDING + 1> bindings = {uniformBufferLayoutBinding,
                                                                sceneBindings[0],
                                                                sceneBindings[1],
                                                                sceneBindings[2],
@@ -198,7 +210,8 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                irradianceBindings[0],
                                                                irradianceBindings[1],
                                                                irradianceBindings[2],
-                                                               irradianceBindings[3]};
+                                                               irradianceBindings[3],
+                                                               estimateImageLayoutBinding};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -209,7 +222,7 @@ void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
     auto irradiancePoolSizes = irradianceCache.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, 14> poolSizes = {
+    std::array<vk::DescriptorPoolSize, ESTIMATE_IMAGE_BINDING + 1> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -224,7 +237,8 @@ void RayTracingApp::createDescriptorPool() {
             irradiancePoolSizes[0],
             irradiancePoolSizes[1],
             irradiancePoolSizes[2],
-            irradiancePoolSizes[3]
+            irradiancePoolSizes[3],
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1),
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -243,6 +257,8 @@ void RayTracingApp::createDescriptorSets() {
 
     vk::DescriptorBufferInfo bufferInfo(uniformBuffer, 0, sizeof(CameraMatrices));
     vk::DescriptorImageInfo accumulateImageInfo({}, accumulateImageView,
+                                                vk::ImageLayout::eGeneral);
+    vk::DescriptorImageInfo estimateImageInfo({}, estimateImageView,
                                                 vk::ImageLayout::eGeneral);
 
 
@@ -275,7 +291,14 @@ void RayTracingApp::createDescriptorSets() {
                                                                                vk::DescriptorType::eStorageImage,
                                                                                &accumulateImageInfo,
                                                                                nullptr, nullptr);
-    std::array<vk::WriteDescriptorSet, ACCUMULATE_IMAGE_BINDING + 5> descriptorWrites = {
+
+    const vk::WriteDescriptorSet estimateImageWrite = vk::WriteDescriptorSet(descriptorSet, ESTIMATE_IMAGE_BINDING,
+                                                                               0,
+                                                                               1,
+                                                                               vk::DescriptorType::eStorageImage,
+                                                                               &estimateImageInfo,
+                                                                               nullptr, nullptr);
+    std::array<vk::WriteDescriptorSet, ESTIMATE_IMAGE_BINDING + 1> descriptorWrites = {
             vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                    vk::DescriptorType::eUniformBuffer, nullptr,
                                    &bufferInfo, nullptr),
@@ -291,7 +314,8 @@ void RayTracingApp::createDescriptorSets() {
             irradianceWrites[0],
             irradianceWrites[1],
             irradianceWrites[2],
-            irradianceWrites[3]
+            irradianceWrites[3],
+            estimateImageWrite
     };
 
     device.updateDescriptorSets(descriptorWrites, nullptr);
@@ -574,12 +598,17 @@ void RayTracingApp::imGuiWindowSetup() {
 
     hasInputChanged |= ImGui::InputInt("Samples per pixel", &rtPushConstants.samplesPerPixel, 1, 5);
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
+    hasInputChanged |= ImGui::InputInt("Max Follow Discrete after max depth", &rtPushConstants.maxFollowDiscrete, 1, 5);
     ImGui::Checkbox("Accumulate results", &accumulateResults);
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
+    hasInputChanged |= ImGui::InputInt("Num NEE", &rtPushConstants.numNEE, 1, 5);
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
+    ImGui::Spacing();
+    hasInputChanged |= ImGui::Checkbox("Estimate image",
+                                       reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));
 
     ImGui::Checkbox("Auto rotate", &autoRotate);
     ImGui::Spacing();
@@ -591,14 +620,17 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Show:", &showOtherVisualizations);
 
 
-    hasInputChanged |= ImGui::RadioButton("Max Depth",&currentVisualizeMode, EDepthMax); ImGui::SameLine();
-    hasInputChanged |= ImGui::RadioButton("Average Depth",&currentVisualizeMode, EDepthAverage); ImGui::SameLine();
-    hasInputChanged |= ImGui::RadioButton("Splits",&currentVisualizeMode, ESplits);
+    bool hasRadioButtonChanged = false;
+    hasRadioButtonChanged |= ImGui::RadioButton("Max Depth",&currentVisualizeMode, EDepthMax); ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Average Depth",&currentVisualizeMode, EDepthAverage); ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Splits",&currentVisualizeMode, ESplits); ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Estimate",&currentVisualizeMode, EEstimate);
 
     rtPushConstants.visualizeMode = ERayTrace;
 
     if (showOtherVisualizations) {
         rtPushConstants.visualizeMode = currentVisualizeMode;
+        hasInputChanged |= hasRadioButtonChanged;
     }
 
     ImGui::Spacing();
@@ -667,6 +699,20 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
         rtPushConstants.isIrradiancePrepareFrame = 0;
     }
 
+    if (rtPushConstants.storeEstimate) {
+        if (loadBackupNextIteration) {
+            rtPushConstants = backupPushConstant;
+            rtPushConstants.storeEstimate = 0;
+            loadBackupNextIteration = false;
+        } else {
+            backupPushConstant = rtPushConstants;
+
+            setEstimateRTSettings();
+
+            loadBackupNextIteration = true;
+        }
+    }
+
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
                               {rtDescSet, descriptorSet}, {});
@@ -701,13 +747,27 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     hasInputChanged = false;
 }
 
+void RayTracingApp::setEstimateRTSettings() {
+    rtPushConstants.samplesPerPixel = 4;
+    rtPushConstants.useIrradianceCache = true;
+    rtPushConstants.useIrradianceCacheOnGlossy = true;
+    rtPushConstants.enableNEE = true;
+    rtPushConstants.visualizeMode = ERayTrace;
+    rtPushConstants.maxDepth = 1;
+    rtPushConstants.maxFollowDiscrete = 10;
+    rtPushConstants.showIrradianceCacheOnly = false;
+}
+
 void RayTracingApp::cleanup() {
     irradianceCache.cleanUp();
 
-    device.destroy(accumulateImageSampler);
     device.destroy(accumulateImageView);
     device.destroyImage(accumulateImage);
     device.free(accumulateImageMemory);
+
+    device.destroy(estimateImageView);
+    device.destroyImage(estimateImage);
+    device.free(estimateImageMemory);
 
     device.free(uniformBufferMemory);
     device.destroy(uniformBuffer);

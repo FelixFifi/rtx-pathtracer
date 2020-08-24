@@ -32,6 +32,7 @@
 #define VISU_DEPTH_MAX 1
 #define VISU_DEPTH_AVERAGE 2
 #define VISU_SPLITS 3
+#define VISU_ESTIMATE 4
 
 #define MAX_DISCRETE_FOLLOW 5
 
@@ -98,6 +99,7 @@ layout(binding = 10, set = 1, scalar) buffer Aabbs { aabb cacheAabbs[]; };
 layout(binding = 11, set = 1) uniform accelerationStructureEXT irradianceAS;
 layout(binding = 12, set = 1, std430) buffer CacheSpheres { sphere cacheSpheres[]; };
 layout(binding = 13, set = 1, scalar) buffer Cache { cacheHeader header; cacheData cache[]; };
+layout(binding = 14, set = 1, rgba32f) uniform image2D estimateImage;
 
 layout(binding = 0, set = 1)
 uniform CameraMatrices{
@@ -1183,6 +1185,19 @@ void saveResult(vec3 result) {
     }
 }
 
+void saveEstimate(vec3 result) {
+    ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
+    imageStore(estimateImage, imageUV, vec4(result, 1.0));
+}
+
+bool visualizeModeNeedsRaytracing() {
+    if (pushC.visualizeMode < VISU_ESTIMATE) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 void main() {
     // Init seed
     seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, pushC.randomUInt);
@@ -1195,62 +1210,68 @@ void main() {
         updateIrradianceCache();
     }
 
-    // Prepare frames should only have one sample per pixel
-    const int samplesPerPixel = pushC.isIrradiancePrepareFrame ? 1 : pushC.samplesPerPixel;
     const int maxDepth = pushC.maxDepth;
-    const int maxFollowDiscrete = 3;
-    const bool useNEE = pushC.enableNEE;
-    const bool addDirectLights = !useNEE;
-    const int numNEE = 1;
-
     int maxReachedDepth = 0;
     int depthSum = 0;
     int depthsCounter = 0;
 
-    float firstT;
+    if (visualizeModeNeedsRaytracing() || pushC.storeEstimate) {
 
-    const bool useIC = pushC.useIrradianceCache;
+        // Prepare frames should only have one sample per pixel
+        const int samplesPerPixel = pushC.isIrradiancePrepareFrame ? 1 : pushC.samplesPerPixel;
+        const int maxFollowDiscrete = pushC.maxFollowDiscrete;
+        const bool useNEE = pushC.enableNEE;
+        const bool addDirectLights = !useNEE;
+        const int numNEE = pushC.numNEE;
 
-    for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
-        vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
-        vec2 d = inUV * 2.0 - 1.0;
+        float firstT;
 
-        vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
-        vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-        vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
-        if (pushC.showIrradianceCacheOnly) {
-            result += visualizeIC(origin, direction);
-        } else {
-            int currentDepth = 0;
-            result += raytrace(origin, direction, currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, true, useNEE, numNEE, useIC, true, firstT);
-            maxReachedDepth = max(maxReachedDepth, currentDepth);
-            depthSum += currentDepth;
+        const bool useIC = pushC.useIrradianceCache;
+
+        for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
+            vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
+            vec2 d = inUV * 2.0 - 1.0;
+
+            vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
+            vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+            vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+            if (pushC.showIrradianceCacheOnly) {
+                result += visualizeIC(origin, direction);
+            } else {
+                int currentDepth = 0;
+                result += raytrace(origin, direction, currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, true, useNEE, numNEE, useIC, true, firstT);
+                maxReachedDepth = max(maxReachedDepth, currentDepth);
+                depthSum += currentDepth;
+                depthsCounter++;
+            }
+        }
+
+
+        for (int iSplit = 0; iSplit < nextSplitSlot; iSplit++) {
+            splitInfo split = splits[iSplit];
+
+            Material mat = mats[split.matIndex];
+            vec3 direction;
+            float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
+
+            if (pdf <= 0.0) {
+                break;
+            }
+            vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
+
+            result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, firstT);
+
+            maxReachedDepth = max(maxReachedDepth, split.currentDepth);
+            depthSum += split.currentDepth;
             depthsCounter++;
         }
+
+        result /= samplesPerPixel;
     }
 
-
-    for (int iSplit = 0; iSplit < nextSplitSlot; iSplit++) {
-        splitInfo split = splits[iSplit];
-
-        Material mat = mats[split.matIndex];
-        vec3 direction;
-        float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
-
-        if (pdf <= 0.0) {
-            break;
-        }
-        vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
-
-        result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, firstT);
-
-        maxReachedDepth = max(maxReachedDepth, split.currentDepth);
-        depthSum += split.currentDepth;
-        depthsCounter++;
+    if (pushC.storeEstimate) {
+        saveEstimate(result);
     }
-
-    result /= samplesPerPixel;
-
 
     switch (pushC.visualizeMode) {
         case VISU_RAYTRACE:
@@ -1275,6 +1296,14 @@ void main() {
             float a = nextSplitSlot / float(MAX_SPLITS);
             vec3 color = vec3(a, 0, 0);
             saveResult(color);
+            break;
+        }
+        case VISU_ESTIMATE:
+        {
+            ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
+            vec3 estimate = imageLoad(estimateImage, imageUV).xyz;
+
+            saveResult(estimate);
             break;
         }
     }
