@@ -1,10 +1,22 @@
 #include <iostream>
 #include "RayTracingApp.h"
 
+void printHelp() {
+    std::cout << "Required parameters: WIDTH HEIGHT" << std::endl;
+}
 
-int main() {
-    const int WIDTH = 1920;
-    const int HEIGHT = 1080;
+int main(int argc, char **argv) {
+    if (argc < 3) {
+        printHelp();
+        return EXIT_FAILURE;
+    }
+
+    int WIDTH;
+    int HEIGHT;
+
+    WIDTH = std::stoi(argv[1]);
+    HEIGHT = std::stoi(argv[2]);
+
     RayTracingApp app(WIDTH, HEIGHT);
 
     app.run();
