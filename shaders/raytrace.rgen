@@ -10,6 +10,7 @@
 #include "random.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
+#define M_INV_PI 1.0 / M_PI
 #define M_INV_2PI 1.0 / (2 * M_PI)
 #define M_HALF_PI M_PI / 2.0
 #define E 2.7182818284590452353602874713527
@@ -674,6 +675,30 @@ bool hasDiscreteDirection(Material mat) {
 
 bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color);
 
+bool isICCapable(Material mat) {
+    if (mat.type == MAT_DIFFUSE || mat.type == MAT_LIGHT) {
+        return true;
+    } else if (pushC.useIrradianceCacheOnGlossy && !hasDiscreteDirection(mat)) {
+        return true;
+    }
+    return false;
+}
+
+vec3 approxDiffuse(Material mat, vec3 normal, vec3 wi, vec2 uv) {
+    switch (mat.type) {
+        case MAT_DIFFUSE:
+        case MAT_LIGHT:
+        case MAT_PHONG:
+        return diffuse(mat, uv);
+
+        case MAT_ROUGH_CONDUCTOR:
+        // Normal conductor but with 1/pi weighting
+        float cosTheta = dot(wi, normal);
+        return fresnelConductor(cosTheta, mat.eta, mat.k).xxx * M_INV_PI;
+    }
+    return vec3(-1,-1,-1);
+}
+
 vec3 multipleNEE(Material mat, vec3 origin, vec3 direction, vec3 normal, int numNEE) {
     vec3 result = vec3(0, 0, 0);
     for (int i = 0; i < numNEE; i++) {
@@ -778,12 +803,15 @@ vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth,
             }
 
             if (useIC) {
-                // If diffuse, then check if irradiance cache is nearby
+                // If diffuse (or non-discrete if enabled), then check if irradiance cache is nearby
                 vec3 irradianceColor;
-                if (mat.type == MAT_DIFFUSE) {
+                if (isICCapable(mat)) {
                     if (queryIrradianceCache(origin, normal, irradianceColor)) {
+
+                        vec3 diffuse = approxDiffuse(mat, normal, -direction, info.textureUV);
+
                         // Record found -> use it
-                        result += throughput * diffuse(mat, info.textureUV) * irradianceColor;
+                        result += throughput * diffuse * irradianceColor;
 
                         // If IC values are used, then NEE is necessary for the complete light values
                         if (!useNEE) {

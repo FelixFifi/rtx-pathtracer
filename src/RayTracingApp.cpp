@@ -616,6 +616,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache Gradients",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceGradients));
+    hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache On Glossy",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCacheOnGlossy));
     hasInputChanged |= ImGui::SliderFloat("Irradiance a", &rtPushConstants.irradianceA, 0.0f, 2.0f);
     hasInputChanged |= ImGui::Checkbox("Perform Visibility Check",
                                        reinterpret_cast<bool *>(&rtPushConstants.irradianceCachePerformVisibilityCheck));

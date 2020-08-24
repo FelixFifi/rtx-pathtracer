@@ -35,6 +35,7 @@ struct pushConstant
     float irradianceCreateProb;
     float irradianceVisualizationScale;
     bool useIrradianceGradients;
+    bool useIrradianceCacheOnGlossy;
     float irradianceGradientsMaxLength;
     bool isIrradiancePrepareFrame;
     int irradianceNumNEE;

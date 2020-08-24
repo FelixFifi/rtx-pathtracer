@@ -38,8 +38,8 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "scenes/irradianceCache.xml",
         "scenes/matpreview.xml",
+        "scenes/irradianceCache.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
         "scenes/mi.xml",
@@ -96,12 +96,13 @@ public:
         float irradianceCreateProb = 0.0001;
         float irradianceVisualizationScale = 1.0;
         int useIrradianceGradients = 0;
+        int useIrradianceCacheOnGlossy = 0;
         float irradianceGradientsMaxLength = 5;
         int isIrradiancePrepareFrame = 0;
         int irradianceNumNEE = 1;
         float irradianceCacheMinRadius = 0.1;
         int irradianceCachePerformVisibilityCheck = 1;
-        int useVisibleSphereSampling = 1;
+        int useVisibleSphereSampling = 0;
     } rtPushConstants;
 
 private:
