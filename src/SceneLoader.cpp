@@ -335,8 +335,6 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
             int width, height;
             std::vector<float> envMap = readEXR(envMapPath.c_str(), width, height);
 
-            writeEXR("test.exr", envMap.data(), width, height);
-
             vulkanOps->createImageFromData(envMap, width, height, vk::Format::eR32G32B32A32Sfloat, textures[0].image,
                                            textures[0].imageMemory, textures[0].imageView);
 
