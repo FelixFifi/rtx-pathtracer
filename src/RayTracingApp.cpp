@@ -679,6 +679,13 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.irradianceCacheMinRadius, 0.0f, 1);
 
     ImGui::End();
+
+    ImGui::Begin("ADRRS");
+    hasInputChanged |= ImGui::Checkbox("Use ADRRS",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useADRRS));
+    hasInputChanged |= ImGui::InputFloat("Window width ratio",
+                                          &rtPushConstants.adrrsS, 1.0f, 5.0f);
+    ImGui::End();
 }
 
 void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {

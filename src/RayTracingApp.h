@@ -38,8 +38,8 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "scenes/matpreview.xml",
         "scenes/irradianceCache.xml",
+        "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
         "scenes/mi.xml",
@@ -108,6 +108,8 @@ public:
         float irradianceCacheMinRadius = 0.1;
         int irradianceCachePerformVisibilityCheck = 1;
         int useVisibleSphereSampling = 0;
+        int useADRRS = 0;
+        float adrrsS = 5;
     } rtPushConstants;
 
 private:

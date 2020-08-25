@@ -45,6 +45,8 @@ struct pushConstant
     float irradianceCacheMinRadius;
     bool irradianceCachePerformVisibilityCheck;
     bool useVisibleSphereSampling;
+    bool useADRRS;
+    float adrrsS;
 };
 
 struct sphere {

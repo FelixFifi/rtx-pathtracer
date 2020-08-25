@@ -74,6 +74,10 @@ struct splitInfo {
 splitInfo splits[MAX_SPLITS];
 int nextSplitSlot = 0;
 
+// ADRRS
+vec3 estimate;
+float lengthEstimate;
+
 //@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
@@ -675,7 +679,67 @@ bool hasDiscreteDirection(Material mat) {
     }
 }
 
-bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color);
+
+/**
+* returns true if cache hits found
+*/
+bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
+    cacheInfo.origin = origin;
+    cacheInfo.normal = normal;
+    cacheInfo.cacheValueSum = vec3(0, 0, 0);
+    cacheInfo.totalWeight = 0;
+
+    traceRayEXT(irradianceAS, // acceleration structure
+    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    0, // ray min range
+    normal.xyz, // ray direction
+    tMin, // ray max range
+    3// payload (location = 3)
+    );
+
+    if (cacheInfo.totalWeight > 0) {
+        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
+        return true;
+    }
+
+    return false;
+}
+
+
+/**
+* returns true if cache hits found
+*/
+bool queryIrradianceCacheGradients(vec3 origin, vec3 normal, out vec3 color) {
+    cacheInfo.origin = origin;
+    cacheInfo.normal = normal;
+    cacheInfo.cacheValueSum = vec3(0, 0, 0);
+    cacheInfo.totalWeight = 0;
+
+    traceRayEXT(irradianceAS, // acceleration structure
+    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
+    0xFF, // cullMask
+    1, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    0, // ray min range
+    normal.xyz, // ray direction
+    tMin, // ray max range
+    3// payload (location = 3)
+    );
+
+    if (cacheInfo.totalWeight > 0) {
+        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
+        return true;
+    }
+
+    return false;
+}
 
 bool isICCapable(Material mat) {
     if (mat.type == MAT_DIFFUSE || mat.type == MAT_LIGHT) {
@@ -698,7 +762,48 @@ vec3 approxDiffuse(Material mat, vec3 normal, vec3 wi, vec2 uv) {
         float cosTheta = dot(wi, normal);
         return fresnelConductor(cosTheta, mat.eta, mat.k).xxx * M_INV_PI;
     }
-    return vec3(-1,-1,-1);
+    return vec3(-1, -1, -1);
+}
+
+float applyWeightWindow(vec3 throughput, vec3 adjoint, out int n) {
+    // Calculate WW
+    float center = length(estimate / adjoint);
+    float lower = 2 * center / (1 + pushC.adrrsS);
+    float upper = pushC.adrrsS * lower;
+
+    float v = length(throughput);
+
+    // Esitmate or adjoint 0
+    // => No prediction possible
+    if (isnan(lower) || lower <= 0) {
+        n = 1;
+        return 1.0;
+    }
+
+    if (lower <= v && v <= upper) {
+        // No change
+        n = 1;
+        return 1.0;
+    } else if (v <= lower) {
+        // RR
+        n = 1;
+
+        // No very small q allowed
+        // => could result in high variance
+        return max(v / lower, 0.1);
+    } else {
+        // Splitting
+        float q = v / upper;
+
+        n = int(q);
+
+        // Non integer solution
+        // => expected-value split
+        if (rnd() > (n + 1 - q)) {
+            n++;
+        }
+        return q;
+    }
 }
 
 vec3 multipleNEE(Material mat, vec3 origin, vec3 direction, vec3 normal, int numNEE) {
@@ -734,7 +839,7 @@ bool split(vec3 origin, vec3 normal, vec3 wi, vec3 throughput, vec2 textureUV, i
     return true;
 }
 
-vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool addFirstHitLight, bool useNEE, int numNEE, bool useIC, bool createIC, out float firstT) {
+vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool addFirstHitLight, bool useNEE, int numNEE, bool useIC, bool createIC, bool useADRRS, out float firstT) {
     bool follow = true;
     int followCount = 0;
     bool addNextDirectLights = false;
@@ -800,27 +905,51 @@ vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth,
             addNextDirectLights = false;
             follow = false;
 
-            if (useNEE) {
-                result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
-            }
-
-            if (useIC) {
+            if (useIC || (useADRRS && (depth > 1))) {
                 // If diffuse (or non-discrete if enabled), then check if irradiance cache is nearby
-                vec3 irradianceColor;
                 if (isICCapable(mat)) {
+                    vec3 irradianceColor;
                     if (queryIrradianceCache(origin, normal, irradianceColor)) {
-
                         vec3 diffuse = approxDiffuse(mat, normal, -direction, info.textureUV);
 
-                        // Record found -> use it
-                        result += throughput * diffuse * irradianceColor;
+                        if (useADRRS) {
+                            vec3 adjoint = diffuse * irradianceColor;
 
-                        // If IC values are used, then NEE is necessary for the complete light values
-                        if (!useNEE) {
+                            int n;
+                            float q = applyWeightWindow(throughput, irradianceColor, n);
+
+
+                            if (n == 1) {
+                                // RR
+                                if (rnd() > q) {
+                                    // Ray dies
+                                    break;^
+                                }
+
+                                throughput /= q;
+                            } else {
+                                // Check if that many splits are even allowed
+                                int possibleSplits = MAX_SPLITS - nextSplitSlot;
+                                if (n - 1 > possibleSplits) {
+                                    n = possibleSplits + 1;
+                                    q = n;
+                                }
+
+                                throughput /= n;
+
+                                // n => n - 1 splits, because the current ray continues on
+                                for (int iSplit = 0; iSplit < n - 1; iSplit++) {
+                                    split(origin, normal, -direction, throughput, info.textureUV, info.matIndex, depth, info.isFrontFace);
+                                }
+                            }
+                        } else {
+                            // Record found -> use it
+                            result += throughput * diffuse * irradianceColor;
+
+                            // If IC values are used, then NEE is necessary for the complete light values
                             result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+                            break;
                         }
-
-                        break;
                     } else if (createIC && rnd() < pushC.irradianceCreateProb) {
                         // No record found -> create one
                         // All irradiance cache values are only available in the next frame,
@@ -838,11 +967,10 @@ vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth,
                 }
             }
 
-            //            if (depth == 1) {
-            //                if (split(origin, normal, -direction, 0.5 * throughput, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
-            //                    throughput *= 0.5;
-            //                }
-            //            }
+            // NEE is after possible splits, as each split should calculate its own NEE
+            if (useNEE) {
+                result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+            }
         }
 
         vec3 newDirection;
@@ -859,67 +987,6 @@ vec3 raytrace(vec3 origin, vec3 direction, inout int currentDepth, int maxDepth,
 
     currentDepth = depth;
     return result;
-}
-
-/**
-* returns true if cache hits found
-*/
-bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
-    cacheInfo.origin = origin;
-    cacheInfo.normal = normal;
-    cacheInfo.cacheValueSum = vec3(0, 0, 0);
-    cacheInfo.totalWeight = 0;
-
-    traceRayEXT(irradianceAS, // acceleration structure
-    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
-    0xFF, // cullMask
-    0, // sbtRecordOffset
-    0, // sbtRecordStride
-    0, // missIndex
-    origin.xyz, // ray origin
-    0, // ray min range
-    normal.xyz, // ray direction
-    tMin, // ray max range
-    3// payload (location = 3)
-    );
-
-    if (cacheInfo.totalWeight > 0) {
-        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
-        return true;
-    }
-
-    return false;
-}
-
-
-/**
-* returns true if cache hits found
-*/
-bool queryIrradianceCacheGradients(vec3 origin, vec3 normal, out vec3 color) {
-    cacheInfo.origin = origin;
-    cacheInfo.normal = normal;
-    cacheInfo.cacheValueSum = vec3(0, 0, 0);
-    cacheInfo.totalWeight = 0;
-
-    traceRayEXT(irradianceAS, // acceleration structure
-    gl_RayFlagsSkipClosestHitShaderEXT, // rayFlags
-    0xFF, // cullMask
-    1, // sbtRecordOffset
-    0, // sbtRecordStride
-    0, // missIndex
-    origin.xyz, // ray origin
-    0, // ray min range
-    normal.xyz, // ray direction
-    tMin, // ray max range
-    3// payload (location = 3)
-    );
-
-    if (cacheInfo.totalWeight > 0) {
-        color = cacheInfo.cacheValueSum / cacheInfo.totalWeight;
-        return true;
-    }
-
-    return false;
 }
 
 /**
@@ -959,7 +1026,7 @@ float calculateCacheData(in vec3 origin, in vec3 normal, out vec3 calculatedColo
             float r = tMax;
 
             int currentDepth = 0;
-            vec3 sampleColor = raytrace(origin, direction, currentDepth, 1, maxFollowDiscrete, addDirectLights, false, true, pushC.irradianceNumNEE, true, createIC, r);
+            vec3 sampleColor = raytrace(origin, direction, currentDepth, 1, maxFollowDiscrete, addDirectLights, false, true, pushC.irradianceNumNEE, true, createIC, false, r);
             color += sampleColor;
 
             if (r < tMax) {
@@ -1206,10 +1273,18 @@ void main() {
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
+    // Store current pixel estimate for easy access
+    if (pushC.useADRRS || pushC.visualizeMode == VISU_ESTIMATE) {
+        ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
+        estimate = imageLoad(estimateImage, imageUV).xyz;
+        lengthEstimate = length(estimate);
+    }
+
     if (pushC.useIrradianceCache && rnd() < pushC.irradianceUpdateProb) {
         updateIrradianceCache();
     }
 
+    const int numNEE = pushC.numNEE;
     const int maxDepth = pushC.maxDepth;
     int maxReachedDepth = 0;
     int depthSum = 0;
@@ -1222,7 +1297,6 @@ void main() {
         const int maxFollowDiscrete = pushC.maxFollowDiscrete;
         const bool useNEE = pushC.enableNEE;
         const bool addDirectLights = !useNEE;
-        const int numNEE = pushC.numNEE;
 
         float firstT;
 
@@ -1239,7 +1313,7 @@ void main() {
                 result += visualizeIC(origin, direction);
             } else {
                 int currentDepth = 0;
-                result += raytrace(origin, direction, currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, true, useNEE, numNEE, useIC, true, firstT);
+                result += raytrace(origin, direction, currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, true, useNEE, numNEE, useIC, true, pushC.useADRRS, firstT);
                 maxReachedDepth = max(maxReachedDepth, currentDepth);
                 depthSum += currentDepth;
                 depthsCounter++;
@@ -1251,6 +1325,13 @@ void main() {
             splitInfo split = splits[iSplit];
 
             Material mat = mats[split.matIndex];
+
+            // Split happens before NEE
+            // => calculate NEE for origin
+            if (useNEE) {
+                result += split.throughput * multipleNEE(mat, split.origin, -split.wi, split.normal, numNEE);
+            }
+
             vec3 direction;
             float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
 
@@ -1259,7 +1340,7 @@ void main() {
             }
             vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
 
-            result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, firstT);
+            result += throughput * raytrace(split.origin, direction, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, pushC.useADRRS, firstT);
 
             maxReachedDepth = max(maxReachedDepth, split.currentDepth);
             depthSum += split.currentDepth;
@@ -1300,9 +1381,6 @@ void main() {
         }
         case VISU_ESTIMATE:
         {
-            ivec2 imageUV = ivec2(gl_LaunchIDEXT.xy);
-            vec3 estimate = imageLoad(estimateImage, imageUV).xyz;
-
             saveResult(estimate);
             break;
         }
