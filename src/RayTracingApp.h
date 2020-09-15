@@ -110,6 +110,7 @@ public:
         int useVisibleSphereSampling = 0;
         int useADRRS = 0;
         float adrrsS = 5;
+        int splitOnFirst = 0;
     } rtPushConstants;
 
 private:

@@ -616,6 +616,7 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
+    hasInputChanged |= ImGui::Checkbox("Split on first surface", reinterpret_cast<bool *>(&rtPushConstants.splitOnFirst));
 
     hasInputChanged |= ImGui::Checkbox("Show:", &showOtherVisualizations);
 

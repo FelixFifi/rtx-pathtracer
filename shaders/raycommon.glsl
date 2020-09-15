@@ -47,6 +47,7 @@ struct pushConstant
     bool useVisibleSphereSampling;
     bool useADRRS;
     float adrrsS;
+    bool splitOnFirst;
 };
 
 struct sphere {

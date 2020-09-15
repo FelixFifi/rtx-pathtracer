@@ -842,15 +842,13 @@ bool split(vec3 origin, vec3 normal, vec3 wi, vec3 throughput, vec2 textureUV, i
 vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool addFirstHitLight, bool useNEE, int numNEE, bool useIC, bool createIC, bool useADRRS, out float firstT) {
     bool follow = true;
     int followCount = 0;
-    bool addNextDirectLights = false;
+    bool addNextDirectLights = addFirstHitLight;
     float r = tMax;
     int depth = currentDepth;
     vec3 normal;
     firstT = tMax;
 
     vec3 result = vec3(0.0, 0.0, 0.0);
-
-    addNextDirectLights = addFirstHitLight;
 
     do {
         depth++;
@@ -966,7 +964,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 }
             }
 
-            if (depth == 1) {
+            if (pushC.splitOnFirst && depth == 1) {
                 if (split(origin, normal, -direction, throughput * 0.5, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
                     throughput *= 0.5;
                 }
@@ -1343,7 +1341,8 @@ void main() {
             if (pdf <= 0.0) {
                 break;
             }
-            vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
+            float cosThetaO = dot(direction, split.normal);
+            vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) * cosThetaO / pdf;
 
             result += raytrace(split.origin, direction, throughput, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, pushC.useADRRS, firstT);
 
