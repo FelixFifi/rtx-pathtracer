@@ -45,10 +45,10 @@ const std::vector<std::string> SCENES{
         "scenes/mi.xml",
         "scenes/veach-mis.json",
         "scenes/cornell-dielectric-path.json",
-        "scenes/test.json",
-        "scenes/cornell.json",
         "scenes/large.json",
-        "scenes/fireplace.json"
+        "scenes/fireplace.json",
+        "scenes/test.json",
+        "scenes/cornell.json"
 };
 
 static const int MAX_RECURSION = 2;
@@ -110,6 +110,7 @@ public:
         int useVisibleSphereSampling = 0;
         int useADRRS = 0;
         float adrrsS = 5;
+        int adrrsSplit = 1;
         int splitOnFirst = 0;
     } rtPushConstants;
 

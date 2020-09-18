@@ -686,6 +686,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.useADRRS));
     hasInputChanged |= ImGui::InputFloat("Window width ratio",
                                           &rtPushConstants.adrrsS, 1.0f, 5.0f);
+    hasInputChanged |= ImGui::Checkbox("Split", reinterpret_cast<bool *>(&rtPushConstants.adrrsSplit));
+
     ImGui::End();
 }
 

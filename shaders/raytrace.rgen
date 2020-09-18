@@ -924,7 +924,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                                 }
 
                                 throughput /= q;
-                            } else {
+                            } else if (pushC.adrrsSplit){
                                 // Check if that many splits are even allowed
                                 int possibleSplits = MAX_SPLITS - nextSplitSlot;
                                 if (n - 1 > possibleSplits) {
