@@ -73,7 +73,7 @@ struct CameraMatrices {
 
 class RayTracingApp {
 public:
-    RayTracingApp(uint32_t width, uint32_t height);
+    RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize);
 
     void run();
 
@@ -112,6 +112,8 @@ public:
         float adrrsS = 5;
         int adrrsSplit = 1;
         int splitOnFirst = 0;
+        int guidingTest = 0;
+        float guidingTestK = 1;
     } rtPushConstants;
 
 private:
@@ -119,6 +121,8 @@ private:
     VulkanWindow vulkanWindow;
 
     SceneLoader sceneLoader;
+
+    uint32_t icSize;
 
     bool autoRotate = false;
     bool accumulateResults = false;

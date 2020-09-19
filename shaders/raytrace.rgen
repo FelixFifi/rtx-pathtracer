@@ -978,7 +978,29 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         }
 
         vec3 newDirection;
-        float pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+
+        float pdf;
+        if (pushC.guidingTest) {
+            vec3 lightDir;
+            vec3 lightColor;
+            float lightDistance;
+            float pdfLights = sampleLights(origin, normal, lightDir, lightColor, lightDistance);
+
+            VMF_Theta vmfTheta;
+            vmfTheta.mu = lightDir;
+            vmfTheta = updateK(vmfTheta, pushC.guidingTestK);
+
+            VMM_Theta vmmTheta = createVMM_Theta(vmfTheta);
+
+            newDirection = sampleVMM(vmmTheta);
+            pdf = VMM(newDirection, vmmTheta);
+
+            if (dot(newDirection, normal) < 0) {
+                pdf = 0.0;
+            }
+        } else {
+            pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
+        }
 
         if (pdf <= 0.0) {
             break;

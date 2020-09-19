@@ -9,7 +9,7 @@
 #include <filesystem>
 #include "RayTracingApp.h"
 
-RayTracingApp::RayTracingApp(uint32_t width, uint32_t height) {
+RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize) : icSize(icSize) {
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
     fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
 
@@ -138,7 +138,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
 
     irradianceCache.cleanUp();
-    irradianceCache = IrradianceCache(50000, vulkanOps, physicalDevice, graphicsQueueIndex);
+    irradianceCache = IrradianceCache(icSize, vulkanOps, physicalDevice, graphicsQueueIndex);
     currentPrepareFrames = 0;
 
     recreateDescriptorSets();
@@ -687,6 +687,15 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputFloat("Window width ratio",
                                           &rtPushConstants.adrrsS, 1.0f, 5.0f);
     hasInputChanged |= ImGui::Checkbox("Split", reinterpret_cast<bool *>(&rtPushConstants.adrrsSplit));
+
+    ImGui::End();
+
+
+    ImGui::Begin("Guiding");
+    hasInputChanged |= ImGui::Checkbox("Guiding Test",
+                                       reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
+    hasInputChanged |= ImGui::SliderFloat("Guiding Test K",
+                                          &rtPushConstants.guidingTestK, 0.0f, 100.0f);
 
     ImGui::End();
 }

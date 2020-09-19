@@ -49,6 +49,8 @@ struct pushConstant
     float adrrsS;
     bool adrrsSplit;
     bool splitOnFirst;
+    bool guidingTest;
+    float guidingTestK;
 };
 
 struct sphere {
