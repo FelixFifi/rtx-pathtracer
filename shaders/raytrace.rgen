@@ -34,8 +34,12 @@
 #define VISU_DEPTH_AVERAGE 2
 #define VISU_SPLITS 3
 #define VISU_ESTIMATE 4
+#define VISU_GUIDING_REGIONS 5
 
-#define MAX_DISCRETE_FOLLOW 5
+#define PAYLOAD_HIT 0
+#define PAYLOAD_SHADOW 1
+#define PAYLOAD_IC 2
+#define PAYLOAD_GUIDING 3
 
 #define SIZE_LIGHT_RANDOM 10000
 #define SIZE_TRI_RANDOM 10000
@@ -117,11 +121,10 @@ uniform CameraMatrices{
     mat4 projInverse;
 } cam;
 
-layout(location = 0) rayPayloadEXT hitInfo info;
-layout(location = 1) rayPayloadEXT shadowCheck shadowInfo;
-layout(location = 2) rayPayloadEXT hitInfo infoIrradiance;
-layout(location = 3) rayPayloadEXT cacheHits cacheInfo;
-layout(location = 4) rayPayloadEXT guidingInfo guidingInfos;
+layout(location = PAYLOAD_HIT) rayPayloadEXT hitInfo info;
+layout(location = PAYLOAD_SHADOW) rayPayloadEXT shadowCheck shadowInfo;
+layout(location = PAYLOAD_IC) rayPayloadEXT cacheHits cacheInfo;
+layout(location = PAYLOAD_GUIDING) rayPayloadEXT guidingInfo guidingInfos;
 //@formatter:on
 
 
@@ -612,7 +615,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
         tMin, // ray min range
         lightDir, // ray direction
         lightDistance * (1 - 0.0001), // ray max range
-        1// payload (location = 1)
+        PAYLOAD_SHADOW// payload
         );
     }
 
@@ -644,7 +647,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
             tMin, // ray min range
             bsdfDir, // ray direction
             tMax, // ray max range
-            0// payload (location = 0)
+            PAYLOAD_HIT// payload
             );
 
             if (info.isMiss) {
@@ -704,7 +707,7 @@ bool queryIrradianceCache(vec3 origin, vec3 normal, out vec3 color) {
     0, // ray min range
     normal.xyz, // ray direction
     tMin, // ray max range
-    3// payload (location = 3)
+    PAYLOAD_IC// payload
     );
 
     if (cacheInfo.totalWeight > 0) {
@@ -735,7 +738,7 @@ bool queryIrradianceCacheGradients(vec3 origin, vec3 normal, out vec3 color) {
     0, // ray min range
     normal.xyz, // ray direction
     tMin, // ray max range
-    3// payload (location = 3)
+    PAYLOAD_IC// payload
     );
 
     if (cacheInfo.totalWeight > 0) {
@@ -868,7 +871,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         tMin, // ray min range
         direction.xyz, // ray direction
         tMax, // ray max range
-        0// payload (location = 0)
+        PAYLOAD_HIT// payload
         );
 
 
@@ -887,29 +890,6 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         // For average distance calculation
         if (depth == 1) {
             firstT = info.t;
-        }
-
-        if (pushC.showGuidingRegions) {
-            guidingInfos.iRegion = -1;
-
-            traceRayEXT(guidingAS, // acceleration structure
-            gl_RayFlagsTerminateOnFirstHitEXT, // The current position should always only be in one guiding region
-            0xFF, // cullMask
-            0, // sbtRecordOffset
-            0, // sbtRecordStride
-            0, // missIndex
-            origin.xyz, // ray origin
-            0, // ray min range
-            normal.xyz, // ray direction
-            tMin, // ray max range
-            4// payload (location = 4)
-            );
-
-            if (guidingInfos.iRegion < 0) {
-                return vec3(1, 0, 0);
-            } else {
-                return (vec3(1) + guidingVMM[guidingInfos.iRegion].thetas[0].mu) / 2.0;
-            }
         }
 
         // Light hit
@@ -1248,7 +1228,7 @@ vec3 visualizeIC(vec3 origin, vec3 direction) {
     tMin, // ray min range
     direction.xyz, // ray direction
     tMax, // ray max range
-    0// payload (location = 0)
+    PAYLOAD_HIT// payload
     );
 
     if (info.isMiss) {
@@ -1302,6 +1282,53 @@ void saveResult(vec3 result) {
         } else {
             imageStore(image, imageUV, vec4(result, 1.0));
         }
+    }
+}
+
+vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
+    vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
+    vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
+    vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+
+    traceRayEXT(topLevelAS, // acceleration structure
+    rayFlags, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    tMin, // ray min range
+    direction.xyz, // ray direction
+    tMax, // ray max range
+    PAYLOAD_HIT// payload
+    );
+
+    if (info.isMiss) {
+        return vec3(0, 0, 0);
+    }
+
+    guidingInfos.iRegion = -1;
+
+    traceRayEXT(guidingAS, // acceleration structure
+    gl_RayFlagsTerminateOnFirstHitEXT, // The current position should always only be in one guiding region
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    info.worldPos.xyz, // ray origin
+    0, // ray min range
+    info.normal.xyz, // ray direction
+    tMin, // ray max range
+    PAYLOAD_GUIDING// payload
+    );
+
+    if (guidingInfos.iRegion < 0) {
+        return vec3(1, 0, 0);
+    } else {
+        return (vec3(1) + guidingVMM[guidingInfos.iRegion].thetas[0].mu) / 2.0;
     }
 }
 
@@ -1436,6 +1463,11 @@ void main() {
         case VISU_ESTIMATE:
         {
             saveResult(estimate);
+            break;
+        }
+        case VISU_GUIDING_REGIONS:
+        {
+            saveResult(getGuidingRegionVisualization(pixelCenter));
             break;
         }
     }

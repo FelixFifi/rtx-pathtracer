@@ -51,7 +51,6 @@ struct pushConstant
     bool splitOnFirst;
     bool guidingTest;
     float guidingTestK;
-    bool showGuidingRegions;
 };
 
 struct sphere {

@@ -62,7 +62,8 @@ enum VisualizationMode {
     EDepthMax = 1,
     EDepthAverage = 2,
     ESplits = 3,
-    EEstimate = 4
+    EEstimate = 4,
+    EGuidingRegions = 5
 };
 
 struct CameraMatrices {
@@ -115,7 +116,6 @@ public:
         int splitOnFirst = 0;
         int guidingTest = 0;
         float guidingTestK = 1;
-        int showGuidingRegions = 0;
     } rtPushConstants;
 
 private:
@@ -132,7 +132,7 @@ private:
     bool needSceneReload = false;
     int currentScene;
     bool showOtherVisualizations = false;
-    int currentVisualizeMode = 1;
+    int currentVisualizeMode = 5;
 
     bool takePicture = false;
 
