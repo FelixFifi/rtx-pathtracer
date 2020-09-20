@@ -23,7 +23,7 @@ static const int BINDINGS_COUNT = 8;
 #include <json.hpp>
 #include <tinyxml2.h>
 #include "Model.h"
-#include "Sphere.h"
+#include "Shapes.h"
 
 
 enum EMatType {
@@ -109,6 +109,12 @@ private:
     std::vector<std::vector<int>> emissiveFacesPerModel;
     std::vector<Texture> textures;
     std::map<std::string, int> pathTextureIdMapping;
+
+    Aabb sceneSize{};
+public:
+    const Aabb &getSceneSize() const;
+
+private:
 
     bool hasEnvMap = false;
 
@@ -233,6 +239,10 @@ private:
     void parseXmlShapes(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedMaterials);
 
     Texture generateDefaultTexture() const;
+
+    void parseEnvMap(tinyxml2::XMLElement *xScene);
+
+    void calculateSceneSize();
 };
 
 

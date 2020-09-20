@@ -51,6 +51,7 @@ struct pushConstant
     bool splitOnFirst;
     bool guidingTest;
     float guidingTestK;
+    bool showGuidingRegions;
 };
 
 struct sphere {
@@ -85,4 +86,8 @@ struct cacheHits {
     vec3 normal;
     float totalWeight;
     vec3 cacheValueSum;
+};
+
+struct guidingInfo {
+    uint iRegion;
 };

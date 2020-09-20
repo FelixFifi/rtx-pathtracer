@@ -9,7 +9,9 @@
 #include <filesystem>
 #include "RayTracingApp.h"
 
-RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize) : icSize(icSize) {
+RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits) : icSize(icSize),
+                                                                                                         guidingSplits(
+                                                                                                                 guidingSplits) {
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
     fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
 
@@ -35,7 +37,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize) :
 
     createVulkanImages();
     createUniformBuffers();
-    loadScene();
+    sceneSwitcher(1);
 
     initRayTracing();
 }
@@ -58,10 +60,6 @@ void RayTracingApp::createVulkanImages() {
     estimateImageView = vulkanOps->createImageView(estimateImage, format, vk::ImageAspectFlagBits::eColor);
 
     vulkanOps->transitionImageLayout(estimateImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
-}
-
-void RayTracingApp::loadScene() {
-    sceneSwitcher(1);
 }
 
 void RayTracingApp::run() {
@@ -141,6 +139,9 @@ void RayTracingApp::sceneSwitcher(int num) {
     irradianceCache = IrradianceCache(icSize, vulkanOps, physicalDevice, graphicsQueueIndex);
     currentPrepareFrames = 0;
 
+    guiding.cleanup();
+    guiding = PathGuiding(guidingSplits, sceneLoader.getSceneSize(), vulkanOps, physicalDevice, graphicsQueueIndex);
+
     recreateDescriptorSets();
 
     if (rtDescSet) {
@@ -191,27 +192,31 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                 vk::DescriptorType::eStorageImage, 1,
                                                                 vk::ShaderStageFlagBits::eRaygenKHR);
     vk::DescriptorSetLayoutBinding estimateImageLayoutBinding(ESTIMATE_IMAGE_BINDING,
-                                                                vk::DescriptorType::eStorageImage, 1,
-                                                                vk::ShaderStageFlagBits::eRaygenKHR);
+                                                              vk::DescriptorType::eStorageImage, 1,
+                                                              vk::ShaderStageFlagBits::eRaygenKHR);
 
 
     auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
     auto irradianceBindings = irradianceCache.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, ESTIMATE_IMAGE_BINDING + 1> bindings = {uniformBufferLayoutBinding,
-                                                               sceneBindings[0],
-                                                               sceneBindings[1],
-                                                               sceneBindings[2],
-                                                               sceneBindings[3],
-                                                               sceneBindings[4],
-                                                               sceneBindings[5],
-                                                               sceneBindings[6],
-                                                               sceneBindings[7],
-                                                               accumulateImageLayoutBinding,
-                                                               irradianceBindings[0],
-                                                               irradianceBindings[1],
-                                                               irradianceBindings[2],
-                                                               irradianceBindings[3],
-                                                               estimateImageLayoutBinding};
+    auto guidingBindings = guiding.getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, ESTIMATE_IMAGE_BINDING + 4> bindings = {uniformBufferLayoutBinding,
+                                                                                       sceneBindings[0],
+                                                                                       sceneBindings[1],
+                                                                                       sceneBindings[2],
+                                                                                       sceneBindings[3],
+                                                                                       sceneBindings[4],
+                                                                                       sceneBindings[5],
+                                                                                       sceneBindings[6],
+                                                                                       sceneBindings[7],
+                                                                                       accumulateImageLayoutBinding,
+                                                                                       irradianceBindings[0],
+                                                                                       irradianceBindings[1],
+                                                                                       irradianceBindings[2],
+                                                                                       irradianceBindings[3],
+                                                                                       estimateImageLayoutBinding,
+                                                                                       guidingBindings[0],
+                                                                                       guidingBindings[1],
+                                                                                       guidingBindings[2]};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -221,8 +226,9 @@ void RayTracingApp::createDecriptorSetLayout() {
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
     auto irradiancePoolSizes = irradianceCache.getDescriptorPoolSizes();
+    auto guidingPoolSizes = guiding.getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, ESTIMATE_IMAGE_BINDING + 1> poolSizes = {
+    std::array<vk::DescriptorPoolSize, ESTIMATE_IMAGE_BINDING + 4> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -239,6 +245,9 @@ void RayTracingApp::createDescriptorPool() {
             irradiancePoolSizes[2],
             irradiancePoolSizes[3],
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1),
+            guidingPoolSizes[0],
+            guidingPoolSizes[1],
+            guidingPoolSizes[2]
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -259,7 +268,7 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorImageInfo accumulateImageInfo({}, accumulateImageView,
                                                 vk::ImageLayout::eGeneral);
     vk::DescriptorImageInfo estimateImageInfo({}, estimateImageView,
-                                                vk::ImageLayout::eGeneral);
+                                              vk::ImageLayout::eGeneral);
 
 
     std::vector<vk::DescriptorBufferInfo> vertexBufferInfos;
@@ -274,6 +283,9 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorBufferInfo irradianceCacheBufferInfo;
     vk::DescriptorBufferInfo irradianceAabbsBufferInfo;
     vk::WriteDescriptorSetAccelerationStructureKHR asInfo;
+    vk::DescriptorBufferInfo guidingBufferInfo;
+    vk::DescriptorBufferInfo guidingAabbsBufferInfo;
+    vk::WriteDescriptorSetAccelerationStructureKHR guidingAsInfo;
 
     auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                           indexBufferInfos, materialBufferInfo,
@@ -284,6 +296,9 @@ void RayTracingApp::createDescriptorSets() {
                                                                    irradianceSpheresBufferInfo,
                                                                    irradianceCacheBufferInfo,
                                                                    irradianceAabbsBufferInfo);
+    auto guidingWrites = guiding.getWriteDescriptorSets(descriptorSet, guidingAsInfo,
+                                                                   guidingAabbsBufferInfo,
+                                                                   guidingBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                0,
@@ -293,12 +308,12 @@ void RayTracingApp::createDescriptorSets() {
                                                                                nullptr, nullptr);
 
     const vk::WriteDescriptorSet estimateImageWrite = vk::WriteDescriptorSet(descriptorSet, ESTIMATE_IMAGE_BINDING,
-                                                                               0,
-                                                                               1,
-                                                                               vk::DescriptorType::eStorageImage,
-                                                                               &estimateImageInfo,
-                                                                               nullptr, nullptr);
-    std::array<vk::WriteDescriptorSet, ESTIMATE_IMAGE_BINDING + 1> descriptorWrites = {
+                                                                             0,
+                                                                             1,
+                                                                             vk::DescriptorType::eStorageImage,
+                                                                             &estimateImageInfo,
+                                                                             nullptr, nullptr);
+    std::array<vk::WriteDescriptorSet, ESTIMATE_IMAGE_BINDING + 4> descriptorWrites = {
             vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                    vk::DescriptorType::eUniformBuffer, nullptr,
                                    &bufferInfo, nullptr),
@@ -315,7 +330,10 @@ void RayTracingApp::createDescriptorSets() {
             irradianceWrites[1],
             irradianceWrites[2],
             irradianceWrites[3],
-            estimateImageWrite
+            estimateImageWrite,
+            guidingWrites[0],
+            guidingWrites[1],
+            guidingWrites[2]
     };
 
     device.updateDescriptorSets(descriptorWrites, nullptr);
@@ -420,6 +438,8 @@ void RayTracingApp::createRtPipeline() {
     auto irradianceIntCode = readFile("shaders/raytrace.irradiance.rint.spv");
     auto irradianceAhitCode = readFile("shaders/raytrace.irradiance.rahit.spv");
     auto irradianceVisualizeAhitCode = readFile("shaders/raytrace.irradiance.visualize.rahit.spv");
+    auto guidingChitCode = readFile("shaders/raytrace.guiding.rchit.spv");
+    auto guidingIntCode = readFile("shaders/raytrace.guiding.rint.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -431,6 +451,8 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule irradianceIntShaderModule = vulkanOps->createShaderModule(irradianceIntCode);
     vk::ShaderModule irradianceAhitShaderModule = vulkanOps->createShaderModule(irradianceAhitCode);
     vk::ShaderModule irradianceVisualizeAhitShaderModule = vulkanOps->createShaderModule(irradianceVisualizeAhitCode);
+    vk::ShaderModule guidingChitShaderModule = vulkanOps->createShaderModule(guidingChitCode);
+    vk::ShaderModule guidingIntShaderModule = vulkanOps->createShaderModule(guidingIntCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -505,6 +527,17 @@ void RayTracingApp::createRtPipeline() {
     hg3.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg3);
 
+    // Hit Group 4 - Guiding
+    vk::RayTracingShaderGroupCreateInfoKHR hg4{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, guidingIntShaderModule, "main"});
+    hg4.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, guidingChitShaderModule, "main"});
+    hg4.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg4);
+
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 
@@ -546,6 +579,8 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(irradianceIntShaderModule);
     device.destroy(irradianceAhitShaderModule);
     device.destroy(irradianceVisualizeAhitShaderModule);
+    device.destroy(guidingIntShaderModule);
+    device.destroy(guidingChitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -616,16 +651,20 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
     hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
                                        reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
-    hasInputChanged |= ImGui::Checkbox("Split on first surface", reinterpret_cast<bool *>(&rtPushConstants.splitOnFirst));
+    hasInputChanged |= ImGui::Checkbox("Split on first surface",
+                                       reinterpret_cast<bool *>(&rtPushConstants.splitOnFirst));
 
     hasInputChanged |= ImGui::Checkbox("Show:", &showOtherVisualizations);
 
 
     bool hasRadioButtonChanged = false;
-    hasRadioButtonChanged |= ImGui::RadioButton("Max Depth",&currentVisualizeMode, EDepthMax); ImGui::SameLine();
-    hasRadioButtonChanged |= ImGui::RadioButton("Average Depth",&currentVisualizeMode, EDepthAverage); ImGui::SameLine();
-    hasRadioButtonChanged |= ImGui::RadioButton("Splits",&currentVisualizeMode, ESplits); ImGui::SameLine();
-    hasRadioButtonChanged |= ImGui::RadioButton("Estimate",&currentVisualizeMode, EEstimate);
+    hasRadioButtonChanged |= ImGui::RadioButton("Max Depth", &currentVisualizeMode, EDepthMax);
+    ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Average Depth", &currentVisualizeMode, EDepthAverage);
+    ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Splits", &currentVisualizeMode, ESplits);
+    ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Estimate", &currentVisualizeMode, EEstimate);
 
     rtPushConstants.visualizeMode = ERayTrace;
 
@@ -685,7 +724,7 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Use ADRRS",
                                        reinterpret_cast<bool *>(&rtPushConstants.useADRRS));
     hasInputChanged |= ImGui::InputFloat("Window width ratio",
-                                          &rtPushConstants.adrrsS, 1.0f, 5.0f);
+                                         &rtPushConstants.adrrsS, 1.0f, 5.0f);
     hasInputChanged |= ImGui::Checkbox("Split", reinterpret_cast<bool *>(&rtPushConstants.adrrsSplit));
 
     ImGui::End();
@@ -696,6 +735,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
     hasInputChanged |= ImGui::SliderFloat("Guiding Test K",
                                           &rtPushConstants.guidingTestK, 0.0f, 100.0f);
+    hasInputChanged |= ImGui::Checkbox("Show guiding regions",
+                                       reinterpret_cast<bool *>(&rtPushConstants.showGuidingRegions));
 
     ImGui::End();
 }
@@ -796,6 +837,7 @@ void RayTracingApp::cleanup() {
     cleanupRtPipeline();
 
     sceneLoader.cleanup();
+    guiding.cleanup();
 
     postProcessing.cleanup();
     vulkanWindow.cleanup();

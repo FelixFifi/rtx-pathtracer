@@ -6,6 +6,7 @@
 #include "VulkanOps.h"
 
 #include <utility>
+#include <limits>
 
 Model::Model(std::vector<Vertex> vertices, std::vector<uint32_t> indices,
              const std::shared_ptr<VulkanOps> &vulkanOps) : vertices(std::move(vertices)), indices(std::move(indices)), device(vulkanOps->getDevice()) {
@@ -55,6 +56,20 @@ void Model::cleanup() {
     device.destroy(vertexBuffer);
     device.free(indexBufferMemory);
     device.destroy(indexBuffer);
+}
+
+Aabb Model::getAabb(glm::mat4 transform) {
+    Aabb aabb;
+
+    float infinity = std::numeric_limits<float>::infinity();
+    aabb.min = {infinity, infinity, infinity};
+    aabb.max = {-infinity, -infinity, -infinity};
+
+    for (Vertex &v : vertices) {
+        aabb.update(transform * glm::vec4(v.pos, 1));
+    }
+
+    return aabb;
 }
 
 

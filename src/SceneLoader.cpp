@@ -45,6 +45,8 @@ SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectB
         parseSceneFile(filepath);
     }
 
+    calculateSceneSize();
+
     createVulkanObjects(physicalDevice, graphicsQueueIndex);
 }
 
@@ -238,7 +240,7 @@ void SceneLoader::converteObjData(const std::vector<tinyobj::shape_t> &shapes, c
     bool hasTexCoords = !attrib.texcoords.empty();
 
     std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
-    for (const auto &shape : shapes) { // TODO: separate obj by shape instead of joing all
+    for (const auto &shape : shapes) { // TODO: separate obj by shape instead of joining all
         unsigned long numFaces = shape.mesh.indices.size() / VERTICES_PER_FACE;
         for (int iFace = 0; iFace < numFaces; ++iFace) {
             int materialIndex = materialIndexOverride;
@@ -325,6 +327,30 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
 
     parseXmlShapes(xScene, definedMaterials);
 
+    parseEnvMap(xScene);
+}
+
+void SceneLoader::calculateSceneSize() {
+    float infintiy = std::numeric_limits<float>::infinity();
+    sceneSize.min = {infintiy, infintiy, infintiy};
+    sceneSize.max = {-infintiy, -infintiy, -infintiy};
+
+    for (const auto &instance : instances) {
+        const Aabb &instanceAabb = models[instance.iModel].getAabb(instance.transform);
+
+        sceneSize.update(instanceAabb.min);
+        sceneSize.update(instanceAabb.max);
+    }
+
+    for (const auto &sphere : spheres) {
+        const Aabb &sphereAabb = sphere.getAabb();
+
+        sceneSize.update(sphereAabb.min);
+        sceneSize.update(sphereAabb.max);
+    }
+}
+
+void SceneLoader::parseEnvMap(XMLElement *xScene) {
     XMLElement *xEnvMap = xScene->FirstChildElement("emitter");
 
     if (xEnvMap) {
@@ -352,7 +378,7 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
             textures[0].sampler = device.createSampler(samplerCreateInfo);
 
             Light light;
-            light.type = ELightType::eEnvMap;
+            light.type = eEnvMap;
 
             lights.push_back(light);
         }
@@ -1057,7 +1083,7 @@ void SceneLoader::createBottomLevelAS() {
 
     if (!spheres.empty()) {
         spheresIndex = allBlas.size();
-        allBlas.emplace_back(spheresToBlas(device, spheres.size(), aabbBuffer, vk::GeometryFlagBitsKHR::eOpaque));
+        allBlas.emplace_back(aabbToBlas(device, spheres.size(), aabbBuffer, vk::GeometryFlagBitsKHR::eOpaque));
     }
 
     rtBuilder.buildBlas(allBlas, vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace);
@@ -1142,4 +1168,8 @@ size_t SceneLoader::getModelCount() {
 
 uint32_t SceneLoader::getSpheresIndex() const {
     return spheresIndex;
+}
+
+const Aabb &SceneLoader::getSceneSize() const {
+    return sceneSize;
 }

@@ -2,16 +2,16 @@
 // Created by felixfifi on 11.07.20.
 //
 
-#include "Sphere.h"
+#include "Shapes.h"
 
 nvvkpp::RaytracingBuilderKHR::Blas
-spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer, vk::GeometryFlagBitsKHR flags) {
+aabbToBlas(vk::Device device, uint32_t aabbCount, vk::Buffer aabbBuffer, vk::GeometryFlagBitsKHR flags) {
     // Setting up the creation info of acceleration structure
     vk::AccelerationStructureCreateGeometryTypeInfoKHR asCreate;
     asCreate.setGeometryType(vk::GeometryTypeKHR::eAabbs);
     asCreate.setIndexType(vk::IndexType::eNoneKHR);
     asCreate.setVertexFormat(vk::Format::eUndefined);
-    asCreate.setMaxPrimitiveCount(sphereCount);
+    asCreate.setMaxPrimitiveCount(aabbCount);
     asCreate.setMaxVertexCount(0);
     asCreate.setAllowsTransforms(VK_FALSE);  // No adding transformation matrices
 
@@ -43,3 +43,4 @@ spheresToBlas(vk::Device device, uint32_t sphereCount, vk::Buffer aabbBuffer, vk
 
     return blas;
 }
+

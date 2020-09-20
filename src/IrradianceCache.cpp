@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "IrradianceCache.h"
-#include "Sphere.h"
+#include "Shapes.h"
 #include "CommonOps.h"
 
 IrradianceCache::IrradianceCache(uint32_t maxCaches, std::shared_ptr<VulkanOps> vulkanOps,
@@ -19,7 +19,8 @@ IrradianceCache::IrradianceCache(uint32_t maxCaches, std::shared_ptr<VulkanOps> 
 void IrradianceCache::createAccelerationStructure() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
 
-    allBlas.emplace_back(spheresToBlas(device, maxCaches, aabbsBuffer, vk::GeometryFlagBitsKHR::eNoDuplicateAnyHitInvocation));
+    allBlas.emplace_back(
+            aabbToBlas(device, maxCaches, aabbsBuffer, vk::GeometryFlagBitsKHR::eNoDuplicateAnyHitInvocation));
 
     const vk::BuildAccelerationStructureFlagsKHR &asFlags =
             vk::BuildAccelerationStructureFlagBitsKHR::eAllowUpdate |

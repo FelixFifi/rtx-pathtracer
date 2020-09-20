@@ -34,6 +34,7 @@
 #include "CameraController.h"
 #include "SceneLoader.h"
 #include "IrradianceCache.h"
+#include "PathGuiding.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
@@ -73,7 +74,7 @@ struct CameraMatrices {
 
 class RayTracingApp {
 public:
-    RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize);
+    RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits);
 
     void run();
 
@@ -114,6 +115,7 @@ public:
         int splitOnFirst = 0;
         int guidingTest = 0;
         float guidingTestK = 1;
+        int showGuidingRegions = 0;
     } rtPushConstants;
 
 private:
@@ -138,6 +140,9 @@ private:
     IrradianceCache irradianceCache;
     int irradianceCachePrepareFrames = 10;
     int currentPrepareFrames = 0;
+
+    PathGuiding guiding;
+    uint guidingSplits;
 
     RtPushConstant backupPushConstant;
     bool loadBackupNextIteration = false;
@@ -186,8 +191,6 @@ private:
     void drawCallback(uint32_t imageIndex);
 
     void recreateSwapchainCallback();
-
-    void loadScene();
 
     void cleanupDescriptorSets();
 

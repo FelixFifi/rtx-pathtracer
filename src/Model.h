@@ -7,6 +7,7 @@
 
 #include "VulkanLoader.h"
 #include "VulkanOps.h"
+#include "Shapes.h"
 
 
 #define GLM_FORCE_RADIANS
@@ -55,7 +56,6 @@ public:
     void cleanup();
 private:
     vk::Device device;
-
 public:
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -64,9 +64,10 @@ public:
     vk::DeviceMemory vertexBufferMemory;
     vk::Buffer indexBuffer;
     vk::DeviceMemory indexBufferMemory;
+
+    Aabb getAabb(glm::mat4 transform);
 private:
     void createBuffers(const std::shared_ptr<VulkanOps> &vulkanOps);
-
 };
 
 
