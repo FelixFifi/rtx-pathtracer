@@ -604,7 +604,9 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
 
     // Check if shadowed
     shadowInfo.isShadowed = true;
-    if (dot(lightDir, normal) > 0 && pdfLights > 0) {
+
+    float cosThetaLight = dot(normal, lightDir);
+    if (cosThetaLight > 0 && pdfLights > 0) {
         traceRayEXT(topLevelAS, // acceleration structure
         shadowRayFlags, // rayFlags
         0xFF, // cullMask
@@ -620,13 +622,14 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
     }
 
     if (!shadowInfo.isShadowed) {
+
         if (pushC.enableMIS) {
             // MIS
             float pdfMat = pdfBSDF(mat, normal, wi, lightDir);
-            neeResult += evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace) *
+            neeResult += cosThetaLight * evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace) *
             lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
         } else {
-            neeResult = evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace)
+            neeResult = cosThetaLight * evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace)
             * lightColor / pdfLights;
         }
     }
@@ -635,6 +638,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
         // Direct light check with BSDF sample
         vec3 bsdfDir;
         float pdfMat = sampleBSDF(mat, wi, normal, info.isFrontFace, bsdfDir);
+        float cosThetaBSDF = dot(bsdfDir, normal);
 
         if (pdfMat > 0)  {
             traceRayEXT(topLevelAS, // acceleration structure
@@ -666,7 +670,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
                     lightColor = matSample.lightColor;
                     pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
 
-                    neeResult += evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
+                    neeResult += cosThetaBSDF * evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
                     lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
                 }
             }
