@@ -13,6 +13,9 @@
 
 #define MAX_DISTRIBUTIONS 10
 
+// Taken from lightpmm/VMFKernel.h
+// the minumum value of kappa before it gets set to 0.0 for numerical stability
+#define VMF_MinKappa 1e-3f
 
 static const int BINDING_AABB = 15;
 static const int BINDING_GUIDING = 16;
@@ -25,6 +28,8 @@ struct VMF_Theta {
     float eMin2K; // exp(-2.0f * k)
 
     void setK(float newK) {
+        newK = newK < VMF_MinKappa ? 0.0 : newK;
+
         k = newK;
         norm = k / (2 * M_PI * (1 - exp(- 2 * k)));
         eMin2K = exp(-2.0 * k);

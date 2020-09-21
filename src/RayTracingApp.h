@@ -114,6 +114,8 @@ public:
         float adrrsS = 5;
         int adrrsSplit = 1;
         int splitOnFirst = 0;
+        int useGuiding = 0;
+        float guidingProb = 0.5;
         int guidingTest = 0;
         float guidingTestK = 1;
     } rtPushConstants;

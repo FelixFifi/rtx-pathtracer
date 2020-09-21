@@ -732,6 +732,10 @@ void RayTracingApp::imGuiWindowSetup() {
 
 
     ImGui::Begin("Guiding");
+    hasInputChanged |= ImGui::Checkbox("Use Guiding",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useGuiding));
+    hasInputChanged |= ImGui::SliderFloat("Guiding Prob",
+                                          &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Test",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
     hasInputChanged |= ImGui::SliderFloat("Guiding Test K",

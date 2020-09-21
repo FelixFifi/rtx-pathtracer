@@ -17,14 +17,17 @@ PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, std::shared_ptr<Vulkan
     createAS();
 }
 
+float getRandNegPos() { return (rand() / (float) RAND_MAX) * 2 - 1.0f; }
+
 glm::vec3 randomOnUnitSphere() {
     glm::vec3 result;
     do {
-        result = {std::rand() / (float) RAND_MAX, std::rand() / (float) RAND_MAX, std::rand() / (float) RAND_MAX};
+        result = {getRandNegPos(), getRandNegPos(), getRandNegPos()};
     } while (glm::length(result) > 1.0f);
 
     return glm::normalize(result);
 }
+
 
 void PathGuiding::createDummyRegions(uint splitCount, const Aabb &sceneAabb) {
     uint regionCount = 1u << splitCount;
@@ -57,7 +60,7 @@ void PathGuiding::createDummyRegions(uint splitCount, const Aabb &sceneAabb) {
             VMF_Theta vmf{};
 
             vmf.mu = randomOnUnitSphere();
-            vmf.setK(1.0f);
+            vmf.setK(30.0f);
 
             vmmTheta.thetas[iDist] = vmf;
             vmmTheta.pi[iDist] = 1.0f / DIST_COUNT;
@@ -147,7 +150,8 @@ PathGuiding::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                      &outAabbsBufferInfo};
 
     outGuidingBufferInfo = vk::DescriptorBufferInfo(guidingBuffer, 0, VK_WHOLE_SIZE);
-    vk::WriteDescriptorSet writeGuiding{descriptorSet, BINDING_GUIDING, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
+    vk::WriteDescriptorSet writeGuiding{descriptorSet, BINDING_GUIDING, 0, 1, vk::DescriptorType::eStorageBuffer,
+                                        nullptr,
                                         &outGuidingBufferInfo};
 
 

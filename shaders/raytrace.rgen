@@ -460,14 +460,14 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
  * @param vec3
  * @return pdf
  */
-float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool frontFace, out vec3 newDirection) {
+float sampleBSDF(in Material mat, in vec3 wi, in vec3 normal, in bool frontFace, out vec3 newDirection) {
     switch (mat.type) {
         case MAT_ROUGH_CONDUCTOR:
         vec3 worldM = randomBeckmannNormal(mat, normal);
 
-        newDirection = reflect(direction, worldM);
+        newDirection = reflect(-wi, worldM);
 
-        return pdfBSDF(mat, normal, -direction, newDirection);
+        return pdfBSDF(mat, normal, wi, newDirection);
 
         case MAT_PHONG:
         float lDiffuse = length(mat.diffuse);
@@ -482,7 +482,7 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool fro
         float pdf;
         if (rnd() * sumSpecDiff > lDiffuse) {
             // Cosine power/phong lobe
-            vec3 reflected = reflect(direction, normal);
+            vec3 reflected = reflect(-wi, normal);
 
             float highlight = mat.specularHighlight;
             newDirection = randomInHemisphereCosinePower(reflected, highlight);
@@ -492,17 +492,17 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool fro
                 return 0.0;
             }
 
-            return pdfBSDF(mat, normal, -direction, newDirection);
+            return pdfBSDF(mat, normal, wi, newDirection);
         } else {
             // Cosine Hemisphere
             newDirection = randomInHemisphereCosine(normal);
-            return pdfBSDF(mat, normal, -direction, newDirection);
+            return pdfBSDF(mat, normal, wi, newDirection);
         }
 
 
         case MAT_SPECULAR:
         case MAT_CONDUCTOR:
-        newDirection = reflect(direction, normal);
+        newDirection = reflect(-wi, normal);
         return 1.0;
 
         case MAT_DIELECTRIC:
@@ -511,16 +511,16 @@ float sampleBSDF(in Material mat, in vec3 direction, in vec3 normal, in bool fro
         if (!frontFace) {
             eta = mat.refractionIndex;
         }
-        float cosTheta = dot(-direction, normal);
+        float cosTheta = dot(wi, normal);
         float fresnel = fresnel(eta, cosTheta);
 
         if (rnd() > fresnel) {
             // Refract
-            newDirection = refract(direction, normal, eta);
+            newDirection = refract(-wi, normal, eta);
             return 1.0 - fresnel;
         } else {
             // Reflect
-            newDirection = reflect(direction, normal);
+            newDirection = reflect(-wi, normal);
             return fresnel;
         }
 
@@ -580,7 +580,7 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFa
     }
 }
 
-vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal) {
+vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
     switch (mat.type) {
         case MAT_DIFFUSE:
         case MAT_PHONG:
@@ -622,11 +622,11 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
     if (!shadowInfo.isShadowed) {
         if (pushC.enableMIS) {
             // MIS
-            float pdfMat = pdfBSDF(mat, normal, -direction, lightDir);
-            neeResult += evalBsdf(mat, textureUV, normal, -direction, lightDir, info.isFrontFace) *
+            float pdfMat = pdfBSDF(mat, normal, wi, lightDir);
+            neeResult += evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace) *
             lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
         } else {
-            neeResult = evalBsdf(mat, textureUV, normal, -direction, lightDir, info.isFrontFace)
+            neeResult = evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace)
             * lightColor / pdfLights;
         }
     }
@@ -634,7 +634,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
     if (pushC.enableMIS) {
         // Direct light check with BSDF sample
         vec3 bsdfDir;
-        float pdfMat = sampleBSDF(mat, direction, normal, info.isFrontFace, bsdfDir);
+        float pdfMat = sampleBSDF(mat, wi, normal, info.isFrontFace, bsdfDir);
 
         if (pdfMat > 0)  {
             traceRayEXT(topLevelAS, // acceleration structure
@@ -654,7 +654,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
                 lightColor = info.missColor;
                 pdfLights = M_INV_2PI;
 
-                neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir, info.isFrontFace) *
+                neeResult += evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
                 lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
             } else {
                 // Check if a light was hit at all
@@ -666,7 +666,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 direction, vec3 normal)
                     lightColor = matSample.lightColor;
                     pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
 
-                    neeResult += evalBsdf(mat, textureUV, normal, -direction, bsdfDir, info.isFrontFace) *
+                    neeResult += evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
                     lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
                 }
             }
@@ -814,10 +814,10 @@ float applyWeightWindow(vec3 throughput, vec3 adjoint, out int n) {
     }
 }
 
-vec3 multipleNEE(Material mat, vec3 origin, vec3 direction, vec3 normal, int numNEE) {
+vec3 multipleNEE(Material mat, vec3 origin, vec3 wi, vec3 normal, int numNEE) {
     vec3 result = vec3(0, 0, 0);
     for (int i = 0; i < numNEE; i++) {
-        result += nextEventEstimation(mat, origin, direction, normal);
+        result += nextEventEstimation(mat, origin, wi, normal);
     }
     return result / numNEE;
 }
@@ -845,6 +845,73 @@ bool split(vec3 origin, vec3 normal, vec3 wi, vec3 throughput, vec2 textureUV, i
     nextSplitSlot++;
 
     return true;
+}
+
+uint getGuidingRegion(vec3 origin) {
+    guidingInfos.iRegion = -1;
+
+    traceRayEXT(guidingAS, // acceleration structure
+    gl_RayFlagsTerminateOnFirstHitEXT, // The current position should always only be in one guiding region
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin, // ray origin
+    0, // ray min range
+    vec3(0, 0, 1), // ray direction
+    tMin, // ray max range
+    PAYLOAD_GUIDING// payload
+    );
+
+    return guidingInfos.iRegion;
+}
+
+float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 newDirection) {
+    float pdf;
+
+    if (pushC.useGuiding) {
+        if (rnd() < pushC.guidingProb) {
+            uint iRegion = getGuidingRegion(origin);
+
+            if (iRegion < 0) {
+                return 0.0;
+            }
+
+            VMM_Theta vmmTheta = guidingVMM[iRegion];
+
+            newDirection = sampleVMM(vmmTheta);
+            pdf = pushC.guidingProb * VMM(newDirection, vmmTheta);
+
+            if (dot(newDirection, normal) < 0) {
+                return 0.0;
+            }
+        } else {
+            pdf = (1.0 - pushC.guidingProb) * sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+        }
+    } else if (pushC.guidingTest) {
+        // Create guiding distribution pointed at a light
+        vec3 lightDir;
+        vec3 lightColor;
+        float lightDistance;
+        float pdfLights = sampleLights(origin, normal, lightDir, lightColor, lightDistance);
+
+        VMF_Theta vmfTheta;
+        vmfTheta.mu = lightDir;
+        vmfTheta = updateK(vmfTheta, pushC.guidingTestK);
+
+        VMM_Theta vmmTheta = createVMM_Theta(vmfTheta);
+
+        // Sample that direction
+        newDirection = sampleVMM(vmmTheta);
+        pdf = VMM(newDirection, vmmTheta);
+
+        if (dot(newDirection, normal) < 0) {
+            return 0.0;
+        }
+    } else {
+        pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+    }
+    return pdf;
 }
 
 vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDepth, int maxDepth, int maxFollowDiscrete, bool addDirectLights, bool addFirstHitLight, bool useNEE, int numNEE, bool useIC, bool createIC, bool useADRRS, out float firstT) {
@@ -952,7 +1019,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                             result += throughput * diffuse * irradianceColor;
 
                             // If IC values are used, then NEE is necessary for the complete light values
-                            result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+                            result += throughput * multipleNEE(mat, origin, -direction, normal, numNEE);
                             break;
                         }
                     } else if (createIC && rnd() < pushC.irradianceCreateProb) {
@@ -980,34 +1047,12 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
             // NEE is after possible splits, as each split should calculate its own NEE
             if (useNEE) {
-                result += throughput * multipleNEE(mat, origin, direction, normal, numNEE);
+                result += throughput * multipleNEE(mat, origin, -direction, normal, numNEE);
             }
         }
 
         vec3 newDirection;
-
-        float pdf;
-        if (pushC.guidingTest) {
-            vec3 lightDir;
-            vec3 lightColor;
-            float lightDistance;
-            float pdfLights = sampleLights(origin, normal, lightDir, lightColor, lightDistance);
-
-            VMF_Theta vmfTheta;
-            vmfTheta.mu = lightDir;
-            vmfTheta = updateK(vmfTheta, pushC.guidingTestK);
-
-            VMM_Theta vmmTheta = createVMM_Theta(vmfTheta);
-
-            newDirection = sampleVMM(vmmTheta);
-            pdf = VMM(newDirection, vmmTheta);
-
-            if (dot(newDirection, normal) < 0) {
-                pdf = 0.0;
-            }
-        } else {
-            pdf = sampleBSDF(mat, direction, normal, info.isFrontFace, newDirection);
-        }
+        float pdf = getNewDirection(mat, origin, normal, -direction, newDirection);
 
         if (pdf <= 0.0) {
             break;
@@ -1310,25 +1355,13 @@ vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
         return vec3(0, 0, 0);
     }
 
-    guidingInfos.iRegion = -1;
+    uint iRegion = getGuidingRegion(info.worldPos.xyz);
 
-    traceRayEXT(guidingAS, // acceleration structure
-    gl_RayFlagsTerminateOnFirstHitEXT, // The current position should always only be in one guiding region
-    0xFF, // cullMask
-    0, // sbtRecordOffset
-    0, // sbtRecordStride
-    0, // missIndex
-    info.worldPos.xyz, // ray origin
-    0, // ray min range
-    info.normal.xyz, // ray direction
-    tMin, // ray max range
-    PAYLOAD_GUIDING// payload
-    );
-
-    if (guidingInfos.iRegion < 0) {
+    if (iRegion < 0) {
         return vec3(1, 0, 0);
     } else {
-        return (vec3(1) + guidingVMM[guidingInfos.iRegion].thetas[0].mu) / 2.0;
+        // Visualize direction of first guiding VMF
+        return (vec3(1) + guidingVMM[iRegion].thetas[0].mu) / 2.0;
     }
 }
 
@@ -1409,11 +1442,11 @@ void main() {
             // Split happens before NEE
             // => calculate NEE for origin
             if (useNEE) {
-                result += split.throughput * multipleNEE(mat, split.origin, -split.wi, split.normal, numNEE);
+                result += split.throughput * multipleNEE(mat, split.origin, split.wi, split.normal, numNEE);
             }
 
             vec3 direction;
-            float pdf = sampleBSDF(mat, -split.wi, split.normal, split.isFrontFace, direction);
+            float pdf = getNewDirection(mat, split.origin, split.normal, split.wi, direction);
 
             if (pdf <= 0.0) {
                 break;

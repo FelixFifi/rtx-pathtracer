@@ -49,6 +49,8 @@ struct pushConstant
     float adrrsS;
     bool adrrsSplit;
     bool splitOnFirst;
+    bool useGuiding;
+    float guidingProb;
     bool guidingTest;
     float guidingTestK;
 };

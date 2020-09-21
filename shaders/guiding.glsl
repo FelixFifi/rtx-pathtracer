@@ -3,6 +3,12 @@
 
 #define M_PI 3.1415926535897932384626433832795
 #define M_2PI 6.28318530718
+#define M_INV_4PI 0.07957747155
+
+// Taken from lightpmm/VMFKernel.h
+
+// the minumum value of kappa before it gets set to 0.0 for numerical stability
+#define VMF_MinKappa 1e-3f
 
 struct VMF_Theta {
     vec3 mu;
@@ -12,6 +18,8 @@ struct VMF_Theta {
 };
 
 VMF_Theta updateK(VMF_Theta theta, float k) {
+    k = k < VMF_MinKappa ? 0.0 : k;
+
     theta.k = k;
     theta.norm = k / (M_2PI * (1 - exp(- 2 * k)));
     theta.eMin2K = exp(-2.0 * k);
@@ -19,6 +27,11 @@ VMF_Theta updateK(VMF_Theta theta, float k) {
 }
 
 float vMF(vec3 wo, VMF_Theta theta) {
+    if (theta.k == 0.0) {
+        // Homogene sphere
+        return M_INV_4PI;
+    }
+
     return theta.norm * exp(theta.k * (dot(theta.mu, wo) - 1));
 }
 
@@ -69,8 +82,11 @@ vec3 sampleVMM(VMM_Theta vmmTheta) {
     float rndDist = rnd();
 
     int iDistribution = 0;
-    while (vmmTheta.pi[iDistribution] < rndDist) {
+    int maxDistribution = vmmTheta.usedDistributions - 1;
+    float piSum = vmmTheta.pi[0];
+    while (piSum < rndDist && iDistribution < maxDistribution) {
         iDistribution++;
+        piSum += vmmTheta.pi[iDistribution];
     }
 
     return sampleVMF(vmmTheta.thetas[iDistribution]);
