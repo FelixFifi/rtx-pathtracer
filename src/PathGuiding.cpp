@@ -52,10 +52,10 @@ void PathGuiding::createDummyRegions(uint splitCount, const Aabb &sceneAabb) {
         aabbs = currentSplits;
     }
 
-    // Generate two random vMF cones
+    // Generate random vMF cones
     for (const Aabb &aabb : aabbs) {
         VMM_Theta vmmTheta{};
-        const int DIST_COUNT = 2;
+        const int DIST_COUNT = MAX_DISTRIBUTIONS;
         for (int iDist = 0; iDist < DIST_COUNT; iDist++) {
             VMF_Theta vmf{};
 
