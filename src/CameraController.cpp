@@ -24,10 +24,7 @@ void CameraController::eventCallbackSDL(const SDL_Event &event) {
                 yaw = glm::radians(event.motion.xrel * mouseSensitivity);
                 pitch = glm::radians(event.motion.yrel * mouseSensitivity);
 
-                glm::quat qYaw = glm::angleAxis(yaw, orientation * glm::vec3(0.0f, 0.0f, 1.0f));
-                glm::quat qPitch = glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-
-                setOrientation(qPitch * (qYaw * orientation));
+                rotate(yaw, pitch, 0);
             }
             break;
         case SDL_EventType::SDL_KEYDOWN:
@@ -44,11 +41,19 @@ void CameraController::eventCallbackSDL(const SDL_Event &event) {
                 case SDLK_d:
                     setPos(pos + speed * getRight());
                     break;
+                case SDLK_q:
+                    rotate(0, 0, ROLL_SPEED);
+                    break;
+                case SDLK_e:
+                    rotate(0, 0, -ROLL_SPEED);
+                    break;
+                case SDLK_v:
                 case SDLK_SPACE:
                 case SDLK_LSHIFT:
                     setPos(pos + speed * getUp());
                     break;
                 case SDLK_LCTRL:
+                case SDLK_c:
                     setPos(pos - speed * getUp());
                     break;
             }
@@ -58,6 +63,14 @@ void CameraController::eventCallbackSDL(const SDL_Event &event) {
             }
             break;
     }
+}
+
+void CameraController::rotate(float yaw, float pitch, float roll) {
+    glm::quat qYaw = glm::angleAxis(yaw, getUp());
+    glm::quat qPitch = glm::angleAxis(pitch, getRight());
+    glm::quat qRoll = glm::angleAxis(roll, getForward());
+
+    setOrientation(qYaw *  (qPitch * (qRoll * orientation)));
 }
 
 void CameraController::lookAt(glm::vec3 origin, glm::vec3 target, glm::vec3 upDir) {

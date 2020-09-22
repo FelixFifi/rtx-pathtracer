@@ -7,6 +7,8 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_ENABLE_EXPERIMENTAL
+static const double ROLL_SPEED = 3.1415926535897932384 / 32.0f;
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <SDL.h>
@@ -48,6 +50,8 @@ public:
     void lookAt(glm::vec3 origin, glm::vec3 target, glm::vec3 upDir);
 
     glm::mat4 getProjMatrix();
+
+    void rotate(float yaw, float pitch, float roll);
 };
 
 
