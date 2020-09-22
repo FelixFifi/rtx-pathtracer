@@ -34,6 +34,7 @@ add_executable(rtx_raytracer
         src/IrradianceCache.cpp
         src/Shapes.cpp
         src/PathGuiding.cpp
+        src/SampleCollector.cpp
         ${EXTERNAL})
 
 target_link_libraries(rtx_raytracer ${Vulkan_LIBRARY} ${SDL2_LIBRARIES} ${CMAKE_DL_LIBS} /usr/local/lib/libIlmImf-2_5.so /usr/local/lib/libHalf-2_5.so)

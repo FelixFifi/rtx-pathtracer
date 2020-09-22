@@ -35,6 +35,9 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, u
 
     offscreenExtent = postProcessing.getExtentOffscreen();
 
+    uint32_t regionCount = 1 << guidingSplits;
+    sampleCollector = SampleCollector(regionCount, offscreenExtent, rtPushConstants.directionalDataPerPixel, vulkanOps);
+
     createVulkanImages();
     createUniformBuffers();
     sceneSwitcher(1);
@@ -199,7 +202,8 @@ void RayTracingApp::createDecriptorSetLayout() {
     auto sceneBindings = sceneLoader.getDescriptorSetLayouts();
     auto irradianceBindings = irradianceCache.getDescriptorSetLayouts();
     auto guidingBindings = guiding.getDescriptorSetLayouts();
-    std::array<vk::DescriptorSetLayoutBinding, ESTIMATE_IMAGE_BINDING + 4> bindings = {uniformBufferLayoutBinding,
+    auto sampleCollectorBindings = sampleCollector.getDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayoutBinding, ESTIMATE_IMAGE_BINDING + 5> bindings = {uniformBufferLayoutBinding,
                                                                                        sceneBindings[0],
                                                                                        sceneBindings[1],
                                                                                        sceneBindings[2],
@@ -216,7 +220,8 @@ void RayTracingApp::createDecriptorSetLayout() {
                                                                                        estimateImageLayoutBinding,
                                                                                        guidingBindings[0],
                                                                                        guidingBindings[1],
-                                                                                       guidingBindings[2]};
+                                                                                       guidingBindings[2],
+                                                                                       sampleCollectorBindings[0]};
     vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
 
@@ -226,9 +231,10 @@ void RayTracingApp::createDecriptorSetLayout() {
 void RayTracingApp::createDescriptorPool() {
     auto vertexIndexMaterialPoolSizes = sceneLoader.getDescriptorPoolSizes();
     auto irradiancePoolSizes = irradianceCache.getDescriptorPoolSizes();
-    auto guidingPoolSizes = guiding.getDescriptorPoolSizes();
+    auto guidingPoolSizes = PathGuiding::getDescriptorPoolSizes();
+    auto sampleCollectorPoolSizes = SampleCollector::getDescriptorPoolSizes();
 
-    std::array<vk::DescriptorPoolSize, ESTIMATE_IMAGE_BINDING + 4> poolSizes = {
+    std::array<vk::DescriptorPoolSize, ESTIMATE_IMAGE_BINDING + 5> poolSizes = {
             vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
                                    static_cast<uint32_t>(1)),
             vertexIndexMaterialPoolSizes[0],
@@ -247,7 +253,8 @@ void RayTracingApp::createDescriptorPool() {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1),
             guidingPoolSizes[0],
             guidingPoolSizes[1],
-            guidingPoolSizes[2]
+            guidingPoolSizes[2],
+            sampleCollectorPoolSizes[0]
     }; // TODO: One per frame
 
     vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(1),
@@ -286,6 +293,7 @@ void RayTracingApp::createDescriptorSets() {
     vk::DescriptorBufferInfo guidingBufferInfo;
     vk::DescriptorBufferInfo guidingAabbsBufferInfo;
     vk::WriteDescriptorSetAccelerationStructureKHR guidingAsInfo;
+    vk::DescriptorBufferInfo directionalDataBufferInfo;
 
     auto sceneWrites = sceneLoader.getWriteDescriptorSets(descriptorSet, vertexBufferInfos,
                                                           indexBufferInfos, materialBufferInfo,
@@ -299,6 +307,7 @@ void RayTracingApp::createDescriptorSets() {
     auto guidingWrites = guiding.getWriteDescriptorSets(descriptorSet, guidingAsInfo,
                                                         guidingAabbsBufferInfo,
                                                         guidingBufferInfo);
+    auto sampleCollectorWrites = sampleCollector.getWriteDescriptorSets(descriptorSet, directionalDataBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                0,
@@ -313,7 +322,7 @@ void RayTracingApp::createDescriptorSets() {
                                                                              vk::DescriptorType::eStorageImage,
                                                                              &estimateImageInfo,
                                                                              nullptr, nullptr);
-    std::array<vk::WriteDescriptorSet, ESTIMATE_IMAGE_BINDING + 4> descriptorWrites = {
+    std::array<vk::WriteDescriptorSet, ESTIMATE_IMAGE_BINDING + 5> descriptorWrites = {
             vk::WriteDescriptorSet(descriptorSet, 0, 0, 1,
                                    vk::DescriptorType::eUniformBuffer, nullptr,
                                    &bufferInfo, nullptr),
@@ -333,7 +342,8 @@ void RayTracingApp::createDescriptorSets() {
             estimateImageWrite,
             guidingWrites[0],
             guidingWrites[1],
-            guidingWrites[2]
+            guidingWrites[2],
+            sampleCollectorWrites[0]
     };
 
     device.updateDescriptorSets(descriptorWrites, nullptr);

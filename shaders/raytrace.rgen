@@ -116,6 +116,8 @@ layout(binding = 14, set = 1, rgba32f) uniform image2D estimateImage;
 // Guiding
 layout(binding = 16, set = 1, scalar) buffer Guiding { VMM_Theta guidingVMM[]; };
 layout(binding = 17, set = 1) uniform accelerationStructureEXT guidingAS;
+layout(binding = 18, set = 1, std140) buffer SampleCollector { DirectionalData directionalData[]; };
+
 
 layout(binding = 0, set = 1)
 uniform CameraMatrices{
@@ -1358,11 +1360,11 @@ bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out
     origin.xyz, // ray origin
     tMin, // ray min range
     direction.xyz, // ray direction
-    tMax, // ray max range
+    maxT, // ray max range
     PAYLOAD_GUIDING_VISU// payload
     );
 
-    if (guidingVisuInfos.isMiss || guidingVisuInfos.t > maxT) {
+    if (guidingVisuInfos.isMiss) {
         return false;
     }
 

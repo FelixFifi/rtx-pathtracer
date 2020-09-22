@@ -56,6 +56,7 @@ struct pushConstant
     bool guidingVisuIgnoreOcclusioon;
     bool guidingTest;
     float guidingTestK;
+    uint directionalDataPerPixel;
 };
 
 struct sphere {

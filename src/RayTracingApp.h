@@ -35,6 +35,7 @@
 #include "SceneLoader.h"
 #include "IrradianceCache.h"
 #include "PathGuiding.h"
+#include "SampleCollector.h"
 
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
@@ -127,6 +128,7 @@ public:
         int guidingVisuIgnoreOcclusioon = 0;
         int guidingTest = 0;
         float guidingTestK = 1;
+        uint32_t directionalDataPerPixel;
     } rtPushConstants;
 
 private:
@@ -154,6 +156,7 @@ private:
 
     PathGuiding guiding;
     uint guidingSplits;
+    SampleCollector sampleCollector;
 
     RtPushConstant backupPushConstant;
     bool loadBackupNextIteration = false;
