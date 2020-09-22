@@ -297,8 +297,8 @@ void RayTracingApp::createDescriptorSets() {
                                                                    irradianceCacheBufferInfo,
                                                                    irradianceAabbsBufferInfo);
     auto guidingWrites = guiding.getWriteDescriptorSets(descriptorSet, guidingAsInfo,
-                                                                   guidingAabbsBufferInfo,
-                                                                   guidingBufferInfo);
+                                                        guidingAabbsBufferInfo,
+                                                        guidingBufferInfo);
 
     const vk::WriteDescriptorSet accumulateImageWrite = vk::WriteDescriptorSet(descriptorSet, ACCUMULATE_IMAGE_BINDING,
                                                                                0,
@@ -440,6 +440,8 @@ void RayTracingApp::createRtPipeline() {
     auto irradianceVisualizeAhitCode = readFile("shaders/raytrace.irradiance.visualize.rahit.spv");
     auto guidingChitCode = readFile("shaders/raytrace.guiding.rchit.spv");
     auto guidingIntCode = readFile("shaders/raytrace.guiding.rint.spv");
+    auto guidingVisualizeChitCode = readFile("shaders/raytrace.guiding.visualize.rchit.spv");
+    auto guidingVisualizeIntCode = readFile("shaders/raytrace.guiding.visualize.rint.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -453,6 +455,8 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule irradianceVisualizeAhitShaderModule = vulkanOps->createShaderModule(irradianceVisualizeAhitCode);
     vk::ShaderModule guidingChitShaderModule = vulkanOps->createShaderModule(guidingChitCode);
     vk::ShaderModule guidingIntShaderModule = vulkanOps->createShaderModule(guidingIntCode);
+    vk::ShaderModule guidingVisualizeChitShaderModule = vulkanOps->createShaderModule(guidingVisualizeChitCode);
+    vk::ShaderModule guidingVisualizeIntShaderModule = vulkanOps->createShaderModule(guidingVisualizeIntCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -538,13 +542,22 @@ void RayTracingApp::createRtPipeline() {
     hg4.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg4);
 
+    // Hit Group 5 - Guiding Visualize
+    vk::RayTracingShaderGroupCreateInfoKHR hg5{vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR,
+                                               VK_SHADER_UNUSED_KHR, VK_SHADER_UNUSED_KHR};
+    stages.push_back({{}, vk::ShaderStageFlagBits::eIntersectionKHR, guidingVisualizeIntShaderModule, "main"});
+    hg5.setIntersectionShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, guidingVisualizeChitShaderModule, "main"});
+    hg5.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+    rtShaderGroups.push_back(hg5);
+
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 
     // Push constant: we want to be able to update constants used by the shaders
-    vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eRaygenKHR
-                                       | vk::ShaderStageFlagBits::eClosestHitKHR
-                                       | vk::ShaderStageFlagBits::eMissKHR | vk::ShaderStageFlagBits::eAnyHitKHR,
+    vk::PushConstantRange pushConstant{PUSH_CONSTANT_STAGES,
                                        0, sizeof(RtPushConstant)};
     pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
     pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
@@ -581,6 +594,8 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(irradianceVisualizeAhitShaderModule);
     device.destroy(guidingIntShaderModule);
     device.destroy(guidingChitShaderModule);
+    device.destroy(guidingVisualizeIntShaderModule);
+    device.destroy(guidingVisualizeChitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -666,6 +681,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasRadioButtonChanged |= ImGui::RadioButton("Estimate", &currentVisualizeMode, EEstimate);
     ImGui::SameLine();
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding Regions", &currentVisualizeMode, EGuidingRegions);
+    ImGui::SameLine();
+    hasRadioButtonChanged |= ImGui::RadioButton("Guiding Overlay", &currentVisualizeMode, EGuidingOverlay);
 
     rtPushConstants.visualizeMode = ERayTrace;
 
@@ -736,6 +753,12 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.useGuiding));
     hasInputChanged |= ImGui::SliderFloat("Guiding Prob",
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
+    hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
+                                          &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
+    hasInputChanged |= ImGui::SliderFloat("Guiding Visu Max",
+                                          &rtPushConstants.guidingVisuMax, 0.0f, 10.0f);
+    hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",
+                                       reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
     hasInputChanged |= ImGui::Checkbox("Guiding Test",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
     hasInputChanged |= ImGui::SliderFloat("Guiding Test K",
@@ -780,10 +803,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
                               {rtDescSet, descriptorSet}, {});
     cmdBuf.pushConstants<RtPushConstant>(rtPipelineLayout,
-                                         vk::ShaderStageFlagBits::eRaygenKHR
-                                         | vk::ShaderStageFlagBits::eClosestHitKHR
-                                         | vk::ShaderStageFlagBits::eMissKHR
-                                         | vk::ShaderStageFlagBits::eAnyHitKHR,
+                                         PUSH_CONSTANT_STAGES,
                                          0, rtPushConstants);
 
     vk::DeviceSize progSize = rtProperties.shaderGroupBaseAlignment;  // Alignment of a program identifier

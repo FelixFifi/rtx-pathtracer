@@ -57,13 +57,19 @@ static const int MAX_RECURSION = 2;
 static const int ACCUMULATE_IMAGE_BINDING = 9;
 static const int ESTIMATE_IMAGE_BINDING = 14;
 
+static const vk::Flags<vk::ShaderStageFlagBits> PUSH_CONSTANT_STAGES = vk::ShaderStageFlagBits::eRaygenKHR
+                                                                       | vk::ShaderStageFlagBits::eClosestHitKHR
+                                                                       | vk::ShaderStageFlagBits::eMissKHR
+                                                                       | vk::ShaderStageFlagBits::eAnyHitKHR
+                                                                       | vk::ShaderStageFlagBits::eIntersectionKHR;
 enum VisualizationMode {
     ERayTrace = 0,
     EDepthMax = 1,
     EDepthAverage = 2,
     ESplits = 3,
     EEstimate = 4,
-    EGuidingRegions = 5
+    EGuidingRegions = 5,
+    EGuidingOverlay = 6
 };
 
 struct CameraMatrices {
@@ -116,6 +122,9 @@ public:
         int splitOnFirst = 0;
         int useGuiding = 0;
         float guidingProb = 0.5;
+        float guidingVisuScale = 0.5;
+        float guidingVisuMax = 1.0;
+        int guidingVisuIgnoreOcclusioon = 0;
         int guidingTest = 0;
         float guidingTestK = 1;
     } rtPushConstants;

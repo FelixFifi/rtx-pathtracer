@@ -26,3 +26,5 @@ glslc --target-env=vulkan1.2 raytrace.sphere.rchit -O -o raytrace.sphere.rchit.s
 echo "Guiding:"
 glslc --target-env=vulkan1.2 raytrace.guiding.rint -O -o raytrace.guiding.rint.spv
 glslc --target-env=vulkan1.2 raytrace.guiding.rchit -O -o raytrace.guiding.rchit.spv
+glslc --target-env=vulkan1.2 raytrace.guiding.visualize.rint -O -o raytrace.guiding.visualize.rint.spv
+glslc --target-env=vulkan1.2 raytrace.guiding.visualize.rchit -O -o raytrace.guiding.visualize.rchit.spv

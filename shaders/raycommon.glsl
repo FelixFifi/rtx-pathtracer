@@ -51,6 +51,9 @@ struct pushConstant
     bool splitOnFirst;
     bool useGuiding;
     float guidingProb;
+    float guidingVisuScale;
+    float guidingVisuMax;
+    bool guidingVisuIgnoreOcclusioon;
     bool guidingTest;
     float guidingTestK;
 };
@@ -91,4 +94,12 @@ struct cacheHits {
 
 struct guidingInfo {
     uint iRegion;
+};
+
+struct guidingVisuInfo {
+    vec3 worldPos;
+    vec3 direction;
+    float t;
+    uint iRegion;
+    bool isMiss;
 };
