@@ -128,7 +128,8 @@ public:
         int guidingVisuIgnoreOcclusioon = 0;
         int guidingTest = 0;
         float guidingTestK = 1;
-        uint32_t directionalDataPerPixel;
+        uint32_t directionalDataPerPixel = 8;
+        int updateGuiding = 0;
     } rtPushConstants;
 
 private:

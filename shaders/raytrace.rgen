@@ -116,7 +116,7 @@ layout(binding = 14, set = 1, rgba32f) uniform image2D estimateImage;
 // Guiding
 layout(binding = 16, set = 1, scalar) buffer Guiding { VMM_Theta guidingVMM[]; };
 layout(binding = 17, set = 1) uniform accelerationStructureEXT guidingAS;
-layout(binding = 18, set = 1, std140) buffer SampleCollector { DirectionalData directionalData[]; };
+layout(binding = 18, set = 1, scalar) buffer SampleCollector { DirectionalData directionalData[]; };
 
 
 layout(binding = 0, set = 1)
@@ -934,6 +934,11 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
     vec3 normal;
     firstT = tMax;
 
+    float firstPDF;
+    uint firstRegion;
+    vec3 firstPos, firstDirection;
+
+
     vec3 result = vec3(0.0, 0.0, 0.0);
 
     do {
@@ -1068,11 +1073,33 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         if (pdf <= 0.0) {
             break;
         }
+
+        // Gather sample data
+        if (depth == 1) {
+            firstPDF = pdf;
+            firstDirection = newDirection;
+            firstPos = origin;
+            firstRegion = getGuidingRegion(origin);
+        }
+
         float cosThetaO = dot(newDirection, normal);
         throughput *= evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) * cosThetaO / pdf;
 
         direction = newDirection;
     } while (depth <= maxDepth || (follow && followCount <= maxFollowDiscrete));
+
+    if (length(result) > 0) {
+        DirectionalData firstHitSample;
+        firstHitSample.position = firstPos;
+        firstHitSample.direction = firstDirection;
+        firstHitSample.pdf = firstPDF;
+        firstHitSample.weight = length(result) / firstPDF;
+        firstHitSample.flags = firstRegion;
+
+        directionalData[gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x] = firstHitSample;
+    } else {
+        directionalData[gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x].flags = 0xFFFFFFFF;
+    }
 
     currentDepth = depth;
     return result;

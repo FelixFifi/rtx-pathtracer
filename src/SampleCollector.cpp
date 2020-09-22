@@ -8,10 +8,14 @@ SampleCollector::SampleCollector(uint32_t regionCount, vk::Extent2D imageSize, u
                                  std::shared_ptr<VulkanOps> vulkanOps)
         : regionCount(regionCount), imageSize(imageSize), numPerPixel(numPerPixel), vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
-
+    createBuffers();
 }
 
 void SampleCollector::cleanup() {
+    if (!directionalDataBuffer) {
+        return;
+    }
+
     device.free(directionalDataBufferMemory);
     device.free(hostDirectionalDataBufferMemory);
     device.destroy(directionalDataBuffer);

@@ -17,7 +17,7 @@ static const int BINDING_DIRECTIONAL_DATA = 18;
 // Taken from lightpmm/DirectionalData.h
 struct DirectionalData {
     // the positin of the sample in 3D (e.g, photon position)
-    alignas(16) glm::vec3 position;
+    glm::vec3 position;
     // direction of the sample (e.g., direction pointing to the origin of the photon)
     glm::vec3 direction;
     // the weight or value associated to this direction (e.g., photon power)

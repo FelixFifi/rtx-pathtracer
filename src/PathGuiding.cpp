@@ -78,10 +78,11 @@ void PathGuiding::createBuffers() {
     }
 
     vk::BufferUsageFlags usage =
-            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress;
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eTransferDst;
     vk::MemoryPropertyFlagBits memoryFlags = vk::MemoryPropertyFlagBits::eDeviceLocal;
     vulkanOps->createBufferFromData(aabbs, usage, memoryFlags, aabbsBuffer, aabbsBufferMemory);
     vulkanOps->createBufferFromData(guidingRegions, usage, memoryFlags, guidingBuffer, guidingBufferMemory);
+    vulkanOps->createBufferFromData(guidingRegions, usage | vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, guidingUpdateBuffer, guidingUpdateBufferMemory);
 }
 
 void PathGuiding::createAS() {
@@ -182,4 +183,31 @@ void PathGuiding::cleanupBuffers() const {
 
     device.destroy(aabbsBuffer);
     device.destroy(guidingBuffer);
+}
+
+uint32_t PathGuiding::getRegionCount() {
+    return aabbs.size();
+}
+
+void PathGuiding::update(SampleCollector sampleCollector) {
+    std::shared_ptr<std::vector<std::vector<DirectionalData>>> directionalData = sampleCollector.getSortedData();
+
+    for (int iRegion = 0; iRegion < getRegionCount(); ++iRegion) {
+        unsigned long samplesInRegion = (*directionalData)[iRegion].size();
+        if (samplesInRegion > 0) {
+            guidingRegions[iRegion].usedDistributions = 1;
+            guidingRegions[iRegion].thetas[0].mu = (*directionalData)[iRegion][0].direction;
+            guidingRegions[iRegion].pi[0] = 1.0f;
+        }
+    }
+
+    void *data;
+    vk::DeviceSize bufferSize = guidingRegions.size() * sizeof(VMM_Theta);
+    data = device.mapMemory(guidingUpdateBufferMemory, 0, bufferSize);
+
+    memcpy(data, guidingRegions.data(), (size_t) bufferSize);
+
+    device.unmapMemory(guidingUpdateBufferMemory);
+
+    vulkanOps->copyBuffer(guidingUpdateBuffer, guidingBuffer, bufferSize);
 }

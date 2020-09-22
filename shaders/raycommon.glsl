@@ -57,6 +57,7 @@ struct pushConstant
     bool guidingTest;
     float guidingTestK;
     uint directionalDataPerPixel;
+    bool updateGuiding;
 };
 
 struct sphere {

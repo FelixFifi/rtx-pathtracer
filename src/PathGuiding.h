@@ -9,6 +9,7 @@
 
 #include "Shapes.h"
 #include "VulkanOps.h"
+#include "SampleCollector.h"
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
 #define MAX_DISTRIBUTIONS 10
@@ -58,6 +59,8 @@ private:
     vk::DeviceMemory aabbsBufferMemory;
     vk::Buffer guidingBuffer;
     vk::DeviceMemory guidingBufferMemory;
+    vk::Buffer guidingUpdateBuffer;
+    vk::DeviceMemory guidingUpdateBufferMemory;
 
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
@@ -66,6 +69,8 @@ public:
     PathGuiding(uint splitCount, Aabb sceneAabb, std::shared_ptr<VulkanOps> vulkanOps,
                 vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex);
 
+    void update(SampleCollector sampleCollector);
+    uint32_t getRegionCount();
 
     std::array<vk::DescriptorSetLayoutBinding, 3> getDescriptorSetLayouts();
 

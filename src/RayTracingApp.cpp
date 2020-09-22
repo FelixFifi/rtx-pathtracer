@@ -87,6 +87,10 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     cameraController.resetStatus();
 
+    if (rtPushConstants.updateGuiding > 0) {
+        guiding.update(sampleCollector);
+    }
+
     // TODO: Fences
     device.waitIdle();
 
@@ -773,6 +777,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
     hasInputChanged |= ImGui::SliderFloat("Guiding Test K",
                                           &rtPushConstants.guidingTestK, 0.0f, 100.0f);
+    hasInputChanged |= ImGui::Checkbox("Update Guiding",
+                                       reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
 
     ImGui::End();
 }
@@ -853,6 +859,7 @@ void RayTracingApp::setEstimateRTSettings() {
 
 void RayTracingApp::cleanup() {
     irradianceCache.cleanUp();
+    sampleCollector.cleanup();
 
     device.destroy(accumulateImageView);
     device.destroyImage(accumulateImage);

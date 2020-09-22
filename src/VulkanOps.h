@@ -51,10 +51,10 @@ public:
                       vk::Buffer &buffer, vk::DeviceMemory &bufferMemory);
 
     template<class T>
-    void createBufferFromData(const std::vector<T> &dataToCopy, vk::BufferUsageFlags &usage,
+    void createBufferFromData(const std::vector<T> &dataToCopy, const vk::BufferUsageFlags &usage,
                                          const vk::MemoryPropertyFlags &memoryProperties, vk::Buffer &outBuffer,
                                          vk::DeviceMemory &outMemory) {
-        usage = usage | vk::BufferUsageFlagBits::eTransferDst;
+        vk::BufferUsageFlags _usage = usage | vk::BufferUsageFlagBits::eTransferDst;
 
         vk::DeviceSize bufferSize = sizeof(dataToCopy[0]) * dataToCopy.size();
 
@@ -72,7 +72,7 @@ public:
         device.unmapMemory(stagingBufferMemory);
 
 
-        VulkanOps::createBuffer(bufferSize, usage,
+        VulkanOps::createBuffer(bufferSize, _usage,
                                 memoryProperties, outBuffer, outMemory);
 
         VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize);
