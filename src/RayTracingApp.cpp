@@ -878,7 +878,7 @@ void RayTracingApp::cleanup() {
 
     sceneLoader.cleanup();
     guiding.cleanup();
-
+    sampleCollector.cleanup();
     postProcessing.cleanup();
     vulkanWindow.cleanup();
 }

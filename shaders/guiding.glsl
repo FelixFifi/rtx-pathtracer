@@ -106,3 +106,10 @@ struct DirectionalData {
     float distance;
     uint flags;
 };
+
+#define INVALID 0xFFFFFFFF
+#define MAX_DIRECTIONAL_DATA_PER_PIXEL 16
+
+uint getBaseIndex() {
+    return gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x;
+}

@@ -78,11 +78,15 @@ void PathGuiding::createBuffers() {
     }
 
     vk::BufferUsageFlags usage =
-            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eTransferDst;
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress |
+            vk::BufferUsageFlagBits::eTransferDst;
     vk::MemoryPropertyFlagBits memoryFlags = vk::MemoryPropertyFlagBits::eDeviceLocal;
     vulkanOps->createBufferFromData(aabbs, usage, memoryFlags, aabbsBuffer, aabbsBufferMemory);
     vulkanOps->createBufferFromData(guidingRegions, usage, memoryFlags, guidingBuffer, guidingBufferMemory);
-    vulkanOps->createBufferFromData(guidingRegions, usage | vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, guidingUpdateBuffer, guidingUpdateBufferMemory);
+    vulkanOps->createBufferFromData(guidingRegions, usage | vk::BufferUsageFlagBits::eTransferSrc,
+                                    vk::MemoryPropertyFlagBits::eHostVisible |
+                                    vk::MemoryPropertyFlagBits::eHostCoherent, guidingUpdateBuffer,
+                                    guidingUpdateBufferMemory);
 }
 
 void PathGuiding::createAS() {
@@ -113,7 +117,8 @@ void PathGuiding::createAS() {
 
 std::array<vk::DescriptorSetLayoutBinding, 3> PathGuiding::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding bufferAabbs{BINDING_AABB, vk::DescriptorType::eStorageBuffer, 1,
-                                               vk::ShaderStageFlagBits::eIntersectionKHR | vk::ShaderStageFlagBits::eClosestHitKHR};
+                                               vk::ShaderStageFlagBits::eIntersectionKHR |
+                                               vk::ShaderStageFlagBits::eClosestHitKHR};
     vk::DescriptorSetLayoutBinding bufferGuiding{BINDING_GUIDING, vk::DescriptorType::eStorageBuffer, 1,
                                                  vk::ShaderStageFlagBits::eRaygenKHR};
     vk::DescriptorSetLayoutBinding bindingAS{BINDING_AS, vk::DescriptorType::eAccelerationStructureKHR, 1,
@@ -190,13 +195,21 @@ uint32_t PathGuiding::getRegionCount() {
 }
 
 void PathGuiding::update(SampleCollector sampleCollector) {
-    std::shared_ptr<std::vector<std::vector<DirectionalData>>> directionalData = sampleCollector.getSortedData();
+    std::vector<uint32_t> regionIndices;
+    std::shared_ptr<std::vector<DirectionalData>> directionalData = sampleCollector.getSortedData(regionIndices);
 
     for (int iRegion = 0; iRegion < getRegionCount(); ++iRegion) {
-        unsigned long samplesInRegion = (*directionalData)[iRegion].size();
-        if (samplesInRegion > 0) {
+        uint32_t regionIndex = regionIndices[iRegion];
+        uint32_t nextRegionIndex = regionIndices[iRegion + 1];
+
+        if (nextRegionIndex - regionIndex > 0) {
+            glm::vec3 directionSum = glm::vec3(0, 0, 0);
+            for (uint32_t iSample = regionIndex; iSample < nextRegionIndex; iSample++) {
+                directionSum += (*directionalData)[iSample].direction * (*directionalData)[iSample].weight;
+            }
+
             guidingRegions[iRegion].usedDistributions = 1;
-            guidingRegions[iRegion].thetas[0].mu = (*directionalData)[iRegion][0].direction;
+            guidingRegions[iRegion].thetas[0].mu = glm::normalize(directionSum);
             guidingRegions[iRegion].pi[0] = 1.0f;
         }
     }

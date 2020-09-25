@@ -2,6 +2,7 @@
 // Created by felixfifi on 22.09.20.
 //
 
+#include <iostream>
 #include "SampleCollector.h"
 
 SampleCollector::SampleCollector(uint32_t regionCount, vk::Extent2D imageSize, uint32_t numPerPixel,
@@ -64,7 +65,7 @@ std::array<vk::WriteDescriptorSet, 1> SampleCollector::getWriteDescriptorSets(co
     return {writeDirectionalData};
 }
 
-std::shared_ptr<std::vector<std::vector<DirectionalData>>> SampleCollector::getSortedData() {
+std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std::vector<uint32_t>& outRegionIndices) {
     vulkanOps->copyBuffer(directionalDataBuffer, hostDirectionalDataBuffer, bufferSize);
 
     void *data;
@@ -75,15 +76,46 @@ std::shared_ptr<std::vector<std::vector<DirectionalData>>> SampleCollector::getS
     std::vector<DirectionalData> directionalData(reinterpret_cast<DirectionalData *>(data),
                                                  reinterpret_cast<DirectionalData *>(data) + sampleCount);
 
-    // Sort into per region arrays
-    auto sortedData = std::make_shared<std::vector<std::vector<DirectionalData>>>(regionCount);
+    // Sort per region
+    std::sort(directionalData.begin(), directionalData.end(), [](const DirectionalData &a, const DirectionalData &b) {
+        return a.flags < b.flags;
+    });
 
-    for (const DirectionalData &datum : directionalData) {
-        uint32_t iRegion = datum.flags;
-        if (iRegion != INVALID) {
-            (*sortedData)[iRegion].push_back(datum);
+
+    auto sortedData = std::make_shared<std::vector<DirectionalData>>(directionalData);
+
+    outRegionIndices.clear();
+    outRegionIndices.reserve(regionCount);
+
+    long lastRegion = -1;
+    for (uint32_t i = 0; i < sampleCount; i++) {
+        const DirectionalData &datum = (*sortedData)[i];
+        uint32_t region = datum.flags;
+        
+        if (region == INVALID){
+            // End of valid data reached
+            // => Set all region intervals to size 0
+            for (int emptyRegion = lastRegion + 1; emptyRegion < regionCount; emptyRegion++) {
+                // Mark empty regions as empty
+                outRegionIndices.push_back(i);
+            }
+            // Mark end
+            outRegionIndices.push_back(i);
+            break;
+        }
+
+        if(region > lastRegion) {
+            for (int emptyRegion = lastRegion + 1; emptyRegion < region; emptyRegion++) {
+                // Mark empty regions as all beginning here
+                // => They can check the next region to see, that they have no data
+                outRegionIndices.push_back(i);
+            }
+            outRegionIndices.push_back(i);
+            lastRegion = region;
         }
     }
+
+
 
     device.unmapMemory(hostDirectionalDataBufferMemory);
 

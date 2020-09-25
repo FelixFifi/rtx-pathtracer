@@ -13,7 +13,6 @@ static const unsigned int INVALID = std::numeric_limits<uint32_t>::max();
 
 static const int BINDING_DIRECTIONAL_DATA = 18;
 
-
 // Taken from lightpmm/DirectionalData.h
 struct DirectionalData {
     // the positin of the sample in 3D (e.g, photon position)
@@ -49,7 +48,7 @@ public:
     SampleCollector(uint32_t regionCount, vk::Extent2D imageSize, uint32_t numPerPixel,
                     std::shared_ptr<VulkanOps> vulkanOps);
 
-    std::shared_ptr<std::vector<std::vector<DirectionalData>>> getSortedData();
+    std::shared_ptr<std::vector<DirectionalData>> getSortedData(std::vector<uint32_t>& outRegionIndices);
 
     static std::array<vk::DescriptorSetLayoutBinding, 1> getDescriptorSetLayouts();
 
