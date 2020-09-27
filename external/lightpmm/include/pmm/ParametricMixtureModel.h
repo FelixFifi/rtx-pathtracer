@@ -39,6 +39,8 @@
 
 PMM_NAMESPACE_BEGIN
 
+using std::endl;
+
 /**
  * @brief Parametric mixture model implementation for arbitrary kernel distributions.
  *

@@ -5,6 +5,7 @@
 #ifndef RTX_RAYTRACER_SAMPLECOLLECTOR_H
 #define RTX_RAYTRACER_SAMPLECOLLECTOR_H
 
+#include "pmm/DirectionalData.h"
 #include "VulkanLoader.h"
 #include "VulkanOps.h"
 #include "glm/vec3.hpp"
@@ -13,20 +14,7 @@ static const unsigned int INVALID = std::numeric_limits<uint32_t>::max();
 
 static const int BINDING_DIRECTIONAL_DATA = 18;
 
-// Taken from lightpmm/DirectionalData.h
-struct DirectionalData {
-    // the positin of the sample in 3D (e.g, photon position)
-    glm::vec3 position;
-    // direction of the sample (e.g., direction pointing to the origin of the photon)
-    glm::vec3 direction;
-    // the weight or value associated to this direction (e.g., photon power)
-    float weight;
-    // the PDF for sampling/generating this directinal sample
-    float pdf;
-    // the distance associated to the directional sample (e.g., distance to the photon's origin)
-    float distance;
-    uint32_t flags = INVALID;
-};
+using lightpmm::DirectionalData;
 
 class SampleCollector {
 private:

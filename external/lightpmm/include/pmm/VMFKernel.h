@@ -41,6 +41,8 @@ PMM_NAMESPACE_BEGIN
 // the minumum value of kappa before it gets set to 0.0 for numerical stability
 #define VMF_MinKappa 1e-3f
 
+#define INV_FOURPI 0.07957747155
+
 template<typename TScalar>
 PMM_INLINE TScalar kappaToMeanCosine(const TScalar& kappa){
     //coth goes to 1.0 fast. no need to evaluate it
@@ -503,7 +505,7 @@ public:
             kappa = meanCosineToKappa<float>(r);
             kappa = ifthen(kappa < VMF_MinKappa, 0.0f, kappa);
 
-            eMin2Kappa = mitsuba::math::fastexp(-2.0f*kappa);
+            eMin2Kappa = std::exp(-2.0f*kappa);
             norm = kappa/(2.0f*M_PI*(1.0f-eMin2Kappa));
 
             mu_x /= r;

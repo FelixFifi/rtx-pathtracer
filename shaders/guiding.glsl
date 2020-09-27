@@ -35,7 +35,7 @@ float vMF(vec3 wo, VMF_Theta theta) {
     return theta.norm * exp(theta.k * (dot(theta.mu, wo) - 1));
 }
 
-    #define MAX_DISTRIBUTIONS 10
+#define MAX_DISTRIBUTIONS 8
 
 
 struct VMM_Theta {

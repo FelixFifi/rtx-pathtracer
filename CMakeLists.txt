@@ -10,7 +10,7 @@ find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(OpenEXR REQUIRED)
 
-include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} ${OpenEXR_INCLUDE_DIRS} "../nvidia_shared_sources" "external")
+include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} ${OpenEXR_INCLUDE_DIRS} "../nvidia_shared_sources" "external" "external/lightpmm/include")
 
 set(EXTERNAL
         external/imgui/imgui.cpp

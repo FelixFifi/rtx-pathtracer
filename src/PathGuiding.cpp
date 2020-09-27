@@ -10,14 +10,53 @@ PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, std::shared_ptr<Vulkan
                          vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex) : sceneAabb(sceneAabb),
                                                                                            vulkanOps(vulkanOps),
                                                                                            device(vulkanOps->getDevice()) {
+    regionCount = 1u << splitCount;
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
 
-    createDummyRegions(splitCount, sceneAabb);
+    configureVMMFactory();
+    createRegions(splitCount);
     createBuffers();
     createAS();
 }
 
 float getRandNegPos() { return (rand() / (float) RAND_MAX) * 2 - 1.0f; }
+
+void PathGuiding::configureVMMFactory() {
+    lightpmm::VMMFactoryProperties factoryProperties{};
+    factoryProperties.numInitialComponents = 8;
+    factoryProperties.maxItr = 3;
+
+    vmmFactory = lightpmm::VMMFactory<PMM>(
+            factoryProperties);
+}
+
+void PathGuiding::createPMMs() {
+    pmms = std::vector<PMM>(regionCount);
+
+    for (int i = 0; i < regionCount; ++i) {
+        PMM pmm;
+        vmmFactory.initialize(pmm);
+        pmms[i] = pmm;
+    }
+}
+
+VMM_Theta PathGuiding::pmmToVMM_Theta(const PMM &pmm) {
+    VMM_Theta vmm{};
+    vmm.usedDistributions = pmm.getK();
+
+    for (int iDistribution = 0; iDistribution < vmm.usedDistributions; ++iDistribution) {
+        vmm.pi[iDistribution] = pmm.weightK(iDistribution);
+
+        uint iComponent = iDistribution / Scalar::Width::value;
+        uint idx = iDistribution % Scalar::Width::value;
+
+        vmm.thetas[iDistribution].mu = pmm.m_comps[iComponent].getMu(idx);
+        vmm.thetas[iDistribution].setK(pmm.m_comps[iComponent].getKappa(idx));
+    }
+
+//    std::cout << vmm.toString() << std::endl;
+    return vmm;
+}
 
 glm::vec3 randomOnUnitSphere() {
     glm::vec3 result;
@@ -29,15 +68,12 @@ glm::vec3 randomOnUnitSphere() {
 }
 
 
-void PathGuiding::createDummyRegions(uint splitCount, const Aabb &sceneAabb) {
-    uint regionCount = 1u << splitCount;
-
-    guidingRegions.clear();
-    guidingRegions.reserve(regionCount);
+void PathGuiding::createRegions(uint splitCount) {
+    guidingRegions = std::vector<VMM_Theta>(regionCount);
 
     aabbs = {sceneAabb};
 
-    for (int iSplits; iSplits < splitCount; iSplits++) {
+    for (int iSplits = 0; iSplits < splitCount; iSplits++) {
         std::vector<Aabb> currentSplits;
         currentSplits.reserve(aabbs.size() * 2);
 
@@ -52,23 +88,15 @@ void PathGuiding::createDummyRegions(uint splitCount, const Aabb &sceneAabb) {
         aabbs = currentSplits;
     }
 
-    // Generate random vMF cones
-    for (const Aabb &aabb : aabbs) {
-        VMM_Theta vmmTheta{};
-        const int DIST_COUNT = MAX_DISTRIBUTIONS;
-        for (int iDist = 0; iDist < DIST_COUNT; iDist++) {
-            VMF_Theta vmf{};
+    // Use lightpmm PMMs
+    createPMMs();
+    syncPMMToVMM_Thetas();
+}
 
-            vmf.mu = randomOnUnitSphere();
-            vmf.setK(30.0f);
-
-            vmmTheta.thetas[iDist] = vmf;
-            vmmTheta.pi[iDist] = 1.0f / DIST_COUNT;
-        }
-
-        vmmTheta.usedDistributions = DIST_COUNT;
-
-        guidingRegions.push_back(vmmTheta);
+void PathGuiding::syncPMMToVMM_Thetas() {
+    // Synchronize to GPU structs
+    for (int iRegion = 0; iRegion < regionCount; iRegion++) {
+        guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
     }
 }
 
@@ -203,16 +231,11 @@ void PathGuiding::update(SampleCollector sampleCollector) {
         uint32_t nextRegionIndex = regionIndices[iRegion + 1];
 
         if (nextRegionIndex - regionIndex > 0) {
-            glm::vec3 directionSum = glm::vec3(0, 0, 0);
-            for (uint32_t iSample = regionIndex; iSample < nextRegionIndex; iSample++) {
-                directionSum += (*directionalData)[iSample].direction * (*directionalData)[iSample].weight;
-            }
-
-            guidingRegions[iRegion].usedDistributions = 1;
-            guidingRegions[iRegion].thetas[0].mu = glm::normalize(directionSum);
-            guidingRegions[iRegion].pi[0] = 1.0f;
+            vmmFactory.fit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex, pmms[iRegion], false);
         }
     }
+
+    syncPMMToVMM_Thetas();
 
     void *data;
     vk::DeviceSize bufferSize = guidingRegions.size() * sizeof(VMM_Theta);

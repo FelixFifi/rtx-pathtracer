@@ -57,12 +57,19 @@
 
 // once there are other options, these should be set via a compiler flag
 #define PMM_USE_VCL
-#define PMM_USE_MITSUBA
+#define PMM_USE_GLM
+//#define PMM_USE_MITSUBA
 
 // includes the Mistuba wrapper
 #ifdef PMM_USE_MITSUBA
 #include "pmm-mitsuba.h"
 #endif
+
+// includes the VCL wrapper to use the VCL library for SSE/AVS support
+#ifdef PMM_USE_GLM
+#include "pmm-glm.h"
+#endif
+
 
 // includes the VCL wrapper to use the VCL library for SSE/AVS support
 #ifdef PMM_USE_VCL

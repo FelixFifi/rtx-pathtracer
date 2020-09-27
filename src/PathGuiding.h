@@ -10,13 +10,20 @@
 #include "Shapes.h"
 #include "VulkanOps.h"
 #include "SampleCollector.h"
+
+
+#include "pmm/VMMFactory.h"
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
-#define MAX_DISTRIBUTIONS 10
+#define MAX_DISTRIBUTIONS 8
 
 // Taken from lightpmm/VMFKernel.h
 // the minumum value of kappa before it gets set to 0.0 for numerical stability
 #define VMF_MinKappa 1e-3f
+
+typedef lightpmm::Scalar4 Scalar;
+typedef lightpmm::VMFKernel<Scalar> VMF;
+typedef lightpmm::ParametricMixtureModel<VMF, MAX_DISTRIBUTIONS / Scalar::Width::value> PMM;
 
 static const int BINDING_AABB = 15;
 static const int BINDING_GUIDING = 16;
@@ -35,20 +42,43 @@ struct VMF_Theta {
         norm = k / (2 * M_PI * (1 - exp(- 2 * k)));
         eMin2K = exp(-2.0 * k);
     }
+
+    std::string toString() const {
+        std::ostringstream result;
+        result << "k: " << k << " mu: " << mu.x << "|" << mu.y << "|" << mu.z;
+        return result.str();
+    }
 };
 
 struct VMM_Theta {
     VMF_Theta thetas[MAX_DISTRIBUTIONS];
     float pi[MAX_DISTRIBUTIONS];
     int usedDistributions;
+
+    std::string toString() const {
+        std::ostringstream result;
+
+        result << "VMM:\n";
+        for (const auto &theta : thetas) {
+            result << theta.toString() << "\n";
+        }
+        result << "\n";
+        return result.str();
+    }
 };
 
 class PathGuiding {
 private:
+    uint regionCount;
+
     Aabb sceneAabb;
 
     std::vector<Aabb> aabbs;
     std::vector<VMM_Theta> guidingRegions;
+
+    lightpmm::VMMFactory<PMM> vmmFactory;
+    std::vector<PMM> pmms;
+
     std::shared_ptr<VulkanOps> vulkanOps;
 
     nvvkpp::RaytracingBuilderKHR rtBuilder;
@@ -83,11 +113,19 @@ public:
 
     void cleanup();
 private:
-    void createDummyRegions(uint splitCount, const Aabb &sceneAabb);
+    void createRegions(uint splitCount);
     void createBuffers();
     void createAS();
 
     void cleanupBuffers() const;
+
+    void configureVMMFactory();
+
+    void createPMMs();
+
+    static VMM_Theta pmmToVMM_Theta(const PMM &pmm);
+
+    void syncPMMToVMM_Thetas();
 };
 
 

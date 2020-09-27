@@ -152,7 +152,7 @@ public:
      * @param dataBegin iterator pointing at the beginning of the sample data
      * @param dataEnd iterator pointing at the end of the sample data
      * @param model VMM to be fit
-     * @param initialize wheter to initialize the VMM before fitting
+     * @param initialize whether to initialize the VMM before fitting
      */
     template<typename TFwdIterator>
     void fit(const TFwdIterator& dataBegin, const TFwdIterator& dataEnd, TVMM& model, const bool initialize) const
@@ -167,7 +167,7 @@ public:
         if (initialize)
             this->initialize(model);
 
-        // if the last used kernel contains deactivated componets, we need to reset them
+        // if the last used kernel contains deactivated components, we need to reset them
         resetInactiveComponents(model);
 
         float sumWeight, weightedLogLikelihood, lastWeightedLogLikelihood = 0.0f, absInvLastWeightedLogLikelihood = 0.0f;
