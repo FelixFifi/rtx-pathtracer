@@ -773,10 +773,6 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingVisuMax, 0.0f, 50.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
-    hasInputChanged |= ImGui::Checkbox("Guiding Test",
-                                       reinterpret_cast<bool *>(&rtPushConstants.guidingTest));
-    hasInputChanged |= ImGui::SliderFloat("Guiding Test K",
-                                          &rtPushConstants.guidingTestK, 0.0f, 100.0f);
     hasInputChanged |= ImGui::Checkbox("Update Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
 

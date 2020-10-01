@@ -70,6 +70,7 @@ struct VMM_Theta {
 class PathGuiding {
 private:
     uint regionCount;
+    bool fitted = false;
 
     Aabb sceneAabb;
 

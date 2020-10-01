@@ -79,7 +79,7 @@ std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std
     std::vector<DirectionalData> directionalData(reinterpret_cast<DirectionalData *>(data),
                                                  reinterpret_cast<DirectionalData *>(data) + sampleCount);
 
-    // Sort per region
+    // Sort per region - in C++17 parallel execution
     std::sort(std::execution::par_unseq, directionalData.begin(), directionalData.end(),
               [](const DirectionalData &a, const DirectionalData &b) {
                   return a.flags < b.flags;

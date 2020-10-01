@@ -40,16 +40,16 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "scenes/irradianceCache.xml",
+        "scenes/test.json",
         "scenes/cornell-dielectric-path.json",
         "scenes/fireplace.json",
+        "scenes/irradianceCache.xml",
         "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
         "scenes/mi.xml",
         "scenes/veach-mis.json",
         "scenes/large.json",
-        "scenes/test.json",
         "scenes/cornell.json"
 };
 
@@ -126,8 +126,6 @@ public:
         float guidingVisuScale = 0.5;
         float guidingVisuMax = 1.0;
         int guidingVisuIgnoreOcclusioon = 0;
-        int guidingTest = 0;
-        float guidingTestK = 1;
         uint32_t directionalDataPerPixel = 8;
         int updateGuiding = 0;
     } rtPushConstants;

@@ -24,7 +24,7 @@ float getRandNegPos() { return (rand() / (float) RAND_MAX) * 2 - 1.0f; }
 void PathGuiding::configureVMMFactory() {
     lightpmm::VMMFactoryProperties factoryProperties{};
     factoryProperties.numInitialComponents = 8;
-    factoryProperties.maxItr = 40;
+    factoryProperties.maxItr = 100;
     factoryProperties.maxKappa = 50000;
 
     vmmFactory = lightpmm::VMMFactory<PMM>(
@@ -232,9 +232,17 @@ void PathGuiding::update(SampleCollector sampleCollector) {
         uint32_t nextRegionIndex = regionIndices[iRegion + 1];
 
         if (nextRegionIndex - regionIndex > 0) {
-            vmmFactory.fit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex, pmms[iRegion], false);
+            if (!fitted) {
+                vmmFactory.fit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex,
+                               pmms[iRegion], false);
+            } else {
+                vmmFactory.updateFit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex,
+                               pmms[iRegion]);
+            }
         }
     }
+
+    fitted = true;
 
     syncPMMsToVMM_Thetas();
 
