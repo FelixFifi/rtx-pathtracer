@@ -930,6 +930,10 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
     return pdf;
 }
 
+uint getBaseIndex() {
+    return (gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x) * pushC.directionalDataPerPixel;
+}
+
 /**
 * Update all previous samples by multiplying the throughput of all samples after them to the light value
 */

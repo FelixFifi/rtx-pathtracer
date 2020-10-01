@@ -125,7 +125,7 @@ private:
 
     static VMM_Theta pmmToVMM_Theta(const PMM &pmm);
 
-    void syncPMMToVMM_Thetas();
+    void syncPMMsToVMM_Thetas();
 };
 
 

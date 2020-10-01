@@ -24,7 +24,8 @@ float getRandNegPos() { return (rand() / (float) RAND_MAX) * 2 - 1.0f; }
 void PathGuiding::configureVMMFactory() {
     lightpmm::VMMFactoryProperties factoryProperties{};
     factoryProperties.numInitialComponents = 8;
-    factoryProperties.maxItr = 3;
+    factoryProperties.maxItr = 40;
+    factoryProperties.maxKappa = 50000;
 
     vmmFactory = lightpmm::VMMFactory<PMM>(
             factoryProperties);
@@ -90,10 +91,10 @@ void PathGuiding::createRegions(uint splitCount) {
 
     // Use lightpmm PMMs
     createPMMs();
-    syncPMMToVMM_Thetas();
+    syncPMMsToVMM_Thetas();
 }
 
-void PathGuiding::syncPMMToVMM_Thetas() {
+void PathGuiding::syncPMMsToVMM_Thetas() {
     // Synchronize to GPU structs
     for (int iRegion = 0; iRegion < regionCount; iRegion++) {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
@@ -235,7 +236,7 @@ void PathGuiding::update(SampleCollector sampleCollector) {
         }
     }
 
-    syncPMMToVMM_Thetas();
+    syncPMMsToVMM_Thetas();
 
     void *data;
     vk::DeviceSize bufferSize = guidingRegions.size() * sizeof(VMM_Theta);

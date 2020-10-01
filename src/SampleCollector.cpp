@@ -1,6 +1,8 @@
 //
 // Created by felixfifi on 22.09.20.
 //
+#include <execution>
+#include <algorithm>
 
 #include <iostream>
 #include "SampleCollector.h"
@@ -59,13 +61,14 @@ std::array<vk::DescriptorPoolSize, 1> SampleCollector::getDescriptorPoolSizes() 
 std::array<vk::WriteDescriptorSet, 1> SampleCollector::getWriteDescriptorSets(const vk::DescriptorSet &descriptorSet,
                                                                               vk::DescriptorBufferInfo &outDirectionalDataInfo) {
     outDirectionalDataInfo = vk::DescriptorBufferInfo(directionalDataBuffer, 0, VK_WHOLE_SIZE);
-    vk::WriteDescriptorSet writeDirectionalData{descriptorSet, BINDING_DIRECTIONAL_DATA, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
+    vk::WriteDescriptorSet writeDirectionalData{descriptorSet, BINDING_DIRECTIONAL_DATA, 0, 1,
+                                                vk::DescriptorType::eStorageBuffer, nullptr,
                                                 &outDirectionalDataInfo};
 
     return {writeDirectionalData};
 }
 
-std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std::vector<uint32_t>& outRegionIndices) {
+std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std::vector<uint32_t> &outRegionIndices) {
     vulkanOps->copyBuffer(directionalDataBuffer, hostDirectionalDataBuffer, bufferSize);
 
     void *data;
@@ -77,9 +80,10 @@ std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std
                                                  reinterpret_cast<DirectionalData *>(data) + sampleCount);
 
     // Sort per region
-    std::sort(directionalData.begin(), directionalData.end(), [](const DirectionalData &a, const DirectionalData &b) {
-        return a.flags < b.flags;
-    });
+    std::sort(std::execution::par_unseq, directionalData.begin(), directionalData.end(),
+              [](const DirectionalData &a, const DirectionalData &b) {
+                  return a.flags < b.flags;
+              });
 
 
     auto sortedData = std::make_shared<std::vector<DirectionalData>>(directionalData);
@@ -91,8 +95,8 @@ std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std
     for (uint32_t i = 0; i < sampleCount; i++) {
         const DirectionalData &datum = (*sortedData)[i];
         uint32_t region = datum.flags;
-        
-        if (region == INVALID){
+
+        if (region == INVALID) {
             // End of valid data reached
             // => Set all region intervals to size 0
             for (int emptyRegion = lastRegion + 1; emptyRegion < regionCount; emptyRegion++) {
@@ -104,7 +108,7 @@ std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std
             break;
         }
 
-        if(region > lastRegion) {
+        if (region > lastRegion) {
             for (int emptyRegion = lastRegion + 1; emptyRegion < region; emptyRegion++) {
                 // Mark empty regions as all beginning here
                 // => They can check the next region to see, that they have no data
@@ -114,7 +118,6 @@ std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std
             lastRegion = region;
         }
     }
-
 
 
     device.unmapMemory(hostDirectionalDataBufferMemory);

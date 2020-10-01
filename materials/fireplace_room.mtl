@@ -25,13 +25,14 @@ Ka 0.40 0.40 0.40
 Tf 1.00 1.00 1.00
 Ni 1.00
 newmtl grey_and_white_room:FireplaceGlass
-illum 2
+illum 7
 Kd 0.00 0.00 0.00
 Ka 0.40 0.40 0.40
+Ks 0.8 0.8 0.8
 Tf 1.00 1.00 1.00
 Ks 0.1 0.1 0.1
 Ns 100
-Ni 1.00
+Ni 1.5
 newmtl grey_and_white_room:Floor
 illum 2
 Kd 1.00 1.00 1.00
@@ -50,7 +51,7 @@ Ks 0.8 0.8 0.8
 d 0.0000
 Tr 1.0000
 Ns 1000
-Ni 1.00
+Ni 1.5
 newmtl grey_and_white_room:Leaves
 illum 2
 Kd 0.00 0.00 0.00
@@ -78,7 +79,7 @@ Ns 100000
 Ni 1.00
 newmtl grey_and_white_room:Painting
 illum 2
-Kd 0.00 0.00 0.00
+Kd 0.3 0.3 0.3
 Ka 0.40 0.40 0.40
 Tf 1.00 1.00 1.00
 Ni 1.00

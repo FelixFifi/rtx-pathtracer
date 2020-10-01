@@ -770,7 +770,7 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
                                           &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Max",
-                                          &rtPushConstants.guidingVisuMax, 0.0f, 10.0f);
+                                          &rtPushConstants.guidingVisuMax, 0.0f, 50.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
     hasInputChanged |= ImGui::Checkbox("Guiding Test",
@@ -859,7 +859,6 @@ void RayTracingApp::setEstimateRTSettings() {
 
 void RayTracingApp::cleanup() {
     irradianceCache.cleanUp();
-    sampleCollector.cleanup();
 
     device.destroy(accumulateImageView);
     device.destroyImage(accumulateImage);

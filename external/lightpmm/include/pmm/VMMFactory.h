@@ -96,16 +96,16 @@ struct VMMFactoryProperties
  * the usage of distribution-dependent initialization, priors and parameter updates currently prevents it from being more general.
  * By moving the handling of these operations to the distribution kernel, it could be applied to a wider range of directional distribution models.
  */
-template<typename _TVMM>
+template<typename TVMM2>
 class VMMFactory
 {
 private:
-    using TScalar = Scalar<typename _TVMM::ScalarType::IntegralType,
-                           _TVMM::ScalarType::Width::value,
-                           _TVMM::ScalarType::Alignment::value>;
+    using TScalar = Scalar<typename TVMM2::ScalarType::IntegralType,
+                           TVMM2::ScalarType::Width::value,
+                           TVMM2::ScalarType::Alignment::value>;
     using TSufficientStats = typename VMFKernel<TScalar>::SufficientStats;
-    using TVMM = ParametricMixtureModel<VMFKernel<TScalar>, _TVMM::NumKernels::value>;
-    static_assert (std::is_same<TVMM, _TVMM>::value, "Only ParametricMixtureModel<VMFKernel<Scalar<...>, N>> is supported by the VMMFactory.");
+    using TVMM = ParametricMixtureModel<VMFKernel<TScalar>, TVMM2::NumKernels::value>;
+    static_assert (std::is_same<TVMM, TVMM2>::value, "Only ParametricMixtureModel<VMFKernel<Scalar<...>, N>> is supported by the VMMFactory.");
 public:
     typedef TVMM PMMType;
 
