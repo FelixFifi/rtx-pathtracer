@@ -911,6 +911,10 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
     return pdf;
 }
 
+bool isMatAlmostDiscrete(Material mat) {
+    return (mat.type == MAT_ROUGH_CONDUCTOR && mat.roughness <= 0.3) || (mat.type == MAT_PHONG && mat.specularHighlight >= 250.0);
+}
+
 uint getBaseIndex() {
     return (gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x) * pushC.directionalDataPerPixel;
 }
@@ -948,6 +952,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
 
     int currentSampleOffset = sampleOffset;
+    int iUpdateDistance = -1;
 
     vec3 result = vec3(0.0, 0.0, 0.0);
 
@@ -1006,6 +1011,12 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
             follow = true;
             if (depth >= maxDepth) {
                 followCount++;
+            }
+
+            // Update distance data
+            //
+            if (saveSamples && iUpdateDistance != -1) {
+                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
             }
         } else {
             addNextDirectLights = false;
@@ -1079,6 +1090,16 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 }
             }
 
+            // Update distance for last directionalData
+            if (saveSamples && iUpdateDistance != -1) {
+                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
+
+                if (!isMatAlmostDiscrete(mat)) {
+                    // Mark the last distance entry as final, but continue adding distances
+                    iUpdateDistance = -1;
+                }
+            }
+
             // NEE is after possible splits, as each split should calculate its own NEE
             if (useNEE) {
                 vec3 neeLight = multipleNEE(mat, origin, -direction, normal, numNEE);
@@ -1102,8 +1123,8 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         throughput *= throughputChange;
 
         if (saveSamples && currentSampleOffset < pushC.directionalDataPerPixel) {
-            if (hasDiscreteDirection(mat)) {
-                // Discrete direction => because of probabilities instead of pdf we can not use this data
+            if (hasDiscreteDirection(mat) || isMatAlmostDiscrete(mat)) {
+                // Discrete direction (or close to it) => because of probabilities instead of pdf we can not use this data
                 directionalData[getBaseIndex() + currentSampleOffset].flags = INVALID;
             } else {
                 // Create new directional data on all non-discrete direction surfaces
@@ -1112,8 +1133,11 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 sampleData.direction = newDirection;
                 sampleData.pdf = pdf;
                 sampleData.weight = 0;
+                sampleData.distance = 0;
                 sampleData.flags = getGuidingRegion(origin);
                 directionalData[getBaseIndex() + currentSampleOffset] = sampleData;
+
+                iUpdateDistance = currentSampleOffset;
             }
 
             lightSums[currentSampleOffset] = vec3(0);

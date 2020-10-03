@@ -40,10 +40,10 @@
 const std::string MATERIAL_BASE_DIR = "materials/";
 const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
+        "scenes/irradianceCache.xml",
         "scenes/test.json",
         "scenes/cornell-dielectric-path.json",
         "scenes/fireplace.json",
-        "scenes/irradianceCache.xml",
         "scenes/matpreview.xml",
         "scenes/materialTest.xml",
         "scenes/testSpheres.xml",
