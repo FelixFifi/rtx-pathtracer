@@ -57,6 +57,10 @@ struct pushConstant
     uint directionalDataPerPixel;
     bool updateGuiding;
     bool useParallaxCompensation;
+    float time;
+    bool guidingVisuMove;
+    float guidingVisuPhiScale;
+    float guidingVisuThetaScale;
 };
 
 struct sphere {
@@ -99,6 +103,7 @@ struct guidingInfo {
 
 struct guidingVisuInfo {
     vec3 worldPos;
+    vec3 center;
     vec3 direction;
     float t;
     uint iRegion;

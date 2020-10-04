@@ -5,6 +5,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "raycommon.glsl"
+#include "guiding.visu.glsl"
 
 //@formatter:off
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
@@ -16,11 +17,16 @@ layout(binding = 15, set = 1, scalar) buffer Aabbs { aabb aabbs[]; };
 void main()
 {
     aabb bb = aabbs[gl_PrimitiveID];
+    vec3 extent = bb.max - bb.min;
+    float radius = min(extent.x, min(extent.y, extent.z)) * 0.5 * pushC.guidingVisuScale;
 
     // Center of AABB
-    vec3 extent = bb.max - bb.min;
-    vec3 center = bb.min + 0.5 * extent;
-    float radius = min(extent.x, min(extent.y, extent.z)) * 0.5 * pushC.guidingVisuScale;
+    vec3 center;
+    if (pushC.guidingVisuMove) {
+        center = getVisuCenter(pushC.time, pushC.guidingVisuPhiScale, pushC.guidingVisuThetaScale, bb, radius);
+    } else {
+        center = bb.min + 0.5 * extent;
+    }
 
     // Intersection
     vec3 oc = gl_WorldRayOriginEXT - center;

@@ -105,17 +105,6 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
     // Synchronize to GPU structs
     for (int iRegion = 0; iRegion < regionCount; iRegion++) {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
-
-        if (useParrallaxCompensation) {
-            for (int iDistribution = 0; iDistribution < MAX_DISTRIBUTIONS; iDistribution++) {
-                uint iComponent = iDistribution / Scalar::Width::value;
-                uint idx = iDistribution % Scalar::Width::value;
-
-                float distance = incrementalDistances[iRegion].distances[iComponent][idx];
-                guidingRegions[iRegion].thetas[iDistribution].distance = distance == std::numeric_limits<float>::infinity() ? -1.0f : distance;
-                guidingRegions[iRegion].thetas[iDistribution].target = guidingRegions[iRegion].meanPosition + distance * guidingRegions[iRegion].thetas[iDistribution].mu;
-            }
-        }
     }
 }
 
@@ -319,5 +308,20 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
     if (useParrallaxCompensation) {
         // Update distances
         incrementalDistances[iRegion].updateDistances(pmms[iRegion], sampleRange);
+
+        // Synchronize to GPU structs
+        for (int iRegion = 0; iRegion < regionCount; iRegion++) {
+            for (int iDistribution = 0; iDistribution < MAX_DISTRIBUTIONS; iDistribution++) {
+                uint iComponent = iDistribution / Scalar::Width::value;
+                uint idx = iDistribution % Scalar::Width::value;
+
+                float distance = incrementalDistances[iRegion].distances[iComponent][idx];
+                distance = distance == std::numeric_limits<float>::infinity() ? -1.0f : distance;
+
+                guidingRegions[iRegion].thetas[iDistribution].distance = distance;
+                guidingRegions[iRegion].thetas[iDistribution].target = guidingRegions[iRegion].meanPosition + distance *
+                                                                                                              guidingRegions[iRegion].thetas[iDistribution].mu;
+            }
+        }
     }
 }

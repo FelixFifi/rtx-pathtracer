@@ -1446,7 +1446,7 @@ bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out
     }
 
     VMM_Theta vmmTheta = guidingVMM[guidingVisuInfos.iRegion];
-    float value = VMM(guidingVisuInfos.direction, vmmTheta, origin, pushC.useParallaxCompensation);
+    float value = VMM(guidingVisuInfos.direction, vmmTheta, guidingVisuInfos.center, pushC.useParallaxCompensation);
     // Normalize to range [0,1]
     value = min(1.0, value / pushC.guidingVisuMax);
 

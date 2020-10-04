@@ -9,7 +9,7 @@
     {"teapot":  "teapot.obj"}
   ],
   "instances": [
-    {"floor":  {}},
+    {"floor":  {"scale": [0.02, 0.02, 0.02]}},
     {"lightBox": {"translate": [0, 0, 30], "scale": [0.5, 0.5, 1]}},
     {"lightBox": {"translate": [5, 30, 2], "scale": [0.2, 0.2, 5]}},
     {"cube": {"translate": [0, -2, 0], "rotate": [0, 0, 45], "scale": [0.2, 0.2, 0.2]}},

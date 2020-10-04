@@ -5,7 +5,7 @@
 #include <imgui/imgui.h>
 #include <glm/gtc/random.hpp>
 #include <random>
-#include <ctime>
+#include <chrono>
 #include <filesystem>
 #include "RayTracingApp.h"
 
@@ -770,6 +770,16 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
                                           &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
+    hasInputChanged |= ImGui::Checkbox("Guiding Visu Move",
+                                       reinterpret_cast<bool *>(&rtPushConstants.guidingVisuMove));
+
+    hasInputChanged |= ImGui::InputFloat("Phi Scale",
+                                          &rtPushConstants.guidingVisuPhiScale, 0.01f, 0.1f);
+    hasInputChanged |= ImGui::InputFloat("Theta Scale",
+                                          &rtPushConstants.guidingVisuThetaScale, 0.01f, 0.1f);
+    hasInputChanged |= ImGui::SliderFloat("Time",
+                                          &rtPushConstants.time, 0.0f, 50.0f);
+
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Max",
                                           &rtPushConstants.guidingVisuMax, 0.0f, 50.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",

@@ -129,6 +129,10 @@ public:
         uint32_t directionalDataPerPixel = 8;
         int updateGuiding = 0;
         int useParallaxCompensation = 0;
+        float time;
+        int guidingVisuMove = 0;
+        float guidingVisuPhiScale = 0.0001f;
+        float guidingVisuThetaScale = 0.000333f;
     } rtPushConstants;
 
 private:
@@ -145,7 +149,7 @@ private:
     bool needSceneReload = false;
     int currentScene;
     bool showOtherVisualizations = false;
-    int currentVisualizeMode = 5;
+    int currentVisualizeMode = EGuidingOverlay;
 
     bool takePicture = false;
 
