@@ -36,6 +36,7 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <array>
 
 PMM_NAMESPACE_BEGIN
 

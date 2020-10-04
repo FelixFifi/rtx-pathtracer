@@ -13,6 +13,8 @@
 
 
 #include "pmm/VMMFactory.h"
+#include "guiding/incrementaldistance.h"
+
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
 #define MAX_DISTRIBUTIONS 8
@@ -34,6 +36,8 @@ struct VMF_Theta {
     float k;
     float norm; // = k / (M_2PI * (1 - exp(- 2 * theta.k)))
     float eMin2K; // exp(-2.0f * k)
+    float distance = -1.0f;
+    glm::vec3 target;
 
     void setK(float newK) {
         newK = newK < VMF_MinKappa ? 0.0 : newK;
@@ -53,6 +57,7 @@ struct VMF_Theta {
 struct VMM_Theta {
     VMF_Theta thetas[MAX_DISTRIBUTIONS];
     float pi[MAX_DISTRIBUTIONS];
+    glm::vec3 meanPosition;
     int usedDistributions;
 
     std::string toString() const {
@@ -70,7 +75,7 @@ struct VMM_Theta {
 class PathGuiding {
 private:
     uint regionCount;
-    bool fitted = false;
+    bool firstFit = true;
 
     Aabb sceneAabb;
 
@@ -79,6 +84,11 @@ private:
 
     lightpmm::VMMFactory<PMM> vmmFactory;
     std::vector<PMM> pmms;
+
+    // Parallax Compensation
+    bool useParrallaxCompensation;
+    std::vector<glm::vec3> lastParallaxMeans;
+    std::vector<guiding::IncrementalDistance<PMM>> incrementalDistances;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 
@@ -97,7 +107,7 @@ private:
     vk::AccelerationStructureKHR accelerationStructure;
 public:
     PathGuiding() = default;
-    PathGuiding(uint splitCount, Aabb sceneAabb, std::shared_ptr<VulkanOps> vulkanOps,
+    PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation, std::shared_ptr<VulkanOps> vulkanOps,
                 vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex);
 
     void update(SampleCollector sampleCollector);
@@ -127,6 +137,9 @@ private:
     static VMM_Theta pmmToVMM_Theta(const PMM &pmm);
 
     void syncPMMsToVMM_Thetas();
+
+    void updateRegion(std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion, uint32_t regionBegin,
+                      uint32_t nextRegionBegin);
 };
 
 

@@ -56,6 +56,7 @@ struct pushConstant
     bool guidingVisuIgnoreOcclusioon;
     uint directionalDataPerPixel;
     bool updateGuiding;
+    bool useParallaxCompensation;
 };
 
 struct sphere {

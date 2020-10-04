@@ -147,7 +147,8 @@ void RayTracingApp::sceneSwitcher(int num) {
     currentPrepareFrames = 0;
 
     guiding.cleanup();
-    guiding = PathGuiding(guidingSplits, sceneLoader.getSceneSize(), vulkanOps, physicalDevice, graphicsQueueIndex);
+    guiding = PathGuiding(guidingSplits, sceneLoader.getSceneSize(), true, vulkanOps, physicalDevice,
+                          graphicsQueueIndex);
 
     recreateDescriptorSets();
 
@@ -775,6 +776,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
     hasInputChanged |= ImGui::Checkbox("Update Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
+    hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
 
     ImGui::End();
 }

@@ -896,8 +896,8 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
 
             VMM_Theta vmmTheta = guidingVMM[iRegion];
 
-            newDirection = sampleVMM(vmmTheta);
-            pdf = pushC.guidingProb * VMM(newDirection, vmmTheta);
+            newDirection = sampleVMM(vmmTheta, origin, pushC.useParallaxCompensation);
+            pdf = pushC.guidingProb * VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
 
             if (dot(newDirection, normal) < 0) {
                 return 0.0;
@@ -1446,7 +1446,7 @@ bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out
     }
 
     VMM_Theta vmmTheta = guidingVMM[guidingVisuInfos.iRegion];
-    float value = VMM(guidingVisuInfos.direction, vmmTheta);
+    float value = VMM(guidingVisuInfos.direction, vmmTheta, origin, pushC.useParallaxCompensation);
     // Normalize to range [0,1]
     value = min(1.0, value / pushC.guidingVisuMax);
 

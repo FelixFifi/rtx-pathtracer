@@ -68,14 +68,14 @@ PMM_INLINE TScalar meanCosineToKappa(const TScalar& r){
 /**
  * @brief von Mises-Fisher distribution kernel for use in \c ParametricMixtureModel.
  */
-template <typename _TScalar>
+template <typename TScalar2>
 class VMFKernel
 {
     // VMFKernel is only implemented for scalars wrapped using the Scalar struct defined in pmm.h,
     // since it depends on the constants defined there.
-    using TScalar = Scalar<typename _TScalar::IntegralType,
-                    _TScalar::Width::value, _TScalar::Alignment::value>;
-    static_assert (std::is_same<TScalar, _TScalar>::value, "lightpmm::Scalar is required for _TScalar");
+    using TScalar = Scalar<typename TScalar2::IntegralType,
+                    TScalar2::Width::value, TScalar2::Alignment::value>;
+    static_assert (std::is_same<TScalar, TScalar2>::value, "lightpmm::Scalar is required for TScalar2");
 public:
 
     typedef TScalar ScalarType;

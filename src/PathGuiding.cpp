@@ -4,12 +4,17 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <guiding/incrementaldistance.h>
+#include <guiding/Range.h>
 #include "PathGuiding.h"
 
-PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, std::shared_ptr<VulkanOps> vulkanOps,
-                         vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex) : sceneAabb(sceneAabb),
-                                                                                           vulkanOps(vulkanOps),
-                                                                                           device(vulkanOps->getDevice()) {
+PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation,
+                         std::shared_ptr<VulkanOps> vulkanOps,
+                         vk::PhysicalDevice physicalDevice,
+                         uint32_t graphicsQueueIndex) : sceneAabb(sceneAabb),
+                                                        useParrallaxCompensation(useParrallaxCompensation),
+                                                        vulkanOps(vulkanOps),
+                                                        device(vulkanOps->getDevice()) {
     regionCount = 1u << splitCount;
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
 
@@ -33,6 +38,8 @@ void PathGuiding::configureVMMFactory() {
 
 void PathGuiding::createPMMs() {
     pmms = std::vector<PMM>(regionCount);
+    incrementalDistances = std::vector<guiding::IncrementalDistance<PMM>>(regionCount);
+    lastParallaxMeans = std::vector<glm::vec3>(regionCount);
 
     for (int i = 0; i < regionCount; ++i) {
         PMM pmm;
@@ -98,6 +105,17 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
     // Synchronize to GPU structs
     for (int iRegion = 0; iRegion < regionCount; iRegion++) {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
+
+        if (useParrallaxCompensation) {
+            for (int iDistribution = 0; iDistribution < MAX_DISTRIBUTIONS; iDistribution++) {
+                uint iComponent = iDistribution / Scalar::Width::value;
+                uint idx = iDistribution % Scalar::Width::value;
+
+                float distance = incrementalDistances[iRegion].distances[iComponent][idx];
+                guidingRegions[iRegion].thetas[iDistribution].distance = distance == std::numeric_limits<float>::infinity() ? -1.0f : distance;
+                guidingRegions[iRegion].thetas[iDistribution].target = guidingRegions[iRegion].meanPosition + distance * guidingRegions[iRegion].thetas[iDistribution].mu;
+            }
+        }
     }
 }
 
@@ -232,17 +250,11 @@ void PathGuiding::update(SampleCollector sampleCollector) {
         uint32_t nextRegionIndex = regionIndices[iRegion + 1];
 
         if (nextRegionIndex - regionIndex > 0) {
-            if (!fitted) {
-                vmmFactory.fit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex,
-                               pmms[iRegion], false);
-            } else {
-                vmmFactory.updateFit(directionalData->begin() + regionIndex, directionalData->begin() + nextRegionIndex,
-                               pmms[iRegion]);
-            }
+            updateRegion(directionalData, iRegion, regionIndex, nextRegionIndex);
         }
     }
 
-    fitted = true;
+    firstFit = false;
 
     syncPMMsToVMM_Thetas();
 
@@ -255,4 +267,57 @@ void PathGuiding::update(SampleCollector sampleCollector) {
     device.unmapMemory(guidingUpdateBufferMemory);
 
     vulkanOps->copyBuffer(guidingUpdateBuffer, guidingBuffer, bufferSize);
+}
+
+void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion,
+                               uint32_t regionBegin, uint32_t nextRegionBegin) {
+    guiding::Range<std::vector<DirectionalData>> sampleRange(directionalData->begin() + regionBegin,
+                                                             directionalData->begin() + nextRegionBegin);
+
+    if (useParrallaxCompensation) {
+        // Find average position
+        glm::vec3 posSum;
+        for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {
+            posSum += (*directionalData)[i].position;
+        }
+        glm::vec3 parallaxMean = posSum / (float) sampleRange.size();
+        guidingRegions[iRegion].meanPosition = parallaxMean;
+
+        // Move all samples to average
+        for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {
+            glm::vec3 pos = (*directionalData)[i].position;
+            float distance = (*directionalData)[i].distance;
+            glm::vec3 direction = (*directionalData)[i].direction;
+
+            if (distance > 0) {
+                // If not infinite distance
+                // => update direction and distance to point to the correct location from the average pos
+                glm::vec3 newDirection = pos + distance * direction - parallaxMean;
+                (*directionalData)[i].direction = glm::normalize(newDirection);
+                (*directionalData)[i].distance = glm::length(newDirection);
+
+            } else {
+                (*directionalData)[i].distance = std::numeric_limits<float>::infinity();
+            }
+            (*directionalData)[i].position = parallaxMean;
+        }
+
+        if (!firstFit) {
+            // Move distribution to current mean
+            incrementalDistances[iRegion].reposition(pmms[iRegion], lastParallaxMeans[iRegion] - parallaxMean);
+        }
+    }
+
+    if (firstFit) {
+        vmmFactory.fit(sampleRange.begin(), sampleRange.end(),
+                       pmms[iRegion], false);
+    } else {
+        vmmFactory.updateFit(sampleRange.begin(), sampleRange.end(),
+                             pmms[iRegion]);
+    }
+
+    if (useParrallaxCompensation) {
+        // Update distances
+        incrementalDistances[iRegion].updateDistances(pmms[iRegion], sampleRange);
+    }
 }
