@@ -49,7 +49,7 @@
 #define SIZE_TRI_RANDOM 10000
 
 
-const float tMin = 0.01;
+const float tMin = 0.001;
 const float tMax = 1000000.0;
 
 
@@ -458,6 +458,9 @@ float sampleLights(in vec3 origin, in vec3 normal, out vec3 lightDir, out vec3 l
         lightColor = mats[v0.materialIndex].lightColor;
 
         float cosThetaLight = dot(-lightDir, lightSampleNormal);
+        if (cosThetaLight < 0) {
+            cosThetaLight = -cosThetaLight;
+        }
 
         return light.sampleProb * lightDistance * lightDistance /
         cosThetaLight / light.area;
@@ -523,9 +526,8 @@ float sampleBSDF(in Material mat, in vec3 wi, in vec3 normal, in bool frontFace,
         if (!frontFace) {
             eta = mat.refractionIndex;
         }
-        float cosTheta = dot(wi, normal);
-        float fresnel = fresnel(eta, cosTheta);
-
+        float cosThetaI = dot(wi, normal);
+        float fresnel = fresnel(eta, cosThetaI);
         if (rnd() > fresnel) {
             // Refract
             newDirection = refract(-wi, normal, eta);
@@ -563,20 +565,19 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFa
         return result;
         case MAT_DIELECTRIC:
         {
-            float cosTheta = dot(normal, wo);
+            float cosThetaI = dot(normal, wi);
 
             float eta = mat.refractionIndexInv;
-
             if (!frontFace) {
                 eta = mat.refractionIndex;
             }
 
-            if (cosTheta < 0) {
+            if (dot(normal, wo) < 0) {
                 // Refraction
-                return mat.specular * (1 - fresnel(eta, cosTheta));
+                return mat.specular * (1 - fresnel(eta, cosThetaI));
             } else {
                 // Reflect
-                return mat.specular * fresnel(eta, cosTheta);
+                return mat.specular * fresnel(eta, cosThetaI);
             }
         }
         case MAT_CONDUCTOR:
@@ -1144,8 +1145,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
             break;
         }
 
-        float cosThetaO = dot(newDirection, normal);
-        vec3 throughputChange = evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) * cosThetaO / pdf;
+        vec3 throughputChange = evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
         throughput *= throughputChange;
 
         if (saveSamples && currentSampleOffset < pushC.directionalDataPerPixel) {
@@ -1622,8 +1622,7 @@ void main() {
             if (pdf <= 0.0) {
                 break;
             }
-            float cosThetaO = dot(direction, split.normal);
-            vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) * cosThetaO / pdf;
+            vec3 throughput = split.throughput * evalBsdf(mat, split.textureUV, split.normal, split.wi, direction, split.isFrontFace) / pdf;
 
             result += raytrace(split.origin, direction, throughput, split.currentDepth, maxDepth, maxFollowDiscrete, addDirectLights, false, useNEE, numNEE, useIC, true, pushC.useADRRS, pushC.updateGuiding, firstT);
 

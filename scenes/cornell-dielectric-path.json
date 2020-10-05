@@ -2,7 +2,7 @@
   "models": [
     {"back": "back.obj"},
     {"ceiling": "ceiling.obj"},
-    {"floor": "floor.obj"},
+    {"floor": "floor_cornell.obj"},
     {"emitter": "emitter.obj"},
     {"left":  "left.obj"},
     {"right":  "right.obj"},
