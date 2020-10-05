@@ -5,13 +5,13 @@
 #include <imgui/imgui.h>
 #include <glm/gtc/random.hpp>
 #include <random>
-#include <chrono>
 #include <filesystem>
 #include "RayTracingApp.h"
 
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits) : icSize(icSize),
                                                                                                          guidingSplits(
                                                                                                                  guidingSplits) {
+    startTime = std::chrono::high_resolution_clock::now();
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
     fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
 
@@ -825,6 +825,8 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
             loadBackupNextIteration = true;
         }
     }
+
+    rtPushConstants.time = (std::chrono::high_resolution_clock::now() - startTime).count() / 10000000.f;
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,

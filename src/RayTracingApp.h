@@ -131,8 +131,8 @@ public:
         int useParallaxCompensation = 0;
         float time;
         int guidingVisuMove = 0;
-        float guidingVisuPhiScale = 0.0001f;
-        float guidingVisuThetaScale = 0.000333f;
+        float guidingVisuPhiScale = 0.004f;
+        float guidingVisuThetaScale = 0.01f;
     } rtPushConstants;
 
 private:
@@ -140,6 +140,8 @@ private:
     VulkanWindow vulkanWindow;
 
     SceneLoader sceneLoader;
+
+    std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
 
     uint32_t icSize;
 
