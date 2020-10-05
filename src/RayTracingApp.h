@@ -133,6 +133,7 @@ public:
         int guidingVisuMove = 0;
         float guidingVisuPhiScale = 0.004f;
         float guidingVisuThetaScale = 0.01f;
+        int guidingMIS = 1;
     } rtPushConstants;
 
 private:

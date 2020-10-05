@@ -770,6 +770,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
                                        reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
+    hasInputChanged |= ImGui::Checkbox("Use Guiding MIS",
+                                       reinterpret_cast<bool *>(&rtPushConstants.guidingMIS));
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
                                           &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
 

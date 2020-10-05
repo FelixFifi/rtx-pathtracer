@@ -902,8 +902,29 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
             if (dot(newDirection, normal) < 0) {
                 return 0.0;
             }
+
+            if (pushC.guidingMIS) {
+                // MIS
+                float pdfMat = pdfBSDF(mat, normal, wi, newDirection);
+                return pdf / powerHeuristic(pdf, pdfMat);
+            }
         } else {
             pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+
+            if (pushC.guidingMIS) {
+                // MIS
+
+                uint iRegion = getGuidingRegion(origin);
+
+                if (iRegion < 0) {
+                    return pdf;
+                }
+
+                VMM_Theta vmmTheta = guidingVMM[iRegion];
+                float pdfGuiding = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
+
+                return pdf / powerHeuristic(pdf, pdfGuiding);
+            }
         }
     } else {
         pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
