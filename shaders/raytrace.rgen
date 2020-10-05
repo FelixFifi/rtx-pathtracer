@@ -1494,8 +1494,9 @@ vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
     if (iRegion < 0) {
         return vec3(1, 0, 0);
     } else {
-        // Visualize direction of first guiding VMF
-        return (vec3(1) + guidingVMM[iRegion].thetas[0].mu) / 2.0;
+        // Visualize with random, but static color
+        uint seed = iRegion;
+        return vec3(rnd(seed), rnd(seed), rnd(seed));
     }
 }
 
