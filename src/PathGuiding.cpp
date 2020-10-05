@@ -39,6 +39,7 @@ void PathGuiding::configureVMMFactory() {
 void PathGuiding::createPMMs() {
     pmms = std::vector<PMM>(regionCount);
     incrementalDistances = std::vector<guiding::IncrementalDistance<PMM>>(regionCount);
+    parallaxMeans = std::vector<glm::vec3>(regionCount);
     lastParallaxMeans = std::vector<glm::vec3>(regionCount);
 
     for (int i = 0; i < regionCount; ++i) {
@@ -107,6 +108,8 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
 
         if (useParrallaxCompensation) {
+            guidingRegions[iRegion].meanPosition = parallaxMeans[iRegion];
+
             // Synchronize distances to GPU structs
             for (int iDistribution = 0; iDistribution < MAX_DISTRIBUTIONS; iDistribution++) {
                 uint iComponent = iDistribution / Scalar::Width::value;
@@ -116,8 +119,8 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
                 distance = distance == std::numeric_limits<float>::infinity() ? -1.0f : distance;
 
                 guidingRegions[iRegion].thetas[iDistribution].distance = distance;
-                guidingRegions[iRegion].thetas[iDistribution].target = guidingRegions[iRegion].meanPosition + distance *
-                                                                                                              guidingRegions[iRegion].thetas[iDistribution].mu;
+                guidingRegions[iRegion].thetas[iDistribution].target = parallaxMeans[iRegion] + distance *
+                                                                                                guidingRegions[iRegion].thetas[iDistribution].mu;
             }
         }
     }
@@ -285,7 +288,8 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
             posSum += (*directionalData)[i].position;
         }
         glm::vec3 parallaxMean = posSum / (float) sampleRange.size();
-        guidingRegions[iRegion].meanPosition = parallaxMean;
+        lastParallaxMeans[iRegion] = parallaxMeans[iRegion];
+        parallaxMeans[iRegion] = parallaxMean;
 
         // Move all samples to average
         for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {

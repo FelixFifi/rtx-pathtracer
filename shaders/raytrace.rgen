@@ -979,6 +979,12 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
                 if (saveSamples) {
                     updateSamples(currentSampleOffset, info.missColor);
+
+                    // Update distance data
+                    if (iUpdateDistance != -1) {
+                        // Distance infinity
+                        directionalData[getBaseIndex() + iUpdateDistance].distance = 0;
+                    }
                 }
             }
             break;

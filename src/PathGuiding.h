@@ -87,6 +87,7 @@ private:
 
     // Parallax Compensation
     bool useParrallaxCompensation;
+    std::vector<glm::vec3> parallaxMeans;
     std::vector<glm::vec3> lastParallaxMeans;
     std::vector<guiding::IncrementalDistance<PMM>> incrementalDistances;
 
