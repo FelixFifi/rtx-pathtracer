@@ -159,6 +159,7 @@ private:
     int currentPrepareFrames = 0;
 
     PathGuiding guiding;
+    bool enableParallaxCompensationForOptimization = false;
     uint guidingSplits;
     SampleCollector sampleCollector;
 

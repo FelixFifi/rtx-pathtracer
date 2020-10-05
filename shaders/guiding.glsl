@@ -77,7 +77,7 @@ vec3 sampleVMF(VMF_Theta theta, vec3 worldPos, bool useParallaxCompensation) {
             mu = normalize(theta.target - worldPos);
         }
 
-        return toWorld(vec3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta), theta.mu);
+        return toWorld(vec3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta), mu);
     } else {
         return randomOnUnitSphere();
     }

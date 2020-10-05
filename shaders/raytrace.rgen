@@ -897,13 +897,13 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
             VMM_Theta vmmTheta = guidingVMM[iRegion];
 
             newDirection = sampleVMM(vmmTheta, origin, pushC.useParallaxCompensation);
-            pdf = pushC.guidingProb * VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
+            pdf = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
 
             if (dot(newDirection, normal) < 0) {
                 return 0.0;
             }
         } else {
-            pdf = (1.0 - pushC.guidingProb) * sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+            pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
         }
     } else {
         pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
@@ -1014,7 +1014,6 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
             }
 
             // Update distance data
-            //
             if (saveSamples && iUpdateDistance != -1) {
                 directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
             }
@@ -1095,7 +1094,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
 
                 if (!isMatAlmostDiscrete(mat)) {
-                    // Mark the last distance entry as final, but continue adding distances
+                    // Mark the last distance entry as final
                     iUpdateDistance = -1;
                 }
             }

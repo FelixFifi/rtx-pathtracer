@@ -147,7 +147,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     currentPrepareFrames = 0;
 
     guiding.cleanup();
-    guiding = PathGuiding(guidingSplits, sceneLoader.getSceneSize(), true, vulkanOps, physicalDevice,
+    guiding = PathGuiding(guidingSplits, sceneLoader.getSceneSize(), enableParallaxCompensationForOptimization, vulkanOps, physicalDevice,
                           graphicsQueueIndex);
 
     recreateDescriptorSets();
@@ -768,6 +768,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.useGuiding));
     hasInputChanged |= ImGui::SliderFloat("Guiding Prob",
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
+    hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
+                                       reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
                                           &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Move",
@@ -786,8 +788,8 @@ void RayTracingApp::imGuiWindowSetup() {
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
     hasInputChanged |= ImGui::Checkbox("Update Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
-    hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
-                                       reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
+    needSceneReload |= ImGui::Checkbox("Use Parallax Compensation for Optimization",
+                                       &enableParallaxCompensationForOptimization);
 
     ImGui::End();
 }
