@@ -61,7 +61,6 @@ struct pushConstant
     bool guidingVisuMove;
     float guidingVisuPhiScale;
     float guidingVisuThetaScale;
-    bool guidingMIS;
 };
 
 struct sphere {

@@ -38,17 +38,17 @@
 #include "SampleCollector.h"
 
 const std::vector<std::string> SCENES{
-    "cornell/cornell.json",
-    "cornell-dielectric/cornell-dielectric-path.json",
-    "fireplace/fireplace.json",
-    "irradianceCache/irradianceCache.xml",
-    "miPhong/miPhong.xml",
-    "roughConductor/roughConductor.xml",
-    "fireplace/fireplace.json",
-    "test-scene/test.json",
-    "testSpheres/testSpheres.xml",
-    "sponza/sponza.json",
-    "veachMIS/veachMIS.xml"
+        "cornell-dielectric/cornell-dielectric-path.json",
+        "cornell/cornell.json",
+        "fireplace/fireplace.json",
+        "irradianceCache/irradianceCache.xml",
+        "miPhong/miPhong.xml",
+        "roughConductor/roughConductor.xml",
+        "fireplace/fireplace.json",
+        "test-scene/test.json",
+        "testSpheres/testSpheres.xml",
+        "sponza/sponza.json",
+        "veachMIS/veachMIS.xml"
 };
 
 static const int MAX_RECURSION = 2;
@@ -131,7 +131,6 @@ public:
         int guidingVisuMove = 0;
         float guidingVisuPhiScale = 0.004f;
         float guidingVisuThetaScale = 0.01f;
-        int guidingMIS = 0;
     } rtPushConstants;
 
 private:

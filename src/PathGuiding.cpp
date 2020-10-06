@@ -284,12 +284,15 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
                                                              directionalData->begin() + nextRegionBegin);
 
     if (useParrallaxCompensation) {
-        // Find average position
-        glm::vec3 posSum;
-        for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {
-            posSum += (*directionalData)[i].position;
-        }
-        glm::vec3 parallaxMean = posSum / (float) sampleRange.size();
+//        // Find average position
+//        glm::vec3 posSum{0.0f,0.0f,0.0f};
+//        for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {
+//            posSum += (*directionalData)[i].position;
+//        }
+//        glm::vec3 parallaxMean = posSum / (float) sampleRange.size();
+// FIXME: Real mean instead of middle of AABB
+        glm::vec3 parallaxMean = aabbs[iRegion].min + 0.5f * (aabbs[iRegion].max - aabbs[iRegion].min);
+
         lastParallaxMeans[iRegion] = parallaxMeans[iRegion];
         parallaxMeans[iRegion] = parallaxMean;
 
@@ -299,7 +302,7 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
             float distance = (*directionalData)[i].distance;
             glm::vec3 direction = (*directionalData)[i].direction;
 
-            if (distance > 0) {
+            if (distance > 0.0f) {
                 // If not infinite distance
                 // => update direction and distance to point to the correct location from the average pos
                 glm::vec3 newDirection = pos + distance * direction - parallaxMean;

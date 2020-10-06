@@ -888,45 +888,30 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
 
     if (pushC.useGuiding && !hasDiscreteDirection(mat)) {
         // Guiding is only possible for non-discrete direction materials
-        if (rnd() < pushC.guidingProb) {
-            uint iRegion = getGuidingRegion(origin);
 
-            if (iRegion < 0) {
-                return 0.0;
-            }
+        uint iRegion = getGuidingRegion(origin);
 
-            VMM_Theta vmmTheta = guidingVMM[iRegion];
-
-            newDirection = sampleVMM(vmmTheta, origin, pushC.useParallaxCompensation);
-            pdf = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
-
-            if (dot(newDirection, normal) < 0) {
-                return 0.0;
-            }
-
-            if (pushC.guidingMIS) {
-                // MIS
-                float pdfMat = pdfBSDF(mat, normal, wi, newDirection);
-                return pdf / powerHeuristic(pdf, pdfMat);
-            }
-        } else {
-            pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
-
-            if (pushC.guidingMIS) {
-                // MIS
-
-                uint iRegion = getGuidingRegion(origin);
-
-                if (iRegion < 0) {
-                    return pdf;
-                }
-
-                VMM_Theta vmmTheta = guidingVMM[iRegion];
-                float pdfGuiding = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
-
-                return pdf / powerHeuristic(pdf, pdfGuiding);
-            }
+        if (iRegion < 0) {
+            return 0.0;
         }
+
+        VMM_Theta vmmTheta = guidingVMM[iRegion];
+
+        float pdfMat;
+        if (rnd() < pushC.guidingProb) {
+            newDirection = sampleVMM(vmmTheta, origin, pushC.useParallaxCompensation);
+            pdfMat = pdfBSDF(mat, normal, wi, newDirection);
+        } else {
+            pdfMat = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+        }
+
+        if (dot(newDirection, normal) < 0 || pdfMat <= 0) {
+            return 0.0;
+        }
+
+        float pdfGuiding = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
+
+        pdf = mix(pdfMat, pdfGuiding, pushC.guidingProb);
     } else {
         pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
     }
