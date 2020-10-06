@@ -25,6 +25,10 @@ static const int BINDINGS_COUNT = 8;
 #include "Model.h"
 #include "Shapes.h"
 
+const std::string SCENE_BASE_DIR = "scenes/";
+const std::string MODELS_BASE_DIR = "models/";
+const std::string MATERIAL_BASE_DIR = "materials/";
+const std::string TEXTURE_BASE_DIR = "textures/";
 
 enum EMatType {
     eDiffuse = 0,
@@ -97,7 +101,7 @@ struct Texture {
 
 class SceneLoader {
 private:
-    std::string objectBaseDir;
+    std::string modelsBaseDir;
     std::string materialBaseDir;
     std::string textureBaseDir;
 
@@ -157,10 +161,8 @@ public:
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> tlas;
 public:
     SceneLoader() = default;
-    SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
-                const std::string &materialBaseDir, const std::string &textureBaseDir,
-                std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
-                uint32_t graphicsQueueIndex);
+    SceneLoader(const std::string &filepath, std::shared_ptr<VulkanOps> vulkanOps,
+                vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex);
 
 
     std::array<vk::DescriptorSetLayoutBinding, BINDINGS_COUNT> getDescriptorSetLayouts();

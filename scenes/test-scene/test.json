@@ -1,0 +1,31 @@
+{
+  "models": [
+    {"floor":  "floor_large.obj"},
+    {"cube": "cube.obj"},
+    {"glassCube": "cubeGlass.obj"},
+    {"lightBox": "lightBoxBright.obj"},
+    {"glassSphere": "sphere.obj"},
+    {"phongSphere": "spherePhong.obj"},
+    {"teapot":  "teapot.obj"}
+  ],
+  "instances": [
+    {"floor":  {"scale": [0.02, 0.02, 0.02]}},
+    {"lightBox": {"translate": [0, 0, 30], "scale": [0.5, 0.5, 1]}},
+    {"lightBox": {"translate": [5, 30, 2], "scale": [0.2, 0.2, 5]}},
+    {"cube": {"translate": [0, -2, 0], "rotate": [0, 0, 45], "scale": [0.2, 0.2, 0.2]}},
+    {"cube": {"translate": [-1, 5, 0], "rotate": [0, 0, 20], "scale": [0.3, 0.3, 0.6]}},
+    {"glassCube": {"translate": [0, 20, 1], "rotate": [0, 0, 45], "scale": [0.5, 0.5, 0.7]}},
+    {"phongSphere": {"translate": [20, -10, 1], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
+    {"teapot": {"translate": [-20, 10, 0], "rotate": [0, 0, 45], "scale": [1, 1, 1]}},
+    {"glassCube": {"translate": [-45, 20, 1], "rotate": [0, 0, 20], "scale": [0.5, 0.5, 0.7]}},
+    {"glassSphere": {"translate": [15, 10, 20], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
+    {"teapot": {"translate": [-10, 40, 1], "rotate": [0, 0, 90], "scale": [1, 1, 1]}},
+    {"glassCube": {"translate": [-40, 0, 3], "rotate": [0, 15, 20], "scale": [0.5, 0.5, 0.7]}},
+    {"glassSphere": {"translate": [-20, -30, 15], "rotate": [0, 0, 20], "scale": [4, 4, 4]}},
+    {"teapot": {"translate": [20, -30, 20], "rotate": [0, 0, 45], "scale": [1, 1, 1]}}
+  ],
+  "lights": [
+    {"color" :  [10000, 2000, 1000 ], "position" : [0, 0, 20]},
+    {"color" :  [1000, 2000, 100000 ], "position" : [20, 200, 20]}
+  ]
+}

@@ -239,9 +239,11 @@ void PathGuiding::cleanup() {
 void PathGuiding::cleanupBuffers() const {
     device.free(aabbsBufferMemory);
     device.free(guidingBufferMemory);
+    device.free(guidingUpdateBufferMemory);
 
     device.destroy(aabbsBuffer);
     device.destroy(guidingBuffer);
+    device.destroy(guidingUpdateBuffer);
 }
 
 uint32_t PathGuiding::getRegionCount() {

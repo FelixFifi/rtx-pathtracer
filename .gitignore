@@ -1,6 +1,5 @@
 cmake-build-*/
 *.spv
-sponza.*
-textures/textures/
-*.exr
+sponza/
+images/
 imgui.ini

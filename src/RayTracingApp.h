@@ -37,20 +37,18 @@
 #include "PathGuiding.h"
 #include "SampleCollector.h"
 
-const std::string MATERIAL_BASE_DIR = "materials/";
-const std::string TEXTURE_BASE_DIR = "textures/";
 const std::vector<std::string> SCENES{
-        "scenes/cornell-dielectric-path.json",
-        "scenes/irradianceCache.xml",
-        "scenes/test.json",
-        "scenes/fireplace.json",
-        "scenes/matpreview.xml",
-        "scenes/materialTest.xml",
-        "scenes/testSpheres.xml",
-        "scenes/mi.xml",
-        "scenes/veach-mis.json",
-        "scenes/large.json",
-        "scenes/cornell.json"
+    "cornell/cornell.json",
+    "cornell-dielectric/cornell-dielectric-path.json",
+    "fireplace/fireplace.json",
+    "irradianceCache/irradianceCache.xml",
+    "miPhong/miPhong.xml",
+    "roughConductor/roughConductor.xml",
+    "fireplace/fireplace.json",
+    "test-scene/test.json",
+    "testSpheres/testSpheres.xml",
+    "sponza/sponza.json",
+    "veachMIS/veachMIS.xml"
 };
 
 static const int MAX_RECURSION = 2;

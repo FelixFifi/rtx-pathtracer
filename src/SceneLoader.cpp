@@ -26,23 +26,27 @@
 using json = nlohmann::json;
 using namespace tinyxml2;
 
-SceneLoader::SceneLoader(const std::string &filepath, const std::string &objectBaseDir,
-                         const std::string &materialBaseDir, const std::string &textureBaseDir,
-                         std::shared_ptr<VulkanOps> vulkanOps, vk::PhysicalDevice &physicalDevice,
-                         uint32_t graphicsQueueIndex)
-        : objectBaseDir(objectBaseDir), materialBaseDir(materialBaseDir), textureBaseDir(textureBaseDir),
-          vulkanOps(vulkanOps),
+SceneLoader::SceneLoader(const std::string &filepath, std::shared_ptr<VulkanOps> vulkanOps,
+                         vk::PhysicalDevice &physicalDevice, uint32_t graphicsQueueIndex)
+        : vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
 
-    std::filesystem::path path = filepath;
+    std::filesystem::path path = SCENE_BASE_DIR + filepath;
+
+    // Set folders to search for models/materials/textures
+    std::filesystem::path directory = path.parent_path();
+    modelsBaseDir = directory / MODELS_BASE_DIR;
+    materialBaseDir = directory / MATERIAL_BASE_DIR;
+    textureBaseDir = directory / TEXTURE_BASE_DIR;
+
 
     // Reserve position for EnvMap
     textures.push_back({});
 
     if (path.extension().string() == ".xml") {
-        parseMitsubaSceneFile(filepath);
+        parseMitsubaSceneFile(path);
     } else if (path.extension().string() == ".json") {
-        parseSceneFile(filepath);
+        parseSceneFile(path);
     }
 
     calculateSceneSize();
@@ -356,7 +360,7 @@ void SceneLoader::parseEnvMap(XMLElement *xScene) {
     if (xEnvMap) {
         if (xEnvMap->Attribute("type") == std::string("envmap")) {
             std::string envMapPath = getChildString(xEnvMap, "filename");
-            envMapPath = "envMap/" + envMapPath;
+            envMapPath = std::filesystem::path(textureBaseDir) / envMapPath;
 
             int width, height;
             std::vector<float> envMap = readEXR(envMapPath.c_str(), width, height);
@@ -698,7 +702,7 @@ void SceneLoader::parseModels(json &j, std::map<std::string, int> &nameIndexMapp
 }
 
 std::string SceneLoader::toObjPath(const std::string &path) {
-    std::string res = (std::filesystem::path(objectBaseDir) / path);
+    std::string res = (std::filesystem::path(modelsBaseDir) / path);
     return res;
 }
 

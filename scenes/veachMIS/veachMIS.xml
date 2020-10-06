@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- MI test scene from Eric Veach's thesis - modeled
+     after a file by Steve Marschner (CS667)
+-->
+<scene version="0.4.0">
+	<integrator type="path">
+		<integer name="maxDepth" value="8"/>
+	</integrator>
+
+	<shape type="sphere">
+		<point name="center" x="-1.25" y="0" z="0"/>
+		<float name="radius" value=".1"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="100, 100, 100"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<shape type="sphere">
+		<point name="center" x="-3.75" y="0" z="0"/>
+		<float name="radius" value=".03333"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="901.803 901.803 901.803"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<shape type="sphere">
+		<point name="center" x="1" y="0" z="0"/>
+		<float name="radius" value=".3"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="11.1111 11.1111 11.1111"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<shape type="sphere">
+		<point name="center" x="3.75" y="0" z="0"/>
+		<float name="radius" value=".9"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="1.23457 1.23457 1.23457"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate1.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.02"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate2.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.06"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate3.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.1"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="plate4.obj"/>
+
+		<bsdf type="roughconductor">
+			<string name="distribution" value="beckmann"/>
+			<float name="alpha" value="0.2"/>
+			<spectrum name="eta" value="0.370"/>
+			<spectrum name="k" value="2.820"/>
+			<boolean name="sampleVisible" value="false"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj">
+		<string name="filename" value="floor.obj"/>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0.4 0.04 0.04"/>
+		</bsdf>
+	</shape>
+
+	<sensor type="perspective">
+		<string name="fovAxis" value="smaller"/>
+		<transform name="toWorld">
+			<scale x="-1"/>
+			<scale x="-1"/>
+			<lookAt origin="0, 2, 15" target="0, -2, 2.5" up="0, 1, 0"/>
+		</transform>
+		<float name="fov" value="28"/>
+
+		<film type="hdrfilm">
+			<integer name="width" value="768"/>
+			<integer name="height" value="512"/>
+		</film>
+	</sensor>
+</scene>

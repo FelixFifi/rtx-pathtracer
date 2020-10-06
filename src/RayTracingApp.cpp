@@ -135,7 +135,7 @@ void RayTracingApp::sceneSwitcher(int num) {
     sceneLoader.cleanup();
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    sceneLoader = SceneLoader(SCENES[sceneIndex], "objs", MATERIAL_BASE_DIR, TEXTURE_BASE_DIR, vulkanOps,
+    sceneLoader = SceneLoader(SCENES[sceneIndex], vulkanOps,
                               physicalDevice,
                               graphicsQueueIndex);
 

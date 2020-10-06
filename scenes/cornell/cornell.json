@@ -1,0 +1,17 @@
+{
+  "models": [
+    {"cube": "cube.obj"},
+    {"cornell": "cornellBox.obj"},
+    {"lightBox": "lightBox.obj"},
+    {"glassSphere": "sphere.obj"},
+    {"teapot":  "teapot.obj"}
+  ],
+  "instances": [
+    {"cornell": {"rotate": [0, 0, 90]}},
+    {"lightBox": {"translate": [0, 0, 18.99], "scale": [0.2, 0.2, 1]}},
+    {"cube": {"translate": [0, -2, 0], "rotate": [0, 0, 45], "scale": [0.2, 0.2, 0.2]}},
+    {"cube": {"translate": [-1, 5, 0], "rotate": [0, 0, 20], "scale": [0.3, 0.3, 0.6]}},
+    {"glassSphere": {"translate": [-4, -6, 5], "rotate": [0, 0, 20], "scale": [1, 1, 1]}},
+    {"teapot": {"translate": [-6, 0, 0], "rotate": [0, 0, 45], "scale": [0.2, 0.2, 0.2]}}
+  ]
+}

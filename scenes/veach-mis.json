@@ -1,8 +1,0 @@
-{
-  "models": [
-    {"veach":  "veach-mis.obj"}
-  ],
-  "instances": [
-    {"veach":  {}}
-  ]
-}
