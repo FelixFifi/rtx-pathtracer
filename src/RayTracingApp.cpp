@@ -81,6 +81,8 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     raytrace(cmdBuf);
     vulkanOps->endSingleTimeCommands(cmdBuf);
 
+    device.waitIdle();
+
     if (rtPushConstants.useIrradianceCache) {
         irradianceCache.updateSpheres();
     }
@@ -88,7 +90,15 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     cameraController.resetStatus();
 
     if (rtPushConstants.updateGuiding > 0) {
-        guiding.update(sampleCollector);
+        if (guiding.update(sampleCollector)) {
+            // Region split occurred
+            // => update sampleCollector and Descriptor sets
+            sampleCollector.cleanup();
+            sampleCollector = SampleCollector(guiding.getRegionCount(), offscreenExtent, rtPushConstants.directionalDataPerPixel, vulkanOps);
+
+
+            updateGuidingDescriptorSets();
+        }
     }
 
     // TODO: Fences
@@ -102,6 +112,29 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     }
 
     postProcessing.drawCallback(imageIndex);
+}
+
+void RayTracingApp::updateGuidingDescriptorSets() {
+    vk::DescriptorBufferInfo guidingBufferInfo;
+    vk::DescriptorBufferInfo guidingAabbsBufferInfo;
+    vk::WriteDescriptorSetAccelerationStructureKHR guidingAsInfo;
+    vk::DescriptorBufferInfo directionalDataBufferInfo;
+
+
+    auto guidingWrites = guiding.getWriteDescriptorSets(descriptorSet, guidingAsInfo,
+                                                        guidingAabbsBufferInfo,
+                                                        guidingBufferInfo);
+
+    auto sampleCollectorWrites = sampleCollector.getWriteDescriptorSets(descriptorSet, directionalDataBufferInfo);
+
+    std::array<vk::WriteDescriptorSet, 4> writes {
+            guidingWrites[0],
+            guidingWrites[1],
+            guidingWrites[2],
+            sampleCollectorWrites[0]
+    };
+
+    device.updateDescriptorSets(writes, nullptr);
 }
 
 void RayTracingApp::takePictureCurrentTime() {
@@ -770,6 +803,17 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
                                        reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
+    hasInputChanged |= ImGui::InputInt("Samples for region split",
+                                         &guiding.samplesForRegionSplit, 100.0f, 1000.0f);
+    hasInputChanged |= ImGui::Checkbox("Update Guiding",
+                                       reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
+    needSceneReload |= ImGui::Checkbox("Use Parallax Compensation for Optimization",
+                                       &enableParallaxCompensationForOptimization);
+
+
+
+    ImGui::Spacing();
+
     hasInputChanged |= ImGui::SliderFloat("Guiding Visu Scale",
                                           &rtPushConstants.guidingVisuScale, 0.0f, 1.0f);
 
@@ -785,11 +829,6 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingVisuMax, 0.0f, 50.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
-    hasInputChanged |= ImGui::Checkbox("Update Guiding",
-                                       reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
-    needSceneReload |= ImGui::Checkbox("Use Parallax Compensation for Optimization",
-                                       &enableParallaxCompensationForOptimization);
-
     ImGui::End();
 }
 

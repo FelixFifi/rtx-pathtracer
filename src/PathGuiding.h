@@ -107,12 +107,14 @@ private:
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
 public:
+    int samplesForRegionSplit = 10000;
+
     PathGuiding() = default;
     PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation, std::shared_ptr<VulkanOps> vulkanOps,
                 vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex);
 
-    void update(SampleCollector sampleCollector);
-    uint32_t getRegionCount();
+    bool update(SampleCollector sampleCollector);
+    uint32_t getRegionCount() const;
 
     std::array<vk::DescriptorSetLayoutBinding, 3> getDescriptorSetLayouts();
 
@@ -129,7 +131,7 @@ private:
     void createBuffers();
     void createAS();
 
-    void cleanupBuffers() const;
+    void cleanupBuffers();
 
     void configureVMMFactory();
 
@@ -141,6 +143,12 @@ private:
 
     void updateRegion(std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion, uint32_t regionBegin,
                       uint32_t nextRegionBegin);
+
+    void splitRegion(int iRegion);
+
+    void syncToGPU();
+
+    void createVulkanObjects();
 };
 
 

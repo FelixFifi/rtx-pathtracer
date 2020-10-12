@@ -20,6 +20,10 @@ PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompe
 
     configureVMMFactory();
     createRegions(splitCount);
+    createVulkanObjects();
+}
+
+void PathGuiding::createVulkanObjects() {
     createBuffers();
     createAS();
 }
@@ -103,6 +107,10 @@ void PathGuiding::createRegions(uint splitCount) {
 }
 
 void PathGuiding::syncPMMsToVMM_Thetas() {
+    if (guidingRegions.size() < regionCount) {
+        guidingRegions = std::vector<VMM_Theta>(regionCount);
+    }
+
     // Synchronize to GPU structs
     for (int iRegion = 0; iRegion < regionCount; iRegion++) {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
@@ -129,6 +137,10 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
 void PathGuiding::createBuffers() {
     if (aabbsBuffer) {
         cleanupBuffers();
+    }
+
+    if (guidingRegions.size() < regionCount) {
+        guidingRegions = std::vector<VMM_Theta>(regionCount);
     }
 
     vk::BufferUsageFlags usage =
@@ -236,7 +248,7 @@ void PathGuiding::cleanup() {
     rtBuilder.destroy();
 }
 
-void PathGuiding::cleanupBuffers() const {
+void PathGuiding::cleanupBuffers() {
     device.free(aabbsBufferMemory);
     device.free(guidingBufferMemory);
     device.free(guidingUpdateBufferMemory);
@@ -244,17 +256,27 @@ void PathGuiding::cleanupBuffers() const {
     device.destroy(aabbsBuffer);
     device.destroy(guidingBuffer);
     device.destroy(guidingUpdateBuffer);
+
+    aabbsBuffer = nullptr;
+    guidingBuffer = nullptr;
+    guidingUpdateBuffer = nullptr;
 }
 
-uint32_t PathGuiding::getRegionCount() {
-    return aabbs.size();
+uint32_t PathGuiding::getRegionCount() const {
+    return regionCount;
 }
 
-void PathGuiding::update(SampleCollector sampleCollector) {
+/**
+ *
+ * @param sampleCollector
+ * @return True - if a Descriptor Set reload is necessary, because a region was split
+ */
+bool PathGuiding::update(SampleCollector sampleCollector) {
     std::vector<uint32_t> regionIndices;
     std::shared_ptr<std::vector<DirectionalData>> directionalData = sampleCollector.getSortedData(regionIndices);
 
-    for (int iRegion = 0; iRegion < getRegionCount(); ++iRegion) {
+    // Update regions
+    for (int iRegion = 0; iRegion < regionCount; ++iRegion) {
         uint32_t regionIndex = regionIndices[iRegion];
         uint32_t nextRegionIndex = regionIndices[iRegion + 1];
 
@@ -262,9 +284,32 @@ void PathGuiding::update(SampleCollector sampleCollector) {
             updateRegion(directionalData, iRegion, regionIndex, nextRegionIndex);
         }
     }
-
     firstFit = false;
 
+    // Check for regions to split
+    uint32_t currentRegionCount = getRegionCount();
+    bool wasSplit = false;
+    for (int iRegion = 0; iRegion < currentRegionCount; ++iRegion) {
+
+        if (pmms[iRegion].m_numSamples > samplesForRegionSplit) {
+            splitRegion(iRegion);
+            wasSplit = true;
+        }
+    }
+
+    if (wasSplit) {
+        // TODO: Update instead of delete/replace
+        cleanup();
+        createVulkanObjects();
+    }
+
+    // Sync CPU and GPU data
+    syncToGPU();
+
+    return wasSplit;
+}
+
+void PathGuiding::syncToGPU() {
     syncPMMsToVMM_Thetas();
 
     void *data;
@@ -276,6 +321,29 @@ void PathGuiding::update(SampleCollector sampleCollector) {
     device.unmapMemory(guidingUpdateBufferMemory);
 
     vulkanOps->copyBuffer(guidingUpdateBuffer, guidingBuffer, bufferSize);
+}
+
+void PathGuiding::splitRegion(int iRegion) {
+    // Split AABB
+    Aabb left{}, right{};
+    std::tie(left, right) = aabbs[iRegion].splitAabb();
+
+    // Update AABB and add new
+    aabbs[iRegion] = left;
+    uint32_t newRegion = aabbs.size();
+    aabbs.push_back(right);
+
+    // Adjust PMM to give more weight to new samples
+    pmms[iRegion].m_numSamples /= 2.0f;
+    pmms[iRegion].m_sampleWeight *= 0.5f;
+
+    // Set PMM as basis for both new PMMs
+    pmms.push_back(pmms[iRegion]);
+    incrementalDistances.push_back(incrementalDistances[iRegion]);
+    parallaxMeans.push_back(parallaxMeans[iRegion]);
+    lastParallaxMeans.push_back(lastParallaxMeans[iRegion]);
+
+    regionCount++;
 }
 
 void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion,

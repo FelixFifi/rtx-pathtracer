@@ -42,13 +42,12 @@ const std::vector<std::string> SCENES{
         "cornell/cornell.json",
         "fireplace/fireplace.json",
         "irradianceCache/irradianceCache.xml",
+        "veachMIS/veachMIS.xml",
         "miPhong/miPhong.xml",
         "roughConductor/roughConductor.xml",
-        "fireplace/fireplace.json",
         "test-scene/test.json",
-        "testSpheres/testSpheres.xml",
         "sponza/sponza.json",
-        "veachMIS/veachMIS.xml"
+        "testSpheres/testSpheres.xml"
 };
 
 static const int MAX_RECURSION = 2;
@@ -248,6 +247,8 @@ private:
     void takePictureCurrentTime();
 
     void setEstimateRTSettings();
+
+    void updateGuidingDescriptorSets();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H
