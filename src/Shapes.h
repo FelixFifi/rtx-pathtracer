@@ -45,6 +45,13 @@ struct Aabb {
         return {resL, resR};
     }
 
+    Aabb addEpsilon() {
+        glm::vec3 extent = max - min;
+        glm::vec3 center = min + 0.5f * extent;
+
+        return {center - 0.50001f * extent, center + 0.50001f * extent};
+    }
+
     void update(glm::vec3 v) {
         min[0] = fmin(min[0], v[0]);
         min[1] = fmin(min[1], v[1]);

@@ -891,7 +891,7 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
 
         uint iRegion = getGuidingRegion(origin);
 
-        if (iRegion < 0) {
+        if (iRegion == -1) {
             return 0.0;
         }
 
@@ -1497,7 +1497,7 @@ vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
 
     uint iRegion = getGuidingRegion(info.worldPos.xyz);
 
-    if (iRegion < 0) {
+    if (iRegion == -1) {
         return vec3(1, 0, 0);
     } else {
         // Visualize with random, but static color

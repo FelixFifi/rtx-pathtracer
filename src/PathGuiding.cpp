@@ -11,7 +11,7 @@
 PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation,
                          std::shared_ptr<VulkanOps> vulkanOps,
                          vk::PhysicalDevice physicalDevice,
-                         uint32_t graphicsQueueIndex) : sceneAabb(sceneAabb),
+                         uint32_t graphicsQueueIndex) : sceneAabb(sceneAabb.addEpsilon()),
                                                         useParrallaxCompensation(useParrallaxCompensation),
                                                         vulkanOps(vulkanOps),
                                                         device(vulkanOps->getDevice()) {
@@ -332,8 +332,9 @@ void PathGuiding::splitRegion(int iRegion) {
     aabbs.push_back(right);
 
     // Adjust PMM to give more weight to new samples
-    pmms[iRegion].m_numSamples /= 2.0f;
-    pmms[iRegion].m_sampleWeight *= 0.5f;
+    const float decayTerm = 0.25f;
+    pmms[iRegion].m_numSamples *= decayTerm;
+    pmms[iRegion].m_sampleWeight *= decayTerm;
 
     // Set PMM as basis for both new PMMs
     pmms.push_back(pmms[iRegion]);
