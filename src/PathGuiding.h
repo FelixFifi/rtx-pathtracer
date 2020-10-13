@@ -107,6 +107,7 @@ private:
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
 public:
+    bool splitRegions;
     int samplesForRegionSplit = 10000;
 
     PathGuiding() = default;

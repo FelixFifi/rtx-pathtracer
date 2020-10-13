@@ -291,7 +291,7 @@ bool PathGuiding::update(SampleCollector sampleCollector) {
     bool wasSplit = false;
     for (int iRegion = 0; iRegion < currentRegionCount; ++iRegion) {
 
-        if (pmms[iRegion].m_numSamples > samplesForRegionSplit) {
+        if (splitRegions && pmms[iRegion].m_numSamples > samplesForRegionSplit) {
             splitRegion(iRegion);
             wasSplit = true;
         }
