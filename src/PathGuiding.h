@@ -14,6 +14,8 @@
 
 #include "pmm/VMMFactory.h"
 #include "guiding/incrementaldistance.h"
+#include "guiding/incrementalpearsonchisquared.h"
+#include "guiding/incrementalcovariance2d.h"
 
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
@@ -72,6 +74,14 @@ struct VMM_Theta {
     }
 };
 
+struct PMM_ExtraData {
+    glm::vec3 parallaxMean;
+    glm::vec3 lastParallaxMean;
+    guiding::IncrementalDistance<PMM> incrementalDistance;
+    guiding::IncrementalCovariance2D<PMM> incrementalCovariance2D;
+    guiding::IncrementalPearsonChiSquared<PMM> incrementalPearsonChiSquared;
+};
+
 class PathGuiding {
 private:
     uint regionCount;
@@ -84,12 +94,10 @@ private:
 
     lightpmm::VMMFactory<PMM> vmmFactory;
     std::vector<PMM> pmms;
+    std::vector<PMM_ExtraData> pmmsExtraData;
 
     // Parallax Compensation
     bool useParrallaxCompensation;
-    std::vector<glm::vec3> parallaxMeans;
-    std::vector<glm::vec3> lastParallaxMeans;
-    std::vector<guiding::IncrementalDistance<PMM>> incrementalDistances;
 
     std::shared_ptr<VulkanOps> vulkanOps;
 

@@ -39,6 +39,9 @@
 
 #define PMM_EPSILON 1.0e-8f
 
+#define EXPECT_TAKEN(arg) arg
+#define EXPECT_NOT_TAKEN(arg) arg
+
 #define PMM_NAMESPACE_BEGIN namespace lightpmm {
 #define PMM_NAMESPACE_END }
 

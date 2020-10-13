@@ -42,9 +42,7 @@ void PathGuiding::configureVMMFactory() {
 
 void PathGuiding::createPMMs() {
     pmms = std::vector<PMM>(regionCount);
-    incrementalDistances = std::vector<guiding::IncrementalDistance<PMM>>(regionCount);
-    parallaxMeans = std::vector<glm::vec3>(regionCount);
-    lastParallaxMeans = std::vector<glm::vec3>(regionCount);
+    pmmsExtraData = std::vector<PMM_ExtraData>(regionCount);
 
     for (int i = 0; i < regionCount; ++i) {
         PMM pmm;
@@ -116,18 +114,18 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
         guidingRegions[iRegion] = pmmToVMM_Theta(pmms[iRegion]);
 
         if (useParrallaxCompensation) {
-            guidingRegions[iRegion].meanPosition = parallaxMeans[iRegion];
+            guidingRegions[iRegion].meanPosition = pmmsExtraData[iRegion].parallaxMean;
 
             // Synchronize distances to GPU structs
             for (int iDistribution = 0; iDistribution < MAX_DISTRIBUTIONS; iDistribution++) {
                 uint iComponent = iDistribution / Scalar::Width::value;
                 uint idx = iDistribution % Scalar::Width::value;
 
-                float distance = incrementalDistances[iRegion].distances[iComponent][idx];
+                float distance = pmmsExtraData[iRegion].incrementalDistance.distances[iComponent][idx];
                 distance = distance == std::numeric_limits<float>::infinity() ? -1.0f : distance;
 
                 guidingRegions[iRegion].thetas[iDistribution].distance = distance;
-                guidingRegions[iRegion].thetas[iDistribution].target = parallaxMeans[iRegion] + distance *
+                guidingRegions[iRegion].thetas[iDistribution].target = pmmsExtraData[iRegion].parallaxMean + distance *
                                                                                                 guidingRegions[iRegion].thetas[iDistribution].mu;
             }
         }
@@ -339,9 +337,7 @@ void PathGuiding::splitRegion(int iRegion) {
 
     // Set PMM as basis for both new PMMs
     pmms.push_back(pmms[iRegion]);
-    incrementalDistances.push_back(incrementalDistances[iRegion]);
-    parallaxMeans.push_back(parallaxMeans[iRegion]);
-    lastParallaxMeans.push_back(lastParallaxMeans[iRegion]);
+    pmmsExtraData.push_back(pmmsExtraData[iRegion]);
 
     regionCount++;
 }
@@ -361,8 +357,8 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
 // FIXME: Real mean instead of middle of AABB
         glm::vec3 parallaxMean = aabbs[iRegion].min + 0.5f * (aabbs[iRegion].max - aabbs[iRegion].min);
 
-        lastParallaxMeans[iRegion] = parallaxMeans[iRegion];
-        parallaxMeans[iRegion] = parallaxMean;
+        pmmsExtraData[iRegion].lastParallaxMean = pmmsExtraData[iRegion].parallaxMean;
+        pmmsExtraData[iRegion].parallaxMean = parallaxMean;
 
         // Move all samples to average
         for (uint32_t i = regionBegin; i < nextRegionBegin; i++) {
@@ -385,7 +381,7 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
 
         if (!firstFit) {
             // Move distribution to current mean
-            incrementalDistances[iRegion].reposition(pmms[iRegion], lastParallaxMeans[iRegion] - parallaxMean);
+            pmmsExtraData[iRegion].incrementalDistance.reposition(pmms[iRegion], pmmsExtraData[iRegion].lastParallaxMean - parallaxMean);
         }
     }
 
@@ -399,7 +395,7 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
 
     if (useParrallaxCompensation) {
         // Update distances
-        incrementalDistances[iRegion].updateDistances(pmms[iRegion], sampleRange);
+        pmmsExtraData[iRegion].incrementalDistance.updateDistances(pmms[iRegion], sampleRange);
     }
 
 

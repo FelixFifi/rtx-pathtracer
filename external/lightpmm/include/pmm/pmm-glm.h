@@ -38,6 +38,7 @@
 
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
+#include <glm/mat2x2.hpp>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/geometric.hpp>
 #include <cmath>
@@ -48,6 +49,7 @@ PMM_NAMESPACE_BEGIN
     typedef glm::vec3 Vector3;
     typedef glm::vec3 Point3;
     typedef glm::vec2 Point2;
+    typedef glm::mat2x2 Matrix2x2;
 
 
 #define PMM_WARN(...) std::cerr << __VA_ARGS__ << std::endl;
@@ -99,6 +101,31 @@ PMM_NAMESPACE_BEGIN
 
         return s * dir.x + t * dir.y + n * dir.z;
     }
+
+    // Rendering Vorlesung - Nori src/common.cpp
+    PMM_INLINE void coordinateAxis(Vector3 z, Vector3 &x, Vector3 &y) {
+        if (abs(z.x) > abs(z.y)) {
+            float invLen = 1.0f / sqrt(z.x * z.x + z.z * z.z);
+            y = Vector3(z.z * invLen, 0.0f, -z.x * invLen);
+        } else {
+            float invLen = 1.0f / sqrt(z.y * z.y + z.z * z.z);
+            y = Vector3(0.0f, z.z * invLen, -z.y * invLen);
+        }
+        x = cross(y, z);
+    }
+
+    struct Frame {
+        Vector3 x, y, z;
+
+        Frame(Vector3 n) {
+            z = n;
+            coordinateAxis(z, x, y);
+        }
+
+        Vector3 toLocal(Vector3 v) {
+            return Vector3(dot(v, x), dot(v, y), dot(v, z));
+        }
+    };
 
 PMM_NAMESPACE_END
 
