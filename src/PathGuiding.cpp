@@ -4,8 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <guiding/incrementaldistance.h>
-#include <guiding/Range.h>
+#include "guiding/incrementaldistance.h"
 #include "PathGuiding.h"
 
 PathGuiding::PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation,
@@ -31,13 +30,12 @@ void PathGuiding::createVulkanObjects() {
 float getRandNegPos() { return (rand() / (float) RAND_MAX) * 2 - 1.0f; }
 
 void PathGuiding::configureVMMFactory() {
-    lightpmm::VMMFactoryProperties factoryProperties{};
-    factoryProperties.numInitialComponents = 8;
-    factoryProperties.maxItr = 100;
-    factoryProperties.maxKappa = 50000;
+    vmmFactoryProperties.numInitialComponents = 8;
+    vmmFactoryProperties.maxItr = 100;
+    vmmFactoryProperties.maxKappa = 50000;
 
     vmmFactory = lightpmm::VMMFactory<PMM>(
-            factoryProperties);
+            vmmFactoryProperties);
 }
 
 void PathGuiding::createPMMs() {
@@ -126,7 +124,7 @@ void PathGuiding::syncPMMsToVMM_Thetas() {
 
                 guidingRegions[iRegion].thetas[iDistribution].distance = distance;
                 guidingRegions[iRegion].thetas[iDistribution].target = pmmsExtraData[iRegion].parallaxMean + distance *
-                                                                                                guidingRegions[iRegion].thetas[iDistribution].mu;
+                                                                                                             guidingRegions[iRegion].thetas[iDistribution].mu;
             }
         }
     }
@@ -348,6 +346,23 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
     guiding::Range<std::vector<DirectionalData>> sampleRange(directionalData->begin() + regionBegin,
                                                              directionalData->begin() + nextRegionBegin);
 
+    preFit(directionalData, iRegion, regionBegin, nextRegionBegin);
+
+    if (firstFit) {
+        vmmFactory.fit(sampleRange.begin(), sampleRange.end(),
+                       pmms[iRegion], false);
+    } else {
+        vmmFactory.updateFit(sampleRange.begin(), sampleRange.end(),
+                             pmms[iRegion]);
+    }
+
+    postFit(iRegion, sampleRange);
+
+
+}
+
+void PathGuiding::preFit(const std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion,
+                         uint32_t regionBegin, uint32_t nextRegionBegin) {
     if (useParrallaxCompensation) {
 //        // Find average position
 //        glm::vec3 posSum{0.0f,0.0f,0.0f};
@@ -382,17 +397,28 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
 
         if (!firstFit) {
             // Move distribution to current mean
-            pmmsExtraData[iRegion].incrementalDistance.reposition(pmms[iRegion], pmmsExtraData[iRegion].lastParallaxMean - parallaxMean);
+            pmmsExtraData[iRegion].incrementalDistance.reposition(pmms[iRegion],
+                                                                  pmmsExtraData[iRegion].lastParallaxMean -
+                                                                  parallaxMean);
+        }
+    }
+}
+
+void PathGuiding::postFit(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange) {
+    if (splitAndMerge) {
+        pmmsExtraData[iRegion].samplesSinceLastMerge += sampleRange.size();
+
+        if (pmmsExtraData[iRegion].samplesSinceLastMerge > minSamplesForMerging) {
+            pmms[iRegion].removeWeightPrior(vmmFactoryProperties.vPrior);
+
+            mergeAll(iRegion, sampleRange);
+
+            pmms[iRegion].applyWeightPrior(vmmFactoryProperties.vPrior);
+
+            pmmsExtraData[iRegion].samplesSinceLastMerge = 0;
         }
     }
 
-    if (firstFit) {
-        vmmFactory.fit(sampleRange.begin(), sampleRange.end(),
-                       pmms[iRegion], false);
-    } else {
-        vmmFactory.updateFit(sampleRange.begin(), sampleRange.end(),
-                             pmms[iRegion]);
-    }
 
     if (useParrallaxCompensation) {
         // Update distances
@@ -400,4 +426,166 @@ void PathGuiding::updateRegion(std::shared_ptr<std::vector<DirectionalData>> &di
     }
 
 
+}
+
+/*
+The following functions are an adapted part of the implementation of the SIGGRAPH 2020 paper
+"Robust Fitting of Parallax-Aware Mixtures for Path Guiding".
+
+Copyright (c) 2020 Lukas Ruppert, Sebastian Herholz.
+*/
+bool PathGuiding::mergeAll(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange) {
+    uint32_t totalNumMerges = 0;
+
+    PMM &pmm = pmms[iRegion];
+
+    do {
+        const uint32_t numComponents = pmm.getK();
+        uint32_t numMerges = 0;
+
+        if (EXPECT_NOT_TAKEN(numComponents <= 1))
+            return false;
+
+        const uint32_t numSimilarityValues = numComponents * (numComponents - 1) / 2;
+
+        const std::array<float,
+                PMM::MaxK::value * (PMM::MaxK::value - 1) / 2> mergeMetric = computePearsonChiSquaredMergeMetric(pmm);
+
+        std::array<std::pair<float, std::pair<uint32_t, uint32_t>>,
+                PMM::MaxK::value * (PMM::MaxK::value - 1) / 2> mergeCandidates;
+        for (uint32_t componentA = 0, offsetA = 0;
+             componentA < numComponents; ++componentA, offsetA += numComponents - componentA) {
+            for (uint32_t componentB = componentA + 1, offsetB = 0;
+                 componentB < numComponents; ++componentB, ++offsetB) {
+                mergeCandidates[offsetA + offsetB] = std::make_pair(mergeMetric[offsetA + offsetB],
+                                                                    std::make_pair(componentA, componentB));
+            }
+        }
+
+
+        const auto validCandidatesEnd = std::partition(mergeCandidates.begin(),
+                                                       mergeCandidates.begin() + numSimilarityValues,
+                                                       [this](std::pair<float, std::pair<uint32_t, uint32_t>> candidate) -> bool {
+                                                           return candidate.first <= mergeMaxDivergence;
+                                                       });
+
+        std::sort(mergeCandidates.begin(), validCandidatesEnd, [](std::pair<float, std::pair<uint32_t, uint32_t>> a,
+                                                                  std::pair<float, std::pair<uint32_t, uint32_t>> b) -> bool {
+            return a.first < b.first;
+        });
+
+        std::array<uint32_t, (PMM::MaxK::value + 31) / 32> bitmask;
+        std::fill(bitmask.begin(), bitmask.end(), 0U);
+
+        std::array<std::pair<uint32_t, uint32_t>, PMM::MaxK::value> merges;
+
+        for (auto it = mergeCandidates.begin(); it != validCandidatesEnd; ++it) {
+            const uint32_t componentA = std::min(it->second.first, it->second.second);
+            const uint32_t componentB = std::max(it->second.first, it->second.second);
+
+            if ((bitmask[componentA / 32] & (1 << (componentA % 32))) != 0 ||
+                (bitmask[componentB / 32] & (1 << (componentB % 32))) != 0)
+                continue;
+
+            merges[numMerges++] = std::make_pair(componentA, componentB);
+            bitmask[componentA / 32] |= (1 << (componentA % 32));
+            bitmask[componentB / 32] |= (1 << (componentB % 32));
+        }
+
+        if (numMerges == 0)
+            break;
+
+        //this is needed to avoid updating indices after individual merges
+        std::sort(merges.begin(), merges.begin() + numMerges,
+                  [](std::pair<uint32_t, uint32_t> a, std::pair<uint32_t, uint32_t> b) -> bool {
+                      return a.second > b.second;
+                  });
+
+        for (uint32_t i = 0; i < numMerges; ++i) {
+            SAssert(merges[i].second > merges[i].first);
+            mergeComponents(iRegion, merges[i].first, merges[i].second);
+        }
+
+        totalNumMerges += numMerges;
+    } while (true);
+
+    return totalNumMerges;
+}
+
+std::array<float, PMM::MaxK::value * (PMM::MaxK::value - 1) / 2>
+PathGuiding::computePearsonChiSquaredMergeMetric(const PMM &distribution) {
+    const uint32_t numComponents = distribution.getK();
+    const uint32_t numActiveKernels = (numComponents + Scalar::Width::value - 1) / Scalar::Width::value;
+
+    std::array<VMF, PMM::NumKernels::value> selfProduct;
+    for (uint32_t k = 0; k < numActiveKernels; ++k) {
+        selfProduct[k] = distribution.getComponent(k);
+        selfProduct[k].product(selfProduct[k]);
+    }
+
+    std::array<Scalar, PMM::NumKernels::value * PMM::MaxK::value> componentToKernelSimilarityValues;
+
+    for (uint32_t i = 0; i < numComponents - 1; ++i) {
+        const size_t kernelIndexI = i / Scalar::Width::value;
+        const size_t inKernelIndexI = i % Scalar::Width::value;
+
+        const VMF componentI = distribution.getComponent(kernelIndexI).extract(inKernelIndexI);
+        const VMF componentISqr = selfProduct[kernelIndexI].extract(inKernelIndexI);
+
+        for (uint32_t j = (i + 1) / Scalar::Width::value; j < numActiveKernels; ++j) {
+            VMF productIJ{componentI};
+            productIJ.product(distribution.getComponent(j));
+
+            const VMF kernelJ{distribution.getComponent(j)};
+            VMF merged{componentI};
+
+            {
+                VMF kJForMerge{kernelJ};
+                for (uint32_t l = 0; l < Scalar::Width::value; ++l)
+                    merged.mergeComponent(l, l, kJForMerge);
+            }
+
+            const Scalar quotientISqrMerged = VMF{componentISqr}.division(merged);
+            const Scalar quotientIJMerged = VMF{productIJ}.division(merged);
+            const Scalar quotientJSqrMerged = VMF{selfProduct[j]}.division(merged);
+
+            const Scalar divergence =
+                    quotientISqrMerged + 2.0f * quotientIJMerged + quotientJSqrMerged - merged.m_weights;
+
+            componentToKernelSimilarityValues[i * PMM::NumKernels::value + j] = divergence;
+        }
+    }
+
+    std::array<float, PMM::MaxK::value * (PMM::MaxK::value - 1) / 2> similarityValues;
+
+    uint32_t index = 0;
+    for (uint32_t i = 0; i < numComponents - 1; ++i)
+        for (size_t j = i + 1; j < numComponents; ++j, ++index)
+            similarityValues[index] = componentToKernelSimilarityValues[i * PMM::NumKernels::value +
+                                                                        j / Scalar::Width::value][j %
+                                                                                                  Scalar::Width::value];
+
+    return similarityValues;
+}
+
+void PathGuiding::mergeComponents(int iRegion, const uint32_t componentA, const uint32_t componentB)
+{
+#ifdef GUIDING_VALIDATE_INTERMEDIATE_MIXTURE_STATES
+    const uint32_t numComponents = pmm.getK();
+
+        if (!pmm.valid(pmmFactory.m_vmmFactory.computeMinComponentWeight(numComponents)))
+            SLog(EWarn, "invalid mixture state before merging components %u and %u", componentA, componentB);
+#endif
+    PMM &pmm = pmms[iRegion];
+
+    pmmsExtraData[iRegion].incrementalDistance.merge(pmm, componentA, componentB);
+    pmmsExtraData[iRegion].incrementalPearsonChiSquared.merge(pmm, componentA, componentB);
+    pmmsExtraData[iRegion].incrementalCovariance2D.merge(pmm, componentA, componentB);
+
+    pmm.mergeComponents(componentA, componentB);
+
+#ifdef GUIDING_VALIDATE_INTERMEDIATE_MIXTURE_STATES
+    if (!pmm.valid(pmmFactory.m_vmmFactory.computeMinComponentWeight(numComponents-1)))
+            SLog(EWarn, "error occured after merging components %u and %u", componentA, componentB);
+#endif
 }

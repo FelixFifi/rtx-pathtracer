@@ -16,6 +16,7 @@
 #include "guiding/incrementaldistance.h"
 #include "guiding/incrementalpearsonchisquared.h"
 #include "guiding/incrementalcovariance2d.h"
+#include "guiding/Range.h"
 
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
@@ -80,12 +81,15 @@ struct PMM_ExtraData {
     guiding::IncrementalDistance<PMM> incrementalDistance;
     guiding::IncrementalCovariance2D<PMM> incrementalCovariance2D;
     guiding::IncrementalPearsonChiSquared<PMM> incrementalPearsonChiSquared;
+    uint32_t samplesSinceLastMerge = 0;
 };
 
 class PathGuiding {
 private:
     uint regionCount;
     bool firstFit = true;
+
+    lightpmm::VMMFactoryProperties vmmFactoryProperties{};
 
     Aabb sceneAabb;
 
@@ -115,8 +119,12 @@ private:
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
 public:
-    bool splitRegions;
+    bool splitRegions = false;
     int samplesForRegionSplit = 10000;
+
+    bool splitAndMerge = true;
+    int minSamplesForMerging = 8192;
+    float mergeMaxDivergence {0.025f};
 
     PathGuiding() = default;
     PathGuiding(uint splitCount, Aabb sceneAabb, bool useParrallaxCompensation, std::shared_ptr<VulkanOps> vulkanOps,
@@ -158,6 +166,19 @@ private:
     void syncToGPU();
 
     void createVulkanObjects();
+
+    void preFit(const std::shared_ptr<std::vector<DirectionalData>> &directionalData, int iRegion, uint32_t regionBegin,
+                uint32_t nextRegionBegin);
+
+    void postFit(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange);
+
+    bool mergeAll(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange);
+
+    static std::array<float, PMM::MaxK::value * (PMM::MaxK::value - 1) / 2> computePearsonChiSquaredMergeMetric(
+            const lightpmm::ParametricMixtureModel<lightpmm::VMFKernel<lightpmm::Scalar4>,
+                    8 / Scalar::Width::value> &distribution);
+
+    void mergeComponents(int iRegion, const uint32_t componentA, const uint32_t componentB);
 };
 
 

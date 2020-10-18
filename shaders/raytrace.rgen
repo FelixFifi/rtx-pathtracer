@@ -36,6 +36,7 @@
 #define VISU_ESTIMATE 4
 #define VISU_GUIDING_REGIONS 5
 #define VISU_GUIDING_OVERLAY 6
+#define VISU_GUIDING_ACTIVE_COMPONENTS 7
 
 #define PAYLOAD_HIT 0
 #define PAYLOAD_SHADOW 1
@@ -1429,13 +1430,18 @@ void saveResult(vec3 result) {
     }
 }
 
-bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out vec3 color) {
+void getCameraRay(const vec2 pixelCenter, out vec3 origin, out vec3 direction) {
     vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0 - 1.0;
 
-    vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
+    origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
     vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-    vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+    direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+}
+
+bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out vec3 color) {
+    vec3 origin, direction;
+    getCameraRay(pixelCenter, origin, direction);
 
     guidingVisuInfos.isMiss = true;
 
@@ -1471,12 +1477,8 @@ bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out
 }
 
 vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
-    vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
-    vec2 d = inUV * 2.0 - 1.0;
-
-    vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
-    vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-    vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
+    vec3 origin, direction;
+    getCameraRay(pixelCenter, origin, direction);
 
     traceRayEXT(topLevelAS, // acceleration structure
     rayFlags, // rayFlags
@@ -1503,6 +1505,37 @@ vec3 getGuidingRegionVisualization(const vec2 pixelCenter) {
         // Visualize with random, but static color
         uint seed = iRegion;
         return vec3(rnd(seed), rnd(seed), rnd(seed));
+    }
+}
+
+vec3 getGuidingActiveComponentsVisualization(const vec2 pixelCenter) {
+    vec3 origin, direction;
+    getCameraRay(pixelCenter, origin, direction);
+
+    traceRayEXT(topLevelAS, // acceleration structure
+    rayFlags, // rayFlags
+    0xFF, // cullMask
+    0, // sbtRecordOffset
+    0, // sbtRecordStride
+    0, // missIndex
+    origin.xyz, // ray origin
+    tMin, // ray min range
+    direction.xyz, // ray direction
+    tMax, // ray max range
+    PAYLOAD_HIT// payload
+    );
+
+    if (info.isMiss) {
+        return vec3(0, 0, 0);
+    }
+
+    uint iRegion = getGuidingRegion(info.worldPos.xyz);
+
+    if (iRegion == -1) {
+        return vec3(1, 0, 0);
+    } else {
+        float a = guidingVMM[iRegion].usedDistributions /  float(MAX_DISTRIBUTIONS);
+        return mix(vec3(0, 0, 1), vec3(1, 0, 0), a);
     }
 }
 
@@ -1572,12 +1605,9 @@ void main() {
         const bool useIC = pushC.useIrradianceCache;
 
         for (int iSample = 0; iSample < samplesPerPixel; ++iSample) {
-            vec2 inUV = (pixelCenter + vec2(getRandomNegPos(), getRandomNegPos()) / 2.0) / vec2(gl_LaunchSizeEXT.xy);
-            vec2 d = inUV * 2.0 - 1.0;
+            vec3 origin, direction;
+            getCameraRay(pixelCenter, origin, direction);
 
-            vec3 origin = (cam.viewInverse * vec4(0, 0, 0, 1)).xyz;
-            vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-            vec3 direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
             if (pushC.showIrradianceCacheOnly) {
                 result += visualizeIC(origin, direction);
             } else {
@@ -1668,6 +1698,11 @@ void main() {
             } else {
                 saveResult(result);
             }
+            break;
+        }
+        case VISU_GUIDING_ACTIVE_COMPONENTS:
+        {
+            saveResult(getGuidingActiveComponentsVisualization(pixelCenter));
             break;
         }
     }

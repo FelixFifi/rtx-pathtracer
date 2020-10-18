@@ -67,7 +67,8 @@ enum VisualizationMode {
     ESplits = 3,
     EEstimate = 4,
     EGuidingRegions = 5,
-    EGuidingOverlay = 6
+    EGuidingOverlay = 6,
+    EGuidingActiveDistributions = 7
 };
 
 struct CameraMatrices {

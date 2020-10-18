@@ -728,11 +728,14 @@ void RayTracingApp::imGuiWindowSetup() {
     hasRadioButtonChanged |= ImGui::RadioButton("Average Depth", &currentVisualizeMode, EDepthAverage);
     ImGui::SameLine();
     hasRadioButtonChanged |= ImGui::RadioButton("Splits", &currentVisualizeMode, ESplits);
+
     hasRadioButtonChanged |= ImGui::RadioButton("Estimate", &currentVisualizeMode, EEstimate);
     ImGui::SameLine();
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding Regions", &currentVisualizeMode, EGuidingRegions);
     ImGui::SameLine();
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding Overlay", &currentVisualizeMode, EGuidingOverlay);
+
+    hasRadioButtonChanged |= ImGui::RadioButton("Guiding Active Components", &currentVisualizeMode, EGuidingActiveDistributions);
 
     rtPushConstants.visualizeMode = ERayTrace;
 
@@ -811,7 +814,7 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::PushItemWidth(100.0f);
     ImGui::InputInt("Samples for region split",
                     &guiding.samplesForRegionSplit, 10000.0f, 100000.0f);
-    ImGui::PushItemWidth(0.0f);
+    ImGui::PopItemWidth();
 
     hasInputChanged |= ImGui::Checkbox("Update Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
