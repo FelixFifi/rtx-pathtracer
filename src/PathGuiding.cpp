@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <eigen3/Eigen/Eigenvalues>
 #include "guiding/incrementaldistance.h"
 #include "PathGuiding.h"
 
@@ -405,18 +406,34 @@ void PathGuiding::preFit(const std::shared_ptr<std::vector<DirectionalData>> &di
 }
 
 void PathGuiding::postFit(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange) {
-    if (splitAndMerge) {
-        pmmsExtraData[iRegion].samplesSinceLastMerge += sampleRange.size();
+    PMM &pmm = pmms[iRegion];
+    PMM_ExtraData &pmmExtraData = pmmsExtraData[iRegion];
 
-        if (pmmsExtraData[iRegion].samplesSinceLastMerge > minSamplesForMerging) {
-            pmms[iRegion].removeWeightPrior(vmmFactoryProperties.vPrior);
+    if (splitAndMerge) {
+        pmmExtraData.samplesSinceLastMerge += sampleRange.size();
+
+        if (pmmExtraData.samplesSinceLastMerge > minSamplesForMerging) {
+            pmm.removeWeightPrior(vmmFactoryProperties.vPrior);
 
             mergeAll(iRegion, sampleRange);
 
-            pmms[iRegion].applyWeightPrior(vmmFactoryProperties.vPrior);
+            pmm.applyWeightPrior(vmmFactoryProperties.vPrior);
 
-            pmmsExtraData[iRegion].samplesSinceLastMerge = 0;
+            pmmExtraData.samplesSinceLastMerge = 0;
         }
+
+        //update incremental statistics after merging
+        pmmExtraData.incrementalPearsonChiSquared.updateDivergence(pmm, sampleRange);
+        pmmExtraData.incrementalCovariance2D.updateStatistics(pmm, sampleRange);
+
+        const bool firstFit = sampleRange.size() == pmm.m_totalNumSamples;
+        const bool firstFitOrEnoughSamplesForSplitting = firstFit || sampleRange.size() > minSamplesForPostSplitFitting;
+
+        pmm.removeWeightPrior(vmmFactoryProperties.vPrior);
+        //while (split(stats, pmm, samples, pmmFactory, firstFitOrEnoughSamplesForSplitting));
+        splitAll(pmmExtraData, pmm, sampleRange, true, firstFitOrEnoughSamplesForSplitting);
+        pmm.applyWeightPrior(vmmFactoryProperties.vPrior);
+
     }
 
 
@@ -428,12 +445,188 @@ void PathGuiding::postFit(int iRegion, const guiding::Range<std::vector<Directio
 
 }
 
+
+static std::vector<float> computeEigenValuesVectors(lightpmm::Matrix2x2 covmat, std::vector<glm::vec2> &eigenVectors){
+    // https://stackoverflow.com/a/56472351
+    Eigen::Matrix2f mat;
+    mat << covmat[0][0], covmat[1][0],
+           covmat[0][1], covmat[1][1];
+
+    Eigen::EigenSolver<Eigen::MatrixXf> eigensolver;
+    eigensolver.compute(mat);
+    Eigen::VectorXf eigen_values = eigensolver.eigenvalues().real();
+    Eigen::MatrixXf eigen_vectors = eigensolver.eigenvectors().real();
+    std::vector<std::tuple<float, Eigen::VectorXf>> eigen_vectors_and_values;
+
+    for(int i=0; i<eigen_values.size(); i++){
+        std::tuple<float, Eigen::VectorXf> vec_and_val(eigen_values[i], eigen_vectors.row(i));
+        eigen_vectors_and_values.push_back(vec_and_val);
+    }
+    std::sort(eigen_vectors_and_values.begin(), eigen_vectors_and_values.end(),
+              [&](const std::tuple<float, Eigen::VectorXf>& a, const std::tuple<float, Eigen::VectorXf>& b) -> bool{
+                  return std::get<0>(a) <= std::get<0>(b);
+              });
+    int index = 0;
+
+    std::vector<float> eigenValues;
+    for(auto const vect : eigen_vectors_and_values){
+        eigenValues.push_back(std::get<0>(vect));
+        eigenVectors.emplace_back(std::get<1>(vect)[0],std::get<1>(vect)[1]);
+        index++;
+    }
+
+    return eigenValues;
+}
+
+
 /*
 The following functions are an adapted part of the implementation of the SIGGRAPH 2020 paper
 "Robust Fitting of Parallax-Aware Mixtures for Path Guiding".
 
 Copyright (c) 2020 Lukas Ruppert, Sebastian Herholz.
 */
+
+static void splitComponentUsingPCA(PMM_ExtraData& stats, PMM& pmm, const uint32_t component, const float maxKappa)
+{
+    if (EXPECT_NOT_TAKEN(pmm.getK() == PMM::MaxK::value))
+    {
+        SLog("Warn", "Skipping split of component, since the mixture has reached its maximum size.");
+        return;
+    }
+
+#ifdef GUIDING_VALIDATE_INTERMEDIATE_MIXTURE_STATES
+    if (!pmm.valid(pmmFactory.m_vmmFactory.computeMinComponentWeight(pmm.getK())))
+            SLog(EWarn, "invalid mixture state before splitting component %u", component);
+#endif
+
+    const uint32_t sourceIndex = component;
+    const uint32_t targetIndex = pmm.getK();
+
+    VMF& sourceComponent = pmm.getComponent(sourceIndex/Scalar::Width::value);
+    VMF& targetComponent = pmm.getComponent(targetIndex/Scalar::Width::value);
+
+    //Log(EDebug, "splitting component %zu", index);
+
+    const lightpmm::Frame frame{sourceComponent.getMu(component%Scalar::Width::value)};
+
+    const lightpmm::Matrix2x2 covariance = stats.incrementalCovariance2D.computeCovarianceMatrix(component);
+
+    std::vector<float> eigenValues;
+    std::vector<glm::vec2> eigenVectors;
+    eigenValues = computeEigenValuesVectors(covariance, eigenVectors);
+
+    const int maxEigValIndex = eigenValues[1] > eigenValues[0];
+    const float oneHalfSigmaOffset = std::min(1.0f, 0.5f*sqrt(eigenValues[maxEigValIndex]));
+
+    lightpmm::Vector2 principalComponentDir = eigenVectors[maxEigValIndex];
+    principalComponentDir *= oneHalfSigmaOffset;
+
+    const float z = std::sqrt(1.0f-oneHalfSigmaOffset*oneHalfSigmaOffset);
+
+    const lightpmm::Vector3 splitMuA {frame.toWorld({ principalComponentDir.x,  principalComponentDir.y, z})};
+    const lightpmm::Vector3 splitMuB {frame.toWorld({-principalComponentDir.x, -principalComponentDir.y, z})};
+
+    pmm.setK(targetIndex+1);
+
+    const float sourceAvgCosine = sourceComponent.getR()[sourceIndex%Scalar::Width::value];
+    const float sourceWeight = sourceComponent.getWeight(sourceIndex%Scalar::Width::value);
+
+    const float splitWeight = sourceWeight*0.5f;
+    //using this concentration, an immediate merge would recreate the original component
+    const float maxAvgCosine = lightpmm::kappaToMeanCosine(maxKappa);
+    const float splitAvgCosine = (z > 0.0f) ? std::min(maxAvgCosine, sourceAvgCosine/z) : maxAvgCosine;
+    const float splitKappa = lightpmm::meanCosineToKappa(splitAvgCosine);
+
+    sourceComponent.setKappaAndR(sourceIndex%Scalar::Width::value, splitKappa, splitAvgCosine);
+    sourceComponent.setMu(sourceIndex%Scalar::Width::value,        splitMuA);
+    sourceComponent.setWeight(sourceIndex%Scalar::Width::value,    splitWeight);
+
+    targetComponent.setKappaAndR(targetIndex%Scalar::Width::value, splitKappa, splitAvgCosine);
+    targetComponent.setMu(targetIndex%Scalar::Width::value,        splitMuB);
+    targetComponent.setWeight(targetIndex%Scalar::Width::value,    splitWeight);
+
+    stats.incrementalDistance.split(pmm, component);
+    stats.incrementalPearsonChiSquared.split(pmm, component);
+    stats.incrementalCovariance2D.split(pmm, component);
+
+#ifdef GUIDING_VALIDATE_INTERMEDIATE_MIXTURE_STATES
+    if (!pmm.valid(pmmFactory.m_vmmFactory.computeMinComponentWeight(pmm.getK())))
+            SLog(EWarn, "error occured after splitting component %u", component);
+#endif
+}
+
+uint32_t PathGuiding::splitAll(PMM_ExtraData& stats, PMM& pmm, const guiding::Range<std::vector<DirectionalData>>& samples, const bool iterative=true, const bool fit=true)
+{
+    if (EXPECT_NOT_TAKEN(pmm.getK() >= PMM::MaxK::value))
+        return false;
+
+    const bool firstFit = samples.size() == pmm.m_totalNumSamples;
+    uint32_t totalNumSplits = 0;
+    uint32_t numSplits = 0;
+
+    do
+    {
+        const uint32_t numActiveKernels = (pmm.getK()+Scalar::Width::value-1)/Scalar::Width::value;
+
+        const std::array<Scalar, PMM::NumKernels::value> divergence = stats.incrementalPearsonChiSquared.computeDivergence(pmm);
+        std::array<std::pair<float, uint32_t>, PMM::MaxK::value> splitCandidates;
+        for (uint32_t k=0; k<numActiveKernels; ++k)
+        {
+            const typename Scalar::BooleanType seenEnoughSamples = stats.incrementalPearsonChiSquared.numSamples[k] > minSamplesForSplitting;
+            const Scalar weightedDivergence = lightpmm::ifthen(firstFit || seenEnoughSamples, divergence[k]*pmm.getComponent(k).m_weights, 0.0f);
+            for (uint32_t i=0; i<Scalar::Width::value; ++i)
+                splitCandidates[k*Scalar::Width::value+i] = std::make_pair(fabs(weightedDivergence[i]), k*Scalar::Width::value+i);
+        }
+
+        const auto lastCandidateIterator = std::partition(splitCandidates.begin(), splitCandidates.begin()+pmm.getK(),
+                                                          [this](const std::pair<float, uint32_t> divergenceAndIndex) -> bool { return divergenceAndIndex.first >= splitMinDivergence; });
+
+        const uint32_t numSplitCandidates = std::distance(splitCandidates.begin(), lastCandidateIterator);
+        const uint32_t maxNumSplits = PMM::MaxK::value-pmm.getK();
+        numSplits = std::min(numSplitCandidates, maxNumSplits);
+
+        if (numSplits == 0)
+            break;
+
+        if (numSplitCandidates > numSplits)
+            std::partial_sort(splitCandidates.begin(), splitCandidates.begin()+numSplits, lastCandidateIterator,
+                              [](const std::pair<float, uint32_t> a, const std::pair<float, uint32_t> b) -> bool { return a.first > b.first; });
+
+        std::array<typename Scalar::BooleanType, PMM::NumKernels::value> modifedComponentMask;
+        std::fill(modifedComponentMask.begin(), modifedComponentMask.end(), typename Scalar::BooleanType{false});
+
+        for (uint32_t i=0; i<numSplits; ++i)
+        {
+            modifedComponentMask[splitCandidates[i].second/Scalar::Width::value].insert(splitCandidates[i].second%Scalar::Width::value, true);
+            modifedComponentMask[pmm.getK()/Scalar::Width::value].insert(pmm.getK()%Scalar::Width::value, true);
+
+            splitComponentUsingPCA(stats, pmm, splitCandidates[i].second, vmmFactory.m_properties.maxKappa);
+        }
+
+        //repeated splitting requires fitting after each split unless all splits are determined beforehand.
+        //otherwise, the same component is split over and over again and fitting all the split components becomes increasingly difficult
+
+        //using the masked fit to fit only the splitted components
+        if (fit)
+        {
+            pmm.applyWeightPrior(vmmFactoryProperties.vPrior);
+            vmmFactory.maskedFit(samples.begin(), samples.end(), pmm, modifedComponentMask);
+            stats.incrementalPearsonChiSquared.updateDivergenceMasked(pmm, samples, modifedComponentMask);
+            stats.incrementalCovariance2D.updateStatisticsMasked(pmm, samples, modifedComponentMask);
+            pmm.removeWeightPrior(vmmFactoryProperties.vPrior);
+        }
+
+        totalNumSplits += numSplits;
+    }
+    while (iterative);
+
+#ifdef GUIDING_DETAILED_STATISTICS
+    avgNumSplits += totalNumSplits;
+#endif
+
+    return totalNumSplits;
+}
+
 bool PathGuiding::mergeAll(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange) {
     uint32_t totalNumMerges = 0;
 
@@ -568,8 +761,7 @@ PathGuiding::computePearsonChiSquaredMergeMetric(const PMM &distribution) {
     return similarityValues;
 }
 
-void PathGuiding::mergeComponents(int iRegion, const uint32_t componentA, const uint32_t componentB)
-{
+void PathGuiding::mergeComponents(int iRegion, const uint32_t componentA, const uint32_t componentB) {
 #ifdef GUIDING_VALIDATE_INTERMEDIATE_MIXTURE_STATES
     const uint32_t numComponents = pmm.getK();
 

@@ -160,6 +160,8 @@ private:
 
     PathGuiding guiding;
     bool enableParallaxCompensationForOptimization = true;
+    int numGuidingOptimizations = 6;
+    int currentGuidingOptimizations = -1;
     uint guidingSplits;
     SampleCollector sampleCollector;
 

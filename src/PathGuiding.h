@@ -20,7 +20,7 @@
 
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
-#define MAX_DISTRIBUTIONS 8
+#define MAX_DISTRIBUTIONS 32
 
 // Taken from lightpmm/VMFKernel.h
 // the minumum value of kappa before it gets set to 0.0 for numerical stability
@@ -123,7 +123,10 @@ public:
     int samplesForRegionSplit = 10000;
 
     bool splitAndMerge = true;
-    int minSamplesForMerging = 8192;
+    size_t minSamplesForMerging = 8192;
+    size_t minSamplesForSplitting {4096};
+    int minSamplesForPostSplitFitting = 4096;
+    float splitMinDivergence {0.5f};
     float mergeMaxDivergence {0.025f};
 
     PathGuiding() = default;
@@ -175,10 +178,12 @@ private:
     bool mergeAll(int iRegion, const guiding::Range<std::vector<DirectionalData>> &sampleRange);
 
     static std::array<float, PMM::MaxK::value * (PMM::MaxK::value - 1) / 2> computePearsonChiSquaredMergeMetric(
-            const lightpmm::ParametricMixtureModel<lightpmm::VMFKernel<lightpmm::Scalar4>,
-                    8 / Scalar::Width::value> &distribution);
+            const PMM &distribution);
 
     void mergeComponents(int iRegion, const uint32_t componentA, const uint32_t componentB);
+
+    uint32_t splitAll(PMM_ExtraData &stats, PMM &pmm, const guiding::Range<std::vector<DirectionalData>> &samples,
+                      const bool iterative, const bool fit);
 };
 
 

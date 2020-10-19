@@ -47,6 +47,7 @@ PMM_NAMESPACE_BEGIN
 
 // Wrapping glm main data types
     typedef glm::vec3 Vector3;
+    typedef glm::vec2 Vector2;
     typedef glm::vec3 Point3;
     typedef glm::vec2 Point2;
     typedef glm::mat2x2 Matrix2x2;
@@ -122,8 +123,12 @@ PMM_NAMESPACE_BEGIN
             coordinateAxis(z, x, y);
         }
 
-        Vector3 toLocal(Vector3 v) {
+        Vector3 toLocal(Vector3 v) const {
             return Vector3(dot(v, x), dot(v, y), dot(v, z));
+        }
+
+        Vector3 toWorld(Vector3 v) const {
+            return v.x * x + v.y * y + v.z * z;
         }
     };
 

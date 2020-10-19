@@ -89,6 +89,23 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     cameraController.resetStatus();
 
+    // Limit number of guiding optimizations
+    if (rtPushConstants.updateGuiding) {
+        if (currentGuidingOptimizations == -1) {
+            currentGuidingOptimizations = 0;
+        } else {
+            currentGuidingOptimizations++;
+        }
+
+        if (numGuidingOptimizations != -1 && currentGuidingOptimizations >= numGuidingOptimizations) {
+            rtPushConstants.updateGuiding = 0;
+            currentGuidingOptimizations = -1;
+        }
+    } else {
+        currentGuidingOptimizations = -1;
+    }
+
+
     if (rtPushConstants.updateGuiding > 0) {
         if (guiding.update(sampleCollector)) {
             // Region split occurred
@@ -818,6 +835,13 @@ void RayTracingApp::imGuiWindowSetup() {
 
     hasInputChanged |= ImGui::Checkbox("Update Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.updateGuiding));
+    ImGui::SameLine();
+    ImGui::PushItemWidth(100.0f);
+
+    ImGui::InputInt("times", &numGuidingOptimizations, 1, 10);
+
+    ImGui::PopItemWidth();
+
     needSceneReload |= ImGui::Checkbox("Use Parallax Compensation for Optimization",
                                        &enableParallaxCompensationForOptimization);
 

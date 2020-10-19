@@ -912,6 +912,10 @@ float getNewDirection(Material mat, vec3 origin, vec3 normal, vec3 wi, out vec3 
 
         float pdfGuiding = VMM(newDirection, vmmTheta, origin, pushC.useParallaxCompensation);
 
+        if (isnan(pdfGuiding)) {
+            return sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
+        }
+
         pdf = mix(pdfMat, pdfGuiding, pushC.guidingProb);
     } else {
         pdf = sampleBSDF(mat, wi, normal, info.isFrontFace, newDirection);
