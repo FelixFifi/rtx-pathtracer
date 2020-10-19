@@ -42,7 +42,7 @@ float vMF(vec3 wo, VMF_Theta theta, vec3 worldPos, bool useParallaxCompensation)
     return theta.norm * exp(theta.k * (dot(mu, wo) - 1));
 }
 
-#define MAX_DISTRIBUTIONS 32
+#define MAX_DISTRIBUTIONS 16
 
 
 struct VMM_Theta {

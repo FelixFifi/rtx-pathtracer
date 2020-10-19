@@ -20,7 +20,7 @@
 
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
 
-#define MAX_DISTRIBUTIONS 32
+#define MAX_DISTRIBUTIONS 16
 
 // Taken from lightpmm/VMFKernel.h
 // the minumum value of kappa before it gets set to 0.0 for numerical stability

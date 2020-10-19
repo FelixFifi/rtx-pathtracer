@@ -9,6 +9,7 @@
 #include "transform.glsl"
 #include "guiding.glsl"
 #include "random.glsl"
+#include "guiding.visu.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
 #define M_INV_PI 1.0 / M_PI
@@ -37,6 +38,7 @@
 #define VISU_GUIDING_REGIONS 5
 #define VISU_GUIDING_OVERLAY 6
 #define VISU_GUIDING_ACTIVE_COMPONENTS 7
+#define VISU_GUIDING_PIP 8
 
 #define PAYLOAD_HIT 0
 #define PAYLOAD_SHADOW 1
@@ -120,6 +122,7 @@ layout(binding = 12, set = 1, std430) buffer CacheSpheres { sphere cacheSpheres[
 layout(binding = 13, set = 1, scalar) buffer Cache { cacheHeader header; cacheData cache[]; };
 layout(binding = 14, set = 1, rgba32f) uniform image2D estimateImage;
 // Guiding
+layout(binding = 15, set = 1, scalar) buffer GuidingAabbs { aabb guidingAabbs[]; };
 layout(binding = 16, set = 1, scalar) buffer Guiding { VMM_Theta guidingVMM[]; };
 layout(binding = 17, set = 1) uniform accelerationStructureEXT guidingAS;
 layout(binding = 18, set = 1, scalar) buffer SampleCollector { DirectionalData directionalData[]; };
@@ -869,7 +872,7 @@ uint getGuidingRegion(vec3 origin) {
     guidingInfos.iRegion = -1;
 
     traceRayEXT(guidingAS, // acceleration structure
-    gl_RayFlagsTerminateOnFirstHitEXT, // The current position should always only be in one guiding region
+    gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, // The current position should always only be in one guiding region
     0xFF, // cullMask
     0, // sbtRecordOffset
     0, // sbtRecordStride
@@ -1443,11 +1446,20 @@ void getCameraRay(const vec2 pixelCenter, out vec3 origin, out vec3 direction) {
     direction = normalize((cam.viewInverse * vec4(normalize(target.xyz), 0)).xyz);
 }
 
-bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out vec3 color) {
+vec3 colormapGuiding(float value) {
+    if (value < 0.5) {
+        return mix(vec3(0, 0, 1), vec3(0, 1, 0), 2 * value);
+    } else {
+        return mix(vec3(0, 1, 0), vec3(1, 0, 0), 2 * (value - 0.5));
+    }
+}
+
+bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, int regionFilter, out vec3 color) {
     vec3 origin, direction;
     getCameraRay(pixelCenter, origin, direction);
 
     guidingVisuInfos.isMiss = true;
+    guidingVisuInfos.iRegion = regionFilter;
 
     traceRayEXT(guidingAS, // acceleration structure
     rayFlags, // rayFlags
@@ -1472,11 +1484,8 @@ bool getGuidingDistributionVisualization(const vec2 pixelCenter, float maxT, out
     value = min(1.0, value / pushC.guidingVisuMax);
 
     // Generate color
-    if (value < 0.5) {
-        color = mix(vec3(0, 0, 1), vec3(0, 1, 0), 2 * value);
-    } else {
-        color = mix(vec3(0, 1, 0), vec3(1, 0, 0), 2 * (value - 0.5));
-    }
+    color = colormapGuiding(value);
+
     return true;
 }
 
@@ -1549,7 +1558,7 @@ void saveEstimate(vec3 result) {
 }
 
 bool visualizeModeNeedsRaytracing() {
-    if (pushC.visualizeMode < VISU_ESTIMATE || pushC.visualizeMode == VISU_GUIDING_OVERLAY) {
+    if (pushC.visualizeMode < VISU_ESTIMATE || pushC.visualizeMode == VISU_GUIDING_OVERLAY || pushC.visualizeMode == VISU_GUIDING_PIP) {
         return true;
     } else {
         return false;
@@ -1697,7 +1706,7 @@ void main() {
             vec3 guidingColor;
             float maxT = pushC.guidingVisuIgnoreOcclusioon ? tMax : firstT;
 
-            if (getGuidingDistributionVisualization(pixelCenter, maxT, guidingColor)) {
+            if (getGuidingDistributionVisualization(pixelCenter, maxT, -1, guidingColor)) {
                 saveResult(guidingColor);
             } else {
                 saveResult(result);
@@ -1707,6 +1716,55 @@ void main() {
         case VISU_GUIDING_ACTIVE_COMPONENTS:
         {
             saveResult(getGuidingActiveComponentsVisualization(pixelCenter));
+            break;
+        }
+        case VISU_GUIDING_PIP:
+        {
+            const float pipSize = pushC.guidingPiPSize;
+            int iRegion = pushC.guidingPiPHighlightRegion % pushC.numGuidingRegions;
+
+            if (gl_LaunchIDEXT.x > gl_LaunchSizeEXT.x * (1.0 - pipSize) && gl_LaunchIDEXT.y > gl_LaunchSizeEXT.y * (1.0 - pipSize)) {
+                // PiP mode
+                vec2 newCoord = (gl_LaunchIDEXT.xy - gl_LaunchSizeEXT.xy * (1.0 - pipSize)) / (gl_LaunchSizeEXT.xy * pipSize);
+
+                // Center for guiding visu sphere
+                aabb bb = guidingAabbs[iRegion];
+                vec3 extent = bb.max - bb.min;
+                float radius = min(extent.x, min(extent.y, extent.z)) * 0.5 * pushC.guidingVisuScale;
+
+                vec3 center;
+                if (pushC.guidingVisuMove) {
+                    center = getVisuCenter(pushC.time, pushC.guidingVisuPhiScale, pushC.guidingVisuThetaScale, bb, radius);
+                } else {
+                    center = bb.min + 0.5 * extent;
+                }
+
+                // Direction is coordinate dependent
+                vec3 direction = sphericalToCartesian(newCoord.y * M_PI, newCoord.x * 2 * M_PI);
+
+                // VMM value
+                VMM_Theta vmmTheta = guidingVMM[iRegion];
+                float value = VMM(direction, vmmTheta, center, pushC.useParallaxCompensation);
+
+                // Normalize to range [0,1]
+                value = min(1.0, value / pushC.guidingVisuMax);
+
+                saveResult(colormapGuiding(value));
+            } else {
+                // Normal mode
+                if (pushC.guidingPiPShowSpheres) {
+                    vec3 guidingColor;
+                    float maxT = pushC.guidingVisuIgnoreOcclusioon ? tMax : firstT;
+
+                    if (getGuidingDistributionVisualization(pixelCenter, maxT, iRegion, guidingColor)) {
+                        saveResult(guidingColor);
+                    } else {
+                        saveResult(result);
+                    }
+                } else {
+                    saveResult(result);
+                }
+            }
             break;
         }
     }

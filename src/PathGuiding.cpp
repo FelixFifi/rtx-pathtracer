@@ -156,7 +156,7 @@ void PathGuiding::createAS() {
     std::vector<nvvkpp::RaytracingBuilderKHR::Blas> allBlas;
 
     allBlas.emplace_back(
-            aabbToBlas(device, aabbs.size(), aabbsBuffer, vk::GeometryFlagBitsKHR::eOpaque));
+            aabbToBlas(device, aabbs.size(), aabbsBuffer, vk::GeometryFlagBitsKHR::eNoDuplicateAnyHitInvocation));
 
     const vk::BuildAccelerationStructureFlagsKHR &asFlags =
             vk::BuildAccelerationStructureFlagBitsKHR::eAllowUpdate |
@@ -181,7 +181,8 @@ void PathGuiding::createAS() {
 std::array<vk::DescriptorSetLayoutBinding, 3> PathGuiding::getDescriptorSetLayouts() {
     vk::DescriptorSetLayoutBinding bufferAabbs{BINDING_AABB, vk::DescriptorType::eStorageBuffer, 1,
                                                vk::ShaderStageFlagBits::eIntersectionKHR |
-                                               vk::ShaderStageFlagBits::eClosestHitKHR};
+                                               vk::ShaderStageFlagBits::eClosestHitKHR|
+                                               vk::ShaderStageFlagBits::eRaygenKHR};
     vk::DescriptorSetLayoutBinding bufferGuiding{BINDING_GUIDING, vk::DescriptorType::eStorageBuffer, 1,
                                                  vk::ShaderStageFlagBits::eRaygenKHR};
     vk::DescriptorSetLayoutBinding bindingAS{BINDING_AS, vk::DescriptorType::eAccelerationStructureKHR, 1,

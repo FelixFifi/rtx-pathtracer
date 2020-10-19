@@ -68,7 +68,8 @@ enum VisualizationMode {
     EEstimate = 4,
     EGuidingRegions = 5,
     EGuidingOverlay = 6,
-    EGuidingActiveDistributions = 7
+    EGuidingActiveDistributions = 7,
+    EGuidingPiP = 8
 };
 
 struct CameraMatrices {
@@ -131,6 +132,10 @@ public:
         int guidingVisuMove = 0;
         float guidingVisuPhiScale = 0.004f;
         float guidingVisuThetaScale = 0.01f;
+        int numGuidingRegions;
+        int guidingPiPHighlightRegion = 0;
+        int guidingPiPShowSpheres = 1;
+        float guidingPiPSize = 0.3f;
     } rtPushConstants;
 
 private:

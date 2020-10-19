@@ -509,6 +509,7 @@ void RayTracingApp::createRtPipeline() {
     auto guidingIntCode = readFile("shaders/raytrace.guiding.rint.spv");
     auto guidingVisualizeChitCode = readFile("shaders/raytrace.guiding.visualize.rchit.spv");
     auto guidingVisualizeIntCode = readFile("shaders/raytrace.guiding.visualize.rint.spv");
+    auto guidingVisualizeAhitCode = readFile("shaders/raytrace.guiding.visualize.rahit.spv");
 
     vk::ShaderModule raygenShaderModule = vulkanOps->createShaderModule(raygenCode);
     vk::ShaderModule missShaderModule = vulkanOps->createShaderModule(missCode);
@@ -524,6 +525,7 @@ void RayTracingApp::createRtPipeline() {
     vk::ShaderModule guidingIntShaderModule = vulkanOps->createShaderModule(guidingIntCode);
     vk::ShaderModule guidingVisualizeChitShaderModule = vulkanOps->createShaderModule(guidingVisualizeChitCode);
     vk::ShaderModule guidingVisualizeIntShaderModule = vulkanOps->createShaderModule(guidingVisualizeIntCode);
+    vk::ShaderModule guidingVisualizeAhitShaderModule = vulkanOps->createShaderModule(guidingVisualizeAhitCode);
 
     std::vector<vk::PipelineShaderStageCreateInfo> stages;
 
@@ -618,6 +620,9 @@ void RayTracingApp::createRtPipeline() {
 
     stages.push_back({{}, vk::ShaderStageFlagBits::eClosestHitKHR, guidingVisualizeChitShaderModule, "main"});
     hg5.setClosestHitShader(static_cast<uint32_t>(stages.size() - 1));
+
+    stages.push_back({{}, vk::ShaderStageFlagBits::eAnyHitKHR, guidingVisualizeAhitShaderModule, "main"});
+    hg5.setAnyHitShader(static_cast<uint32_t>(stages.size() - 1));
     rtShaderGroups.push_back(hg5);
 
 
@@ -754,6 +759,13 @@ void RayTracingApp::imGuiWindowSetup() {
 
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding Active Components", &currentVisualizeMode, EGuidingActiveDistributions);
 
+    hasRadioButtonChanged |= ImGui::RadioButton("Guiding PiP of region", &currentVisualizeMode, EGuidingPiP);
+    ImGui::SameLine();
+    ImGui::PushItemWidth(100.0f);
+    ImGui::InputInt("",
+                    &rtPushConstants.guidingPiPHighlightRegion, 1, 10);
+    ImGui::PopItemWidth();
+
     rtPushConstants.visualizeMode = ERayTrace;
 
     if (showOtherVisualizations) {
@@ -863,6 +875,10 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.guidingVisuMax, 0.0f, 50.0f);
     hasInputChanged |= ImGui::Checkbox("Guiding Visu Ignore Occlusion",
                                        reinterpret_cast<bool *>(&rtPushConstants.guidingVisuIgnoreOcclusioon));
+    hasInputChanged |= ImGui::Checkbox("Guiding PiP show spheres",
+                                       reinterpret_cast<bool *>(&rtPushConstants.guidingPiPShowSpheres));
+    hasInputChanged |= ImGui::SliderFloat("Guiding PiP size",
+                                          &rtPushConstants.guidingPiPSize, 0.0f, 1.0f);
     ImGui::End();
 }
 
@@ -899,6 +915,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     }
 
     rtPushConstants.time = (std::chrono::high_resolution_clock::now() - startTime).count() / 10000000.f;
+    rtPushConstants.numGuidingRegions = guiding.getRegionCount();
 
     cmdBuf.bindPipeline(vk::PipelineBindPoint::eRayTracingKHR, rtPipeline);
     cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingKHR, rtPipelineLayout, 0,
