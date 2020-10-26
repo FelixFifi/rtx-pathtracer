@@ -35,9 +35,16 @@ SceneLoader::SceneLoader(const std::string &filepath, std::shared_ptr<VulkanOps>
 
     // Set folders to search for models/materials/textures
     std::filesystem::path directory = path.parent_path();
-    modelsBaseDir = directory / MODELS_BASE_DIR;
-    materialBaseDir = directory / MATERIAL_BASE_DIR;
-    textureBaseDir = directory / TEXTURE_BASE_DIR;
+    if (path.extension().string() == ".xml") {
+        // XML scenes should be compatible with mitsuba
+        modelsBaseDir = directory;
+        materialBaseDir = directory;
+        textureBaseDir = directory;
+    } else {
+        modelsBaseDir = directory / MODELS_BASE_DIR;
+        materialBaseDir = directory / MATERIAL_BASE_DIR;
+        textureBaseDir = directory / TEXTURE_BASE_DIR;
+    }
 
 
     // Reserve position for EnvMap

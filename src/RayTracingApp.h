@@ -38,10 +38,10 @@
 #include "SampleCollector.h"
 
 const std::vector<std::string> SCENES{
+        "irradianceCache/irradianceCache.xml",
         "cornell-dielectric/cornell-dielectric-path.json",
         "cornell/cornell.json",
         "fireplace/fireplace.json",
-        "irradianceCache/irradianceCache.xml",
         "veachMIS/veachMIS.xml",
         "miPhong/miPhong.xml",
         "roughConductor/roughConductor.xml",
