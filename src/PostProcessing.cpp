@@ -327,7 +327,7 @@ void PostProcessing::saveOffscreenImage(const std::string &filepath) {
 
     cmd.copyImageToBuffer(offscreenImage, vk::ImageLayout::eGeneral, copyBuffer, region);
 
-    vulkanOps->endSingleTimeCommands(cmd);
+    vulkanOps->endSingleTimeCommands(cmd, nullptr);
 
     void *data = device.mapMemory(copyBufferMemory, 0, bufferSize);
 

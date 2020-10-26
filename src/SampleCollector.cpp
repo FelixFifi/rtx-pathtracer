@@ -43,6 +43,10 @@ void SampleCollector::createBuffers() {
     bufferSize = sizeof(DirectionalData) * sampleCount;
     vulkanOps->createBuffer(bufferSize, usageHost, memoryFlagsHost, hostDirectionalDataBuffer,
                             hostDirectionalDataBufferMemory);
+
+
+    vulkanOps->setBufferName(directionalDataBuffer, "B: SampleCollector Directional Data");
+    vulkanOps->setBufferName(hostDirectionalDataBuffer, "B: SampleCollector Directional Data Host");
 }
 
 std::array<vk::DescriptorSetLayoutBinding, 1> SampleCollector::getDescriptorSetLayouts() {
@@ -69,7 +73,7 @@ std::array<vk::WriteDescriptorSet, 1> SampleCollector::getWriteDescriptorSets(co
 }
 
 std::shared_ptr<std::vector<DirectionalData>> SampleCollector::getSortedData(std::vector<uint32_t> &outRegionIndices) {
-    vulkanOps->copyBuffer(directionalDataBuffer, hostDirectionalDataBuffer, bufferSize);
+    vulkanOps->copyBuffer(directionalDataBuffer, hostDirectionalDataBuffer, bufferSize, "Copy directional data to host");
 
     void *data;
     data = device.mapMemory(hostDirectionalDataBufferMemory, 0, bufferSize);

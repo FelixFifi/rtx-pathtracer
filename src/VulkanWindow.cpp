@@ -217,7 +217,7 @@ void VulkanWindow::setupImGui() {
 
     ImGui_ImplVulkan_CreateFontsTexture(cmdBuf);
 
-    vulkanOps->endSingleTimeCommands(cmdBuf);
+    vulkanOps->endSingleTimeCommands(cmdBuf, nullptr);
 
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 }

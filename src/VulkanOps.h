@@ -75,7 +75,7 @@ public:
         VulkanOps::createBuffer(bufferSize, _usage,
                                 memoryProperties, outBuffer, outMemory);
 
-        VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize);
+        VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize, nullptr);
 
         device.destroy(stagingBuffer);
         device.freeMemory(stagingBufferMemory);
@@ -109,13 +109,13 @@ public:
         VulkanOps::createBuffer(bufferSize, usage,
                                 memoryProperties, outBuffer, outMemory);
 
-        VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize);
+        VulkanOps::copyBuffer(stagingBuffer, outBuffer, bufferSize, nullptr);
 
         device.destroy(stagingBuffer);
         device.freeMemory(stagingBufferMemory);
     }
 
-    void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
+    void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, uint64_t size, const char *label);
 
     void createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,
                      const vk::ImageUsageFlags &usage,
@@ -126,7 +126,7 @@ public:
 
     vk::CommandBuffer beginSingleTimeCommands();
 
-    void endSingleTimeCommands(vk::CommandBuffer commandBuffer);
+    void endSingleTimeCommands(vk::CommandBuffer commandBuffer, const char *label);
 
     uint32_t findMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties);
 
@@ -181,6 +181,10 @@ public:
 
         outImageView = createImageView(outImage, format, vk::ImageAspectFlagBits::eColor);
     }
+
+    void setBufferName(const vk::Buffer &buffer, const char *name);
+
+    void setObjectName(uint64_t object, vk::ObjectType objectType, const char *name);
 };
 
 #endif //RTX_RAYTRACER_VULKANOPS_H

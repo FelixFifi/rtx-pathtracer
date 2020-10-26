@@ -26,13 +26,23 @@ void VulkanOps::createBuffer(uint64_t size, const vk::BufferUsageFlags &usage,
     device.bindBufferMemory(buffer, bufferMemory, 0);
 }
 
-void VulkanOps::copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, uint64_t size) {
+void VulkanOps::copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, uint64_t size, const char *label) {
     vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+    if (label) {
+        vk::DebugUtilsLabelEXT vkLabel;
+        vkLabel.pLabelName = label;
+        commandBuffer.beginDebugUtilsLabelEXT(vkLabel);
+    }
 
     vk::BufferCopy copyRegion(0, 0, size);
     commandBuffer.copyBuffer(srcBuffer, dstBuffer, copyRegion);
 
-    endSingleTimeCommands(commandBuffer);
+    if (label) {
+        commandBuffer.endDebugUtilsLabelEXT();
+    }
+
+    endSingleTimeCommands(commandBuffer, label);
 }
 
 void VulkanOps::createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,
@@ -122,7 +132,7 @@ VulkanOps::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLa
 
     commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    VulkanOps::endSingleTimeCommands(commandBuffer);
+    VulkanOps::endSingleTimeCommands(commandBuffer, nullptr);
 }
 
 bool VulkanOps::hasStencilComponent(vk::Format format) {
@@ -156,7 +166,7 @@ void VulkanOps::copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t w
 
     commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
 
-    VulkanOps::endSingleTimeCommands(commandBuffer);
+    VulkanOps::endSingleTimeCommands(commandBuffer, nullptr);
 }
 
 vk::CommandBuffer VulkanOps::beginSingleTimeCommands() {
@@ -171,14 +181,25 @@ vk::CommandBuffer VulkanOps::beginSingleTimeCommands() {
     return commandBuffer;
 }
 
-void VulkanOps::endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
+void VulkanOps::endSingleTimeCommands(vk::CommandBuffer commandBuffer, const char *label) {
     commandBuffer.end();
+
+    if (label) {
+        vk::DebugUtilsLabelEXT queueLabel;
+        queueLabel.pLabelName = label;
+
+        graphicsQueue.beginDebugUtilsLabelEXT(queueLabel);
+    }
 
     vk::SubmitInfo submitInfo(0, nullptr, {},
                               1, &commandBuffer, 0, nullptr);
 
     graphicsQueue.submit(submitInfo, nullptr);
     graphicsQueue.waitIdle();
+
+    if (label) {
+        graphicsQueue.endDebugUtilsLabelEXT();
+    }
 
     device.freeCommandBuffers(commandPool, commandBuffer);
 }
@@ -209,4 +230,16 @@ VulkanOps::VulkanOps(const vk::SurfaceKHR &surface, const vk::PhysicalDevice &ph
 
 const vk::Device &VulkanOps::getDevice() const {
     return device;
+}
+
+void VulkanOps::setObjectName(uint64_t object, vk::ObjectType objectType, const char *name) {
+    vk::DebugUtilsObjectNameInfoEXT nameInfo = {};
+    nameInfo.objectType = objectType;
+    nameInfo.pObjectName = name;
+    nameInfo.objectHandle = object;
+    device.setDebugUtilsObjectNameEXT(nameInfo);
+}
+
+void VulkanOps::setBufferName(const vk::Buffer &buffer, const char *name) {
+    setObjectName((uint64_t)(VkBuffer)buffer, vk::Buffer::objectType, name);
 }

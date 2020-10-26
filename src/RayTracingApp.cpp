@@ -79,7 +79,7 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     vk::CommandBuffer cmdBuf = vulkanOps->beginSingleTimeCommands();
 
     raytrace(cmdBuf);
-    vulkanOps->endSingleTimeCommands(cmdBuf);
+    vulkanOps->endSingleTimeCommands(cmdBuf, nullptr);
 
     device.waitIdle();
 
@@ -668,6 +668,7 @@ void RayTracingApp::createRtPipeline() {
     device.destroy(guidingChitShaderModule);
     device.destroy(guidingVisualizeIntShaderModule);
     device.destroy(guidingVisualizeChitShaderModule);
+    device.destroy(guidingVisualizeAhitShaderModule);
 }
 
 void RayTracingApp::createRtShaderBindingTable() {
@@ -708,7 +709,7 @@ void RayTracingApp::createRtShaderBindingTable() {
     vulkanOps->createBuffer(sbtSize, usage,
                             vk::MemoryPropertyFlagBits::eDeviceLocal, rtSBTBuffer, rtSBTBufferMemory);
 
-    vulkanOps->copyBuffer(stagingBuffer, rtSBTBuffer, sbtSize);
+    vulkanOps->copyBuffer(stagingBuffer, rtSBTBuffer, sbtSize, nullptr);
 
     device.destroy(stagingBuffer);
     device.freeMemory(stagingBufferMemory);

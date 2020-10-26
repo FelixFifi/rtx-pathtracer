@@ -67,6 +67,11 @@ void IrradianceCache::createBuffers() {
     std::vector<CacheHeader> singleHeader{header};
 
     vulkanOps->createBufferFrom2Data(singleHeader, cacheValues, usage, memoryFlags, cacheBuffer, cacheBufferMemory);
+
+
+    vulkanOps->setBufferName(aabbsBuffer, "B: IC AABBs");
+    vulkanOps->setBufferName(spheresBuffer, "B: IC Spheres");
+    vulkanOps->setBufferName(cacheBuffer, "B: IC Cache");
 }
 
 void IrradianceCache::updateSpheres() {

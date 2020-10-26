@@ -32,7 +32,8 @@ const std::vector<const char *> deviceExtensions = {
 };
 
 const std::vector<const char *> instanceExtensions = {
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 };
 
 const int MAX_FRAMES_IN_FLIGHT = 2;

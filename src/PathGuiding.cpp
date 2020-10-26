@@ -150,6 +150,10 @@ void PathGuiding::createBuffers() {
                                     vk::MemoryPropertyFlagBits::eHostVisible |
                                     vk::MemoryPropertyFlagBits::eHostCoherent, guidingUpdateBuffer,
                                     guidingUpdateBufferMemory);
+
+    vulkanOps->setBufferName(aabbsBuffer, "B: Guiding regions AABBs");
+    vulkanOps->setBufferName(guidingBuffer, "B: Guiding data device");
+    vulkanOps->setBufferName(guidingUpdateBuffer, "B: Guiding update host");
 }
 
 void PathGuiding::createAS() {
@@ -318,7 +322,7 @@ void PathGuiding::syncToGPU() {
 
     device.unmapMemory(guidingUpdateBufferMemory);
 
-    vulkanOps->copyBuffer(guidingUpdateBuffer, guidingBuffer, bufferSize);
+    vulkanOps->copyBuffer(guidingUpdateBuffer, guidingBuffer, bufferSize, nullptr);
 }
 
 void PathGuiding::splitRegion(int iRegion) {

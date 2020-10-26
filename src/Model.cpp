@@ -25,6 +25,10 @@ void Model::createBuffers(const std::shared_ptr<VulkanOps> &vulkanOps) {
             vk::BufferUsageFlagBits::eShaderDeviceAddressKHR | vk::BufferUsageFlagBits::eTransferDst;
     memoryProperties = vk::MemoryPropertyFlagBits::eDeviceLocal;
     vulkanOps->createBufferFromData(indices, usage, memoryProperties, indexBuffer, indexBufferMemory);
+
+
+    vulkanOps->setBufferName(vertexBuffer, "B: Model Vertex");
+    vulkanOps->setBufferName(indexBuffer, "B: Model Index");
 }
 
 float Model::getFaceArea(int iFace, glm::mat4 transform) {
