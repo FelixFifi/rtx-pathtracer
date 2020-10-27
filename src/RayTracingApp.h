@@ -38,6 +38,7 @@
 #include "SampleCollector.h"
 
 const std::vector<std::string> SCENES{
+        "envMap/envMap.xml",
         "irradianceCache/irradianceCache.xml",
         "cornell-dielectric/cornell-dielectric-path.json",
         "cornell/cornell.json",
@@ -148,11 +149,13 @@ private:
 
     uint32_t icSize;
 
+    std::string currentScene;
+
     bool autoRotate = false;
     bool accumulateResults = false;
     bool hasInputChanged = false;
     bool needSceneReload = false;
-    int currentScene;
+    int sceneNum;
     bool showOtherVisualizations = false;
     int currentVisualizeMode = EGuidingOverlay;
 
@@ -257,6 +260,8 @@ private:
     void setEstimateRTSettings();
 
     void updateGuidingDescriptorSets();
+
+    std::string getModeString() const;
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

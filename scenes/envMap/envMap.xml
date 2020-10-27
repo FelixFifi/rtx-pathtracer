@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<scene version="0.6.0">
+	<integrator type="path"/>
+
+	<sensor type="perspective" id="Camera-camera">
+		<string name="fovAxis" value="smaller"/>
+		<float name="fov" value="45"/>
+		<transform name="toWorld">
+			<lookAt target="0, 1, 0" origin="0, 2, 4" up="0, 1, 0"/>
+		</transform>
+
+		<sampler type="independent">
+			<integer name="sampleCount" value="50"/>
+		</sampler>
+
+		<film type="hdrfilm" id="film">
+			<integer name="width" value="1280"/>
+			<integer name="height" value="720"/>
+			<string name="pixelFormat" value="rgb"/>
+			<boolean name="banner" value="false"/>
+		</film>
+	</sensor>
+	
+	<shape type="sphere">
+		<point name="center" x="2" y="2" z="0"/>
+		<float name="radius" value=".9"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="1000 1000 1000"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<bsdf type="diffuse" id="__diffmat">
+		<rgb name="reflectance" value="0.56 0.56 0.56"/>
+	</bsdf>
+
+	<shape type="obj" id="Interior-mesh_0">
+		<string name="filename" value="ball.obj"/>
+
+		<ref name="bsdf" id="__diffmat"/>
+	</shape>
+</scene>

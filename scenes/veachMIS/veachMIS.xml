@@ -3,7 +3,7 @@
 <!-- MI test scene from Eric Veach's thesis - modeled
      after a file by Steve Marschner (CS667)
 -->
-<scene version="0.4.0">
+<scene version="0.6.0">
 	<integrator type="path">
 		<integer name="maxDepth" value="8"/>
 	</integrator>
@@ -119,15 +119,15 @@
 	<sensor type="perspective">
 		<string name="fovAxis" value="smaller"/>
 		<transform name="toWorld">
-			<scale x="-1"/>
-			<scale x="-1"/>
 			<lookAt origin="0, 2, 15" target="0, -2, 2.5" up="0, 1, 0"/>
 		</transform>
 		<float name="fov" value="28"/>
 
 		<film type="hdrfilm">
-			<integer name="width" value="768"/>
-			<integer name="height" value="512"/>
+			<integer name="width" value="1280"/>
+			<integer name="height" value="720"/>
+			<string name="pixelFormat" value="rgb"/>
+			<boolean name="banner" value="false"/>
 		</film>
 	</sensor>
 </scene>

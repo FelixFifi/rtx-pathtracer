@@ -71,7 +71,7 @@ void RayTracingApp::run() {
 
 void RayTracingApp::drawCallback(uint32_t imageIndex) {
     if (needSceneReload) {
-        sceneSwitcher(currentScene);
+        sceneSwitcher(sceneNum);
     }
 
     updateUniformBuffer(imageIndex);
@@ -159,14 +159,50 @@ void RayTracingApp::takePictureCurrentTime() {
     time_t t = time(nullptr);   // get time now
     tm *now = localtime(&t);
 
-    char *filepath = new char[64];
-
     std::filesystem::create_directories("images/");
 
-    strftime(filepath, 64, "images/%F--%H-%M-%S.exr", now);
+    char *timestring = new char[128];
+    strftime(timestring, 128, "images/%F--%H-%M-%S", now);
+
+    std::string mode = getModeString();
+    std::string scene = std::filesystem::path(currentScene).filename().replace_extension("");
+    std::string separator = "_";
+
+    const std::string filepath =
+            timestring + separator + scene + mode + ".exr";
 
     postProcessing.saveOffscreenImage(filepath);
-    std::cout << "Wrote file" << std::endl;
+    std::cout << "Wrote file " << filepath << std::endl;
+}
+
+std::string RayTracingApp::getModeString() const {
+    std::string mode = "";
+
+    if (rtPushConstants.enableNEE) {
+        mode += "_NEE";
+
+        if (rtPushConstants.enableMIS) {
+            mode += "_MIS";
+        }
+    }
+
+
+    if (rtPushConstants.useIrradianceCache) {
+        mode += "_IC";
+    }
+
+    if (rtPushConstants.useADRRS) {
+        mode += "_ADRRS";
+    }
+
+    if (rtPushConstants.useGuiding) {
+        mode += "_Guiding";
+
+        if (rtPushConstants.useParallaxCompensation) {
+            mode += "_Parallax";
+        }
+    }
+    return mode;
 }
 
 void RayTracingApp::sceneSwitcher(int num) {
@@ -175,7 +211,7 @@ void RayTracingApp::sceneSwitcher(int num) {
         num = 10;
     }
 
-    currentScene = num;
+    sceneNum = num;
     needSceneReload = false;
 
     // Don't load out of bounds
@@ -189,6 +225,8 @@ void RayTracingApp::sceneSwitcher(int num) {
     sceneLoader = SceneLoader(SCENES[sceneIndex], vulkanOps,
                               physicalDevice,
                               graphicsQueueIndex);
+
+    currentScene = SCENES[sceneIndex];
 
     cameraController.vfov = sceneLoader.vfov;
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);

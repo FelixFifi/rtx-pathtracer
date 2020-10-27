@@ -1,6 +1,4 @@
 # This file uses centimeters as units for non-parametric coordinates.
-mtllib diffuse_grey.mtl
-usemtl diffuse_grey
 v 0.762800 0.071800 -0.307600
 v 0.706600 0.068300 -0.463800
 v 0.686400 0.071800 -0.450300

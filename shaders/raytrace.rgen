@@ -279,7 +279,7 @@ vec3 roughConductor(in Material mat, in vec3 normal, in vec3 wi, in vec3 wo) {
         return vec3(0);
     }
 
-    return (fresnelConductor(cosThetaIHr, mat.eta, mat.k) * G(mat, wi, wo, normal, hr) * D(mat, normal, hr) / (4 * cosThetaI * cosThetaO)).xxx;
+    return cosThetaO * (fresnelConductor(cosThetaIHr, mat.eta, mat.k) * G(mat, wi, wo, normal, hr) * D(mat, normal, hr) / (4 * cosThetaI * cosThetaO)).xxx;
 }
 
 
@@ -643,10 +643,10 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
         if (pushC.enableMIS) {
             // MIS
             float pdfMat = pdfBSDF(mat, normal, wi, lightDir);
-            neeResult += cosThetaLight * evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace) *
+            neeResult += evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace) *
             lightColor * powerHeuristic(pdfLights, pdfMat) / pdfLights;
         } else {
-            neeResult = cosThetaLight * evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace)
+            neeResult = evalBsdf(mat, textureUV, normal, wi, lightDir, info.isFrontFace)
             * lightColor / pdfLights;
         }
     }
@@ -687,7 +687,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
                     lightColor = matSample.lightColor;
                     pdfLights = pdfLight(light, bsdfDir, info.normal, info.t);
 
-                    neeResult += cosThetaBSDF * evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
+                    neeResult += evalBsdf(mat, textureUV, normal, wi, bsdfDir, info.isFrontFace) *
                     lightColor * powerHeuristic(pdfMat, pdfLights) / pdfMat;
                 }
             }
