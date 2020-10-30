@@ -62,7 +62,7 @@ struct Aabb {
     }
 };
 
-struct alignas(16) Sphere {
+struct Sphere {
     glm::vec3 center;
     float radius;
     int matertialIndex;

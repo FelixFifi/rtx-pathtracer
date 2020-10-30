@@ -70,9 +70,9 @@ struct alignas(16) Instance {
     int iLight = -1;
 };
 
-struct alignas(16) Light {
-    alignas(16) glm::vec3 color; // Does not need to be set for area lights. Is taken from material
-    alignas(16) glm::vec3 pos; // Only for point lights
+struct Light {
+    glm::vec3 color; // Does not need to be set for area lights. Is taken from material
+    glm::vec3 pos; // Only for point lights
     uint instanceIndex;
     float sampleProb;
     float area;
@@ -106,6 +106,7 @@ private:
     std::string textureBaseDir;
 
     std::vector<Instance> instances;
+    std::vector<Sphere> spheres;
     std::vector<Model> models;
     std::vector<Aabb> aabbs;
     std::vector<Material> materials;
@@ -149,8 +150,6 @@ public:
     glm::vec3 target {0, -2, 2.5};
     glm::vec3 upDir {0, 1, 0};
     float vfov = 28.0f;
-
-    std::vector<Sphere> spheres;
 
     vk::Buffer sphereBuffer;
     vk::DeviceMemory sphereBufferMemory;

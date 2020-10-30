@@ -7,6 +7,7 @@ struct hitInfo
     float t;
     bool isMiss;
     bool isFrontFace;
+    bool isSphere;
     vec3 missColor;
     uint instanceIndex;
 };
@@ -27,6 +28,7 @@ struct pushConstant
     int numNEE;
     bool enableAverageInsteadOfMix;
     bool enableMIS;
+    bool usePowerHeuristic;
     bool storeEstimate;
     int visualizeMode;
     bool showIrradianceCacheOnly;

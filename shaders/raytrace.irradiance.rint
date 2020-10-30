@@ -6,7 +6,7 @@
 #include "wavefront.glsl"
 #include "raycommon.glsl"
 
-layout(binding = 12, set = 1, std430) buffer Spheres { sphere spheres[]; };
+layout(binding = 12, set = 1, scalar) buffer Spheres { sphere spheres[]; };
 
 void main()
 {

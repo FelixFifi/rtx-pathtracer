@@ -53,5 +53,6 @@ void main()
     info.matIndex = v0.materialIndex;
     info.t = gl_HitTEXT;
     info.isMiss = false;
+    info.isSphere = false;
     info.instanceIndex = gl_InstanceID;
 }

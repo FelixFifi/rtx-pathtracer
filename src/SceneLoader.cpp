@@ -551,9 +551,14 @@ Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId) const 
         mat.refractionIndex = getChildFloat(xBSDF, "intIOR") / getChildFloat(xBSDF, "extIOR");
         mat.refractionIndexInv = 1.0f / mat.refractionIndex;
     } else if (type == "conductor") {
-        mat.type = eConductor;
-        mat.eta = getChildSingleSpectrum(xBSDF, "eta");
-        mat.k = getChildSingleSpectrum(xBSDF, "k");
+        if (hasChildString(xBSDF, "material") && getChildString(xBSDF, "material") == "none") {
+            mat.type = eSpecular;
+            mat.specular = glm::vec3(1, 1, 1);
+        } else {
+            mat.type = eConductor;
+            mat.eta = getChildSingleSpectrum(xBSDF, "eta");
+            mat.k = getChildSingleSpectrum(xBSDF, "k");
+        }
     } else if (type == "roughconductor") {
         mat.type = eRoughConductor;
         mat.roughness = getChildFloat(xBSDF, "alpha");
@@ -734,12 +739,17 @@ void SceneLoader::createSpheresBuffer() {
     vulkanOps->createBufferFromData(aabbs, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, aabbBuffer, aabbBufferMemory);
 
+    vulkanOps->setBufferName(sphereBuffer, "B: Scene Spheres");
+    vulkanOps->setBufferName(aabbBuffer, "B: Scene Sphere AABBs");
 }
 
 void SceneLoader::createMaterialBuffer() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
     vulkanOps->createBufferFromData(materials, usage,
                                     vk::MemoryPropertyFlagBits::eDeviceLocal, materialBuffer, materialBufferMemory);
+
+
+    vulkanOps->setBufferName(materialBuffer, "B: Scene Materials");
 }
 
 void SceneLoader::createInstanceInfoBuffer() {
@@ -758,6 +768,7 @@ void SceneLoader::createInstanceInfoBuffer() {
                                         vk::MemoryPropertyFlagBits::eDeviceLocal, instanceInfoBuffer,
                                         instanceInfoBufferMemory);
     }
+    vulkanOps->setBufferName(instanceInfoBuffer, "B: Scene Instances");
 }
 
 void SceneLoader::createLightsBuffers() {
@@ -766,16 +777,11 @@ void SceneLoader::createLightsBuffers() {
     vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer;
 
     // Light count is padded with 0s to satisfy struct alignment
-    std::vector<int> lightCount{static_cast<int>(lights.size()), 0, 0, 0};
+    std::vector<int> lightCount{static_cast<int>(lights.size())};
     vulkanOps->createBufferFrom2Data(lightCount, lights, usage,
                                      vk::MemoryPropertyFlagBits::eDeviceLocal, lightsBuffer, lightsBufferMemory);
-}
 
-bool lightCompareAreaLightsFirst(Light l1, Light l2) {
-    bool isArea1 = l1.type == eArea;
-    bool isArea2 = l2.type == eArea;
-
-    return isArea1 || !isArea2;
+    vulkanOps->setBufferName(lightsBuffer, "B: Scene Lights");
 }
 
 /**
@@ -783,9 +789,6 @@ bool lightCompareAreaLightsFirst(Light l1, Light l2) {
  * These random numbers should be weighted by the total power and face area.
  */
 void SceneLoader::createLightSamplersBuffer() {
-    // Sort lights, so that model lights are before spheres and point lights, as they don't need random face indices
-    std::sort(lights.begin(), lights.end(), lightCompareAreaLightsFirst);
-
     std::vector<int> randomLightIndex = getLightSamplingVector();
 
     std::vector<FaceSample> randomTriIndicesPerLight = getFaceSamplingVector();
@@ -795,6 +798,8 @@ void SceneLoader::createLightSamplersBuffer() {
     vulkanOps->createBufferFrom2Data(randomLightIndex, randomTriIndicesPerLight, usage,
                                      vk::MemoryPropertyFlagBits::eDeviceLocal, lightsSamplersBuffer,
                                      lightsSamplerBufferMemory);
+    vulkanOps->setBufferName(lightsSamplersBuffer, "B: Scene Sample Lights");
+
 }
 
 std::vector<FaceSample> SceneLoader::getFaceSamplingVector() {

@@ -8,7 +8,7 @@
 
 layout(location = 0) rayPayloadInEXT hitInfo info;
 
-layout(binding = 8, set = 1, std430) buffer Spheres { sphere spheres[]; };
+layout(binding = 8, set = 1, scalar) buffer Spheres { sphere spheres[]; };
 
 void main()
 {
@@ -30,5 +30,6 @@ void main()
     info.matIndex = s.materialIndex;
     info.t = gl_HitTEXT;
     info.isMiss = false;
-    info.instanceIndex = gl_InstanceID;
+    info.isSphere = true;
+    info.instanceIndex = gl_PrimitiveID;
 }

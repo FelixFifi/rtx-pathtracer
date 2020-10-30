@@ -38,12 +38,12 @@
 #include "SampleCollector.h"
 
 const std::vector<std::string> SCENES{
+        "veachMIS/veachMIS.xml",
         "envMap/envMap.xml",
         "irradianceCache/irradianceCache.xml",
         "cornell-dielectric/cornell-dielectric-path.json",
         "cornell/cornell.json",
         "fireplace/fireplace.json",
-        "veachMIS/veachMIS.xml",
         "miPhong/miPhong.xml",
         "roughConductor/roughConductor.xml",
         "test-scene/test.json",
@@ -99,6 +99,7 @@ public:
         int numNEE = 1;
         int enableAverageInsteadOfMix = 0;
         int enableMIS = 0;
+        int usePowerHeuristic = 1;
         int storeEstimate = 0;
         int visualizeMode = ERayTrace;
         int showIrradianceCacheOnly = 0;

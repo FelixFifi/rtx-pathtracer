@@ -767,6 +767,8 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::InputInt("Num NEE", &rtPushConstants.numNEE, 1, 5);
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
+    hasInputChanged |= ImGui::Checkbox("Use power heuristic, else balance heuristic",
+                                       reinterpret_cast<bool *>(&rtPushConstants.usePowerHeuristic));
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Estimate image",
                                        reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));

@@ -38,13 +38,13 @@
 		<string name="filename" value="envmap.exr"/>
 	</emitter>
 
-	<bsdf type="diffuse" id="__diffmat">
-		<rgb name="reflectance" value="0.18 0.18 0.18"/>
-	</bsdf>
+
 
 	<shape type="obj" id="Interior-mesh_0">
 		<string name="filename" value="ball.obj"/>
 
-		<ref name="bsdf" id="__diffmat"/>
+			<bsdf type="diffuse">
+		<rgb name="reflectance" value="0.18 0.18 0.18"/>
+	</bsdf>
 	</shape>
 </scene>

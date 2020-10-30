@@ -22,26 +22,17 @@
 		</film>
 	</sensor>
 	
-	<shape type="sphere">
-		<point name="center" x="2" y="2" z="0"/>
-		<float name="radius" value=".9"/>
+	<emitter type="envmap" id="Area_002-light">
+		<string name="filename" value="envmap.exr"/>
+	</emitter>
 
-		<emitter type="area">
-			<rgb name="radiance" value="1000 1000 1000"/>
-		</emitter>
 
-		<bsdf type="diffuse">
-			<rgb name="reflectance" value="0,0,0"/>
-		</bsdf>
-	</shape>
-
-	<bsdf type="diffuse" id="__diffmat">
-		<rgb name="reflectance" value="0.56 0.56 0.56"/>
-	</bsdf>
 
 	<shape type="obj" id="Interior-mesh_0">
 		<string name="filename" value="ball.obj"/>
 
-		<ref name="bsdf" id="__diffmat"/>
+			<bsdf type="diffuse">
+		<rgb name="reflectance" value="0.18 0.18 0.18"/>
+	</bsdf>
 	</shape>
 </scene>

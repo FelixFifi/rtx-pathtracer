@@ -47,6 +47,13 @@ glm::vec3 parseCommaSpaceSeparatedVec3(const std::string &text) {
     return {values[0], values[1], values[2]};
 }
 
+bool hasChildString(XMLElement *elem, const std::string &name) {
+    const char *FILTER = "string";
+    XMLElement *xChild = getNamedChild(elem, name, FILTER);
+
+    return xChild != nullptr;
+}
+
 bool getChildBool(XMLElement *elem, const std::string &name) {
     const char *FILTER = "boolean";
     XMLElement *xChild = getNamedChild(elem, name, FILTER);
