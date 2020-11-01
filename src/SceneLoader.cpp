@@ -417,7 +417,7 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
         if (matIndex < 0) {
             // Else, check for refs
             XMLElement *xRef = xShape->FirstChildElement("ref");
-            if (xRef && xRef->Attribute("name", "bsdf")) {
+            if (xRef) {
                 std::string id = xRef->Attribute("id");
 
                 matIndex = definedMaterials[id];
