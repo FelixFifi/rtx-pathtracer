@@ -1006,6 +1006,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
     int currentSampleOffset = sampleOffset;
     int iUpdateDistance = -1;
+    float distanceFactor = 1.0;
 
     vec3 result = vec3(0.0, 0.0, 0.0);
 
@@ -1074,7 +1075,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
             // Update distance data
             if (saveSamples && iUpdateDistance != -1) {
-                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
+                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t * distanceFactor;
             }
         } else {
             addNextDirectLights = false;
@@ -1150,7 +1151,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
             // Update distance for last directionalData
             if (saveSamples && iUpdateDistance != -1) {
-                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t;
+                directionalData[getBaseIndex() + iUpdateDistance].distance += info.t * distanceFactor;
 
                 if (!isMatAlmostDiscrete(mat)) {
                     // Mark the last distance entry as final
@@ -1195,11 +1196,23 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 directionalData[getBaseIndex() + currentSampleOffset] = sampleData;
 
                 iUpdateDistance = currentSampleOffset;
+                distanceFactor = 1.0;
             }
 
             lightSums[currentSampleOffset] = vec3(0);
             sampleThroughputs[currentSampleOffset] = throughputChange;
             currentSampleOffset++;
+        } else if (iUpdateDistance != -1 && mat.type == MAT_DIELECTRIC && dot(newDirection, normal) < 0) {
+            // Refraction
+            float eta = mat.refractionIndex;
+
+            if (!info.isFrontFace) {
+                // Leaving dielectric
+                eta = mat.refractionIndexInv;
+            }
+
+            // Next distance value has to take into account the apparent distance
+            distanceFactor = abs(dot(normal, direction) / dot(normal, newDirection)) * eta;
         }
 
         direction = newDirection;
