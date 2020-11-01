@@ -38,17 +38,18 @@
 #include "SampleCollector.h"
 
 const std::vector<std::string> SCENES{
-        "veachMIS/veachMIS.xml",
+        "cornell-dielectric/cornell-dielectric.xml",
         "envMap/envMap.xml",
+        "veachMIS/veachMIS.xml",
         "irradianceCache/irradianceCache.xml",
+        "testSpheres/testSpheres.xml",
+        "miPhong/miPhong.xml",
+        "roughConductor/roughConductor.xml",
         "cornell-dielectric/cornell-dielectric-path.json",
         "cornell/cornell.json",
         "fireplace/fireplace.json",
-        "miPhong/miPhong.xml",
-        "roughConductor/roughConductor.xml",
         "test-scene/test.json",
-        "sponza/sponza.json",
-        "testSpheres/testSpheres.xml"
+        "sponza/sponza.json"
 };
 
 static const int MAX_RECURSION = 2;

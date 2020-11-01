@@ -3,9 +3,8 @@
 <!-- MI test scene from Eric Veach's thesis - modeled
      after a file by Steve Marschner (CS667)
 -->
-<scene version="0.4.0">
-	<integrator type="path">
-	</integrator>
+<scene version="0.6.0">
+	<integrator type="path"/>
 
 	<shape type="sphere">
 		<point name="center" x="-1.25" y="0" z="0"/>
@@ -116,16 +115,15 @@
 		</transform>
 		<float name="fov" value="28"/>
 
-		<sampler type="ldsampler">
-			<integer name="sampleCount" value="16"/>
-			<integer name="dimension" value="1"/>
+		<sampler type="independent">
+			<integer name="sampleCount" value="50"/>
 		</sampler>
 
-		<film type="hdrfilm">
-			<integer name="width" value="768"/>
-			<integer name="height" value="512"/>
-
-			<rfilter type="gaussian"/>
+		<film type="hdrfilm" id="film">
+			<integer name="width" value="1280"/>
+			<integer name="height" value="720"/>
+			<string name="pixelFormat" value="rgb"/>
+			<boolean name="banner" value="false"/>
 		</film>
 	</sensor>
 </scene>

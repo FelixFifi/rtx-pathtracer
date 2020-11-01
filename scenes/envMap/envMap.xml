@@ -26,13 +26,26 @@
 		<string name="filename" value="envmap.exr"/>
 	</emitter>
 
+	<shape type="sphere">
+		<point name="center" x="3.75" y="0" z="0"/>
+		<float name="radius" value=".9"/>
 
+		<emitter type="area">
+			<rgb name="radiance" value="1.23457 1.23457 1.23457"/>
+		</emitter>
+
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0"/>
+		</bsdf>
+	</shape>
+
+	<bsdf type="diffuse" id="diffuseRed">
+		<rgb name="reflectance" value="0.3 0.1 0.1"/>
+	</bsdf>
 
 	<shape type="obj" id="Interior-mesh_0">
 		<string name="filename" value="ball.obj"/>
 
-			<bsdf type="diffuse">
-		<rgb name="reflectance" value="0.18 0.18 0.18"/>
-	</bsdf>
+		<ref id="diffuseRed"/>
 	</shape>
 </scene>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<scene version="0.6.0">
+    <integrator type="path"/>
+
+    <sensor type="perspective" id="Camera-camera">
+        <string name="fovAxis" value="smaller"/>
+        <float name="fov" value="45"/>
+        <transform name="toWorld">
+            <lookAt target="0, 1.5, 0" origin="0, 2, 5" up="0, 1, 0"/>
+        </transform>
+
+        <sampler type="independent">
+            <integer name="sampleCount" value="50"/>
+        </sampler>
+
+        <film type="hdrfilm" id="film">
+            <integer name="width" value="1280"/>
+            <integer name="height" value="720"/>
+            <string name="pixelFormat" value="rgb"/>
+            <boolean name="banner" value="false"/>
+        </film>
+    </sensor>
+
+
+    <bsdf type="diffuse" id="diffuseGrey">
+        <rgb name="reflectance" value="0.3 0.3 0.3"/>
+    </bsdf>
+
+    <bsdf type="diffuse" id="diffuseRed">
+        <rgb name="reflectance" value="0.3 0.0 0.0"/>
+    </bsdf>
+
+    <bsdf type="diffuse" id="diffuseGreen">
+        <rgb name="reflectance" value="0.0 0.3 0.0"/>
+    </bsdf>
+
+    <bsdf type="dielectric" id="glass">
+        <float name="intIOR" value="1.5"/>
+        <float name="extIOR" value="1.0"/>
+    </bsdf>
+
+    <shape type="obj">
+        <string name="filename" value="back.obj"/>
+        <ref id="diffuseGrey"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="ceiling.obj"/>
+        <ref id="diffuseGrey"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="floor.obj"/>
+        <ref id="diffuseGrey"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="left.obj"/>
+        <ref id="diffuseRed"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="right.obj"/>
+        <ref id="diffuseGreen"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="ball.obj"/>
+        <ref id="diffuseGrey"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="shell.obj"/>
+        <ref id="glass"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="emitter.obj"/>
+        <ref id="diffuseGrey"/>
+        <emitter type="area">
+            <rgb name="radiance" value="15 15 15"/>
+        </emitter>
+    </shape>
+</scene>
