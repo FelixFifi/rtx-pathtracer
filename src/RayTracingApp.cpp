@@ -23,7 +23,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, u
                                         glm::vec3(0, -0.30478, -0.9524), aspectRatio);
     fEventCallback eventCallback = [this](const SDL_Event &event) { cameraController.eventCallbackSDL(event); };
     vulkanWindow.setEventCallback(eventCallback);
-    fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcher(key); };
+    fNumberKeyEventCallback numberKeyCallback = [this](int key) { sceneSwitcherFromKey(key); };
     vulkanWindow.setNumberKeyEventCallback(numberKeyCallback);
 
     fImGuiCallback callbackImGui = [this] { imGuiWindowSetup(); };
@@ -40,7 +40,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, u
 
     createVulkanImages();
     createUniformBuffers();
-    sceneSwitcher(1);
+    sceneSwitcher(0);
 
     initRayTracing();
 }
@@ -71,7 +71,7 @@ void RayTracingApp::run() {
 
 void RayTracingApp::drawCallback(uint32_t imageIndex) {
     if (needSceneReload) {
-        sceneSwitcher(sceneNum);
+        sceneSwitcher(sceneIndex);
     }
 
     updateUniformBuffer(imageIndex);
@@ -205,19 +205,21 @@ std::string RayTracingApp::getModeString() const {
     return mode;
 }
 
-void RayTracingApp::sceneSwitcher(int num) {
+void RayTracingApp::sceneSwitcherFromKey(int num) {
     // 0 should load the 10th scene
     if (num == 0) {
-        num = 10;
+        sceneSwitcher(9);
+    } else {
+        sceneSwitcher(num - 1);
     }
+}
 
-    sceneNum = num;
+void RayTracingApp::sceneSwitcher(int index) {
     needSceneReload = false;
 
     // Don't load out of bounds
     int sceneCount = SCENES.size();
-    int sceneIndex = std::min(num - 1, sceneCount - 1);
-
+    sceneIndex = std::min(index, sceneCount - 1);
 
     sceneLoader.cleanup();
 
@@ -755,16 +757,45 @@ void RayTracingApp::createRtShaderBindingTable() {
 
 
 void RayTracingApp::imGuiWindowSetup() {
+    imGuiGeneral();
+    imGuiIC();
+    imGuiADRRS();
+    imGuiGuiding();
+}
+
+void RayTracingApp::imGuiSceneSelection() {
+    ImGui::Text("Scene");
+    if (ImGui::BeginCombo(" ", SCENES[sceneIndex].c_str())) {
+
+        for (int iScene = 0; iScene < SCENES.size(); iScene++) {
+            const char *scene = SCENES[iScene].c_str();
+            if(ImGui::Selectable(scene, iScene == sceneIndex)) {
+                sceneIndex = iScene;
+                needSceneReload = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
+void RayTracingApp::imGuiGeneral() {
     ImGui::Begin("Raytrace Window");
 
+    imGuiSceneSelection();
+
+    ImGui::PushItemWidth(100.0f);
     hasInputChanged |= ImGui::InputInt("Samples per pixel", &rtPushConstants.samplesPerPixel, 1, 5);
     hasInputChanged |= ImGui::InputInt("Max depth", &rtPushConstants.maxDepth, 1, 5);
     hasInputChanged |= ImGui::InputInt("Max Follow Discrete after max depth", &rtPushConstants.maxFollowDiscrete, 1, 5);
+    ImGui::PopItemWidth();
+
     ImGui::Checkbox("Accumulate results", &accumulateResults);
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Russian Roulette", reinterpret_cast<bool *>(&rtPushConstants.enableRR));
     hasInputChanged |= ImGui::Checkbox("Next Event Estimation", reinterpret_cast<bool *>(&rtPushConstants.enableNEE));
+    ImGui::PushItemWidth(100.0f);
     hasInputChanged |= ImGui::InputInt("Num NEE", &rtPushConstants.numNEE, 1, 5);
+    ImGui::PopItemWidth();
     hasInputChanged |= ImGui::Checkbox("Multiple Importance Sampling (for NEE)",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableMIS));
     hasInputChanged |= ImGui::Checkbox("Use power heuristic, else balance heuristic",
@@ -798,7 +829,8 @@ void RayTracingApp::imGuiWindowSetup() {
     ImGui::SameLine();
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding Overlay", &currentVisualizeMode, EGuidingOverlay);
 
-    hasRadioButtonChanged |= ImGui::RadioButton("Guiding Active Components", &currentVisualizeMode, EGuidingActiveDistributions);
+    hasRadioButtonChanged |= ImGui::RadioButton("Guiding Active Components", &currentVisualizeMode,
+                                                EGuidingActiveDistributions);
 
     hasRadioButtonChanged |= ImGui::RadioButton("Guiding PiP of region", &currentVisualizeMode, EGuidingPiP);
     ImGui::SameLine();
@@ -822,8 +854,9 @@ void RayTracingApp::imGuiWindowSetup() {
                 ImGui::GetIO().Framerate);
 
     ImGui::End();
+}
 
-
+void RayTracingApp::imGuiIC() {
     ImGui::Begin("Irradiance Cache");
     hasInputChanged |= ImGui::Checkbox("Use Irradiance Cache",
                                        reinterpret_cast<bool *>(&rtPushConstants.useIrradianceCache));
@@ -860,7 +893,9 @@ void RayTracingApp::imGuiWindowSetup() {
                                           &rtPushConstants.irradianceCacheMinRadius, 0.0f, 1);
 
     ImGui::End();
+}
 
+void RayTracingApp::imGuiADRRS() {
     ImGui::Begin("ADRRS");
     hasInputChanged |= ImGui::Checkbox("Use ADRRS",
                                        reinterpret_cast<bool *>(&rtPushConstants.useADRRS));
@@ -869,8 +904,9 @@ void RayTracingApp::imGuiWindowSetup() {
     hasInputChanged |= ImGui::Checkbox("Split", reinterpret_cast<bool *>(&rtPushConstants.adrrsSplit));
 
     ImGui::End();
+}
 
-
+void RayTracingApp::imGuiGuiding() {
     ImGui::Begin("Guiding");
     hasInputChanged |= ImGui::Checkbox("Use Guiding",
                                        reinterpret_cast<bool *>(&rtPushConstants.useGuiding));

@@ -157,7 +157,7 @@ private:
     bool accumulateResults = false;
     bool hasInputChanged = false;
     bool needSceneReload = false;
-    int sceneNum;
+    int sceneIndex;
     bool showOtherVisualizations = false;
     int currentVisualizeMode = EGuidingOverlay;
 
@@ -253,7 +253,7 @@ private:
 
     void createVulkanImages();
 
-    void sceneSwitcher(int num);
+    void sceneSwitcher(int index);
 
     void cleanupRtPipeline();
 
@@ -264,6 +264,18 @@ private:
     void updateGuidingDescriptorSets();
 
     std::string getModeString() const;
+
+    void imGuiGuiding();
+
+    void imGuiADRRS();
+
+    void imGuiIC();
+
+    void imGuiGeneral();
+
+    void sceneSwitcherFromKey(int num);
+
+    void imGuiSceneSelection();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H
