@@ -655,6 +655,10 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
                 heuristic = balanceHeuristic(pdfLights, pdfMat);
             }
 
+            if (isnan(heuristic)) {
+                return neeResult;
+            }
+
             neeResult += evalBsdf(mat, textureUV, normal, wi, lightDir, true) *
             lightColor * heuristic / pdfLights;
         } else {
@@ -684,7 +688,7 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
 
             if (info.isMiss) {
                 lightColor = info.missColor;
-                pdfLights = M_INV_2PI / lightCount; // TODO: lights[0].sampleProb ?
+                pdfLights = M_INV_2PI / lightCount;
 
                 float heuristic;
                 if (pushC.usePowerHeuristic) {
@@ -715,6 +719,10 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
                         heuristic = powerHeuristic(pdfMat, pdfLights);
                     } else {
                         heuristic = balanceHeuristic(pdfMat, pdfLights);
+                    }
+
+                    if (isnan(heuristic)) {
+                        return neeResult;
                     }
 
                     neeResult += evalBsdf(mat, textureUV, normal, wi, bsdfDir, true) *
