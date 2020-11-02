@@ -36,7 +36,7 @@ RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, u
     offscreenExtent = postProcessing.getExtentOffscreen();
 
     uint32_t regionCount = 1 << guidingSplits;
-    sampleCollector = SampleCollector(regionCount, offscreenExtent, rtPushConstants.directionalDataPerPixel, vulkanOps);
+    sampleCollector = SampleCollector(regionCount, offscreenExtent, vulkanOps);
 
     createVulkanImages();
     createUniformBuffers();
@@ -111,8 +111,7 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
             // Region split occurred
             // => update sampleCollector and Descriptor sets
             sampleCollector.cleanup();
-            sampleCollector = SampleCollector(guiding.getRegionCount(), offscreenExtent,
-                                              rtPushConstants.directionalDataPerPixel, vulkanOps);
+            sampleCollector = SampleCollector(guiding.getRegionCount(), offscreenExtent, vulkanOps);
 
 
             updateGuidingDescriptorSets();

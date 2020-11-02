@@ -4,6 +4,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_scalar_block_layout : enable
 
+#include "limits.glsl"
 #include "raycommon.glsl"
 #include "wavefront.glsl"
 #include "transform.glsl"
@@ -47,10 +48,6 @@
 #define PAYLOAD_GUIDING_VISU 4
 
 #define VISU_HITGROUP_OFFSET 1
-
-#define SIZE_LIGHT_RANDOM 10000
-#define SIZE_TRI_RANDOM 10000
-
 
 const float tMin = 0.001;
 const float tMax = 1000000.0;
@@ -969,7 +966,7 @@ bool isMatAlmostDiscrete(Material mat) {
 }
 
 uint getBaseIndex() {
-    return (gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x) * pushC.directionalDataPerPixel;
+    return (gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x) * MAX_DIRECTIONAL_DATA_PER_PIXEL;
 }
 
 /**
@@ -1180,7 +1177,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         vec3 throughputChange = evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
         throughput *= throughputChange;
 
-        if (saveSamples && currentSampleOffset < pushC.directionalDataPerPixel) {
+        if (saveSamples && currentSampleOffset < MAX_DIRECTIONAL_DATA_PER_PIXEL) {
             if (hasDiscreteDirection(mat) || isMatAlmostDiscrete(mat)) {
                 // Discrete direction (or close to it) => because of probabilities instead of pdf we can not use this data
                 directionalData[getBaseIndex() + currentSampleOffset].flags = INVALID;
@@ -1619,7 +1616,7 @@ bool visualizeModeNeedsRaytracing() {
 void resetSamplesToInvalid() {
     uint baseIndex = getBaseIndex();
 
-    for (int i = 0; i < pushC.directionalDataPerPixel; i++) {
+    for (int i = 0; i < MAX_DIRECTIONAL_DATA_PER_PIXEL; i++) {
         directionalData[baseIndex + i].flags = INVALID;
     }
 }
@@ -1646,7 +1643,8 @@ void main() {
     if (pushC.updateGuiding) {
         resetSamplesToInvalid();
 
-        if (pushC.directionalDataPerPixel > MAX_DIRECTIONAL_DATA_PER_PIXEL || (pushC.useADRRS && pushC.adrrsSplit)) {
+        // Samples can currently not be collected while splitting
+        if ((pushC.useADRRS && pushC.adrrsSplit) || pushC.splitOnFirst) {
             return;
         }
     }

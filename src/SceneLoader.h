@@ -7,11 +7,9 @@
 
 static const int VERTICES_PER_FACE = 3;
 static const int BINDINGS_COUNT = 8;
-#define SIZE_LIGHT_RANDOM 10000
-#define SIZE_TRI_RANDOM 10000
 
 #include "VulkanLoader.h"
-
+#include "../shaders/limits.glsl"
 #include "tiny_obj_loader.h"
 
 // #VKRay

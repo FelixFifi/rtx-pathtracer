@@ -33,7 +33,7 @@ private:
     vk::DeviceMemory hostDirectionalDataBufferMemory;
 public:
     SampleCollector() = default;
-    SampleCollector(uint32_t regionCount, vk::Extent2D imageSize, uint32_t numPerPixel,
+    SampleCollector(uint32_t regionCount, vk::Extent2D imageSize,
                     std::shared_ptr<VulkanOps> vulkanOps);
 
     std::shared_ptr<std::vector<DirectionalData>> getSortedData(std::vector<uint32_t>& outRegionIndices);

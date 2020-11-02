@@ -128,7 +128,6 @@ public:
         float guidingVisuScale = 0.5;
         float guidingVisuMax = 1.0;
         int guidingVisuIgnoreOcclusioon = 0;
-        uint32_t directionalDataPerPixel = 8;
         int updateGuiding = 0;
         int useParallaxCompensation = 1;
         float time;

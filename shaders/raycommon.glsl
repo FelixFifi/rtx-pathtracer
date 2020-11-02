@@ -56,7 +56,6 @@ struct pushConstant
     float guidingVisuScale;
     float guidingVisuMax;
     bool guidingVisuIgnoreOcclusioon;
-    uint directionalDataPerPixel;
     bool updateGuiding;
     bool useParallaxCompensation;
     float time;

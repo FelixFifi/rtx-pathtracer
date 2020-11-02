@@ -1,5 +1,6 @@
 #include "random_fwd.glsl"
 #include "transform_fwd.glsl"
+#include "limits.glsl"
 
 #define M_PI 3.1415926535897932384626433832795
 #define M_2PI 6.28318530718
@@ -41,9 +42,6 @@ float vMF(vec3 wo, VMF_Theta theta, vec3 worldPos, bool useParallaxCompensation)
 
     return theta.norm * exp(theta.k * (dot(mu, wo) - 1));
 }
-
-#define MAX_DISTRIBUTIONS 16
-
 
 struct VMM_Theta {
     VMF_Theta thetas[MAX_DISTRIBUTIONS];
@@ -113,4 +111,3 @@ struct DirectionalData {
 };
 
 #define INVALID 4294967295u
-#define MAX_DIRECTIONAL_DATA_PER_PIXEL 16

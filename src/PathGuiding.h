@@ -19,8 +19,7 @@
 #include "guiding/Range.h"
 
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
-
-#define MAX_DISTRIBUTIONS 16
+#include "../shaders/limits.glsl"
 
 // Taken from lightpmm/VMFKernel.h
 // the minumum value of kappa before it gets set to 0.0 for numerical stability

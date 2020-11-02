@@ -6,10 +6,11 @@
 
 #include <iostream>
 #include "SampleCollector.h"
+#include "../shaders/limits.glsl"
 
-SampleCollector::SampleCollector(uint32_t regionCount, vk::Extent2D imageSize, uint32_t numPerPixel,
+SampleCollector::SampleCollector(uint32_t regionCount, vk::Extent2D imageSize,
                                  std::shared_ptr<VulkanOps> vulkanOps)
-        : regionCount(regionCount), imageSize(imageSize), numPerPixel(numPerPixel), vulkanOps(vulkanOps),
+        : regionCount(regionCount), imageSize(imageSize), numPerPixel(MAX_DIRECTIONAL_DATA_PER_PIXEL), vulkanOps(vulkanOps),
           device(vulkanOps->getDevice()) {
     createBuffers();
 }
