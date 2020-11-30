@@ -44,6 +44,7 @@ public:
 private:
 
     vk::Device device;
+    uint32_t graphicsQueueIndex;
 
     vk::Buffer spheresBuffer;
     vk::DeviceMemory spheresBufferMemory;
@@ -54,6 +55,9 @@ private:
 
     std::vector<nvvkpp::RaytracingBuilderKHR::Instance> instances;
     vk::AccelerationStructureKHR accelerationStructure;
+
+    int asUpdatesWithoutRebuild = 100;
+    int updates = 0;
 public:
     IrradianceCache() = default;
 
@@ -62,7 +66,7 @@ public:
 
     void cleanUp();
 
-    void updateSpheres();
+    bool updateSpheres(bool forceRebuild);
 
     std::array<vk::DescriptorSetLayoutBinding, 4> getDescriptorSetLayouts();
 
@@ -75,6 +79,7 @@ public:
                            vk::DescriptorBufferInfo &outCacheBufferInfo,
                            vk::DescriptorBufferInfo &outAabbsBufferInfo);
 
+    vk::WriteDescriptorSet getASWriteDescriptorSet(const vk::DescriptorSet &descriptorSet, vk::WriteDescriptorSetAccelerationStructureKHR &outDescASInfo);
 private:
     void createBuffers();
 

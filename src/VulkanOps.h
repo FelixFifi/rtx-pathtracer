@@ -185,6 +185,7 @@ public:
     void setBufferName(const vk::Buffer &buffer, const char *name);
 
     void setObjectName(uint64_t object, vk::ObjectType objectType, const char *name);
+    vk::PhysicalDevice &getPhysicalDevice();
 };
 
 #endif //RTX_RAYTRACER_VULKANOPS_H

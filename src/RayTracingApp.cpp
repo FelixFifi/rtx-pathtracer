@@ -84,8 +84,10 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     device.waitIdle();
 
-    if (rtPushConstants.useIrradianceCache) {
-        irradianceCache.updateSpheres();
+    if (rtPushConstants.useIrradianceCache && (rtPushConstants.irradianceUpdateProb > 0  || rtPushConstants.irradianceCreateProb > 0)) {
+        if (irradianceCache.updateSpheres(false)) {
+            updateIrradianceCacheASDescriptorSets();
+        }
     }
 
     cameraController.resetStatus();
@@ -150,6 +152,18 @@ void RayTracingApp::updateGuidingDescriptorSets() {
             guidingWrites[1],
             guidingWrites[2],
             sampleCollectorWrites[0]
+    };
+
+    device.updateDescriptorSets(writes, nullptr);
+}
+
+void RayTracingApp::updateIrradianceCacheASDescriptorSets() {
+    vk::WriteDescriptorSetAccelerationStructureKHR icAsInfo;
+
+    auto icASWrite = irradianceCache.getASWriteDescriptorSet(descriptorSet, icAsInfo);
+
+    std::array<vk::WriteDescriptorSet, 1> writes{
+            icASWrite
     };
 
     device.updateDescriptorSets(writes, nullptr);
@@ -674,7 +688,7 @@ void RayTracingApp::createRtPipeline() {
     pipelineLayoutCreateInfo.setPushConstantRangeCount(1);
     pipelineLayoutCreateInfo.setPPushConstantRanges(&pushConstant);
 
-    // Descriptor sets: one specific to ray tracing, and one shared with the rasterization pipeline
+    // Descriptor sets
     std::vector<vk::DescriptorSetLayout> rtDescSetLayouts = {rtDescSetLayout, descriptorSetLayout};
     pipelineLayoutCreateInfo.setSetLayoutCount(static_cast<uint32_t>(rtDescSetLayouts.size()));
     pipelineLayoutCreateInfo.setPSetLayouts(rtDescSetLayouts.data());
@@ -865,10 +879,17 @@ void RayTracingApp::imGuiIC() {
                                        reinterpret_cast<bool *>(&rtPushConstants.irradianceCachePerformVisibilityCheck));
 
     ImGui::Spacing();
-    ImGui::InputFloat("Update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
+    bool probUpdated = ImGui::InputFloat("Update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
                       "%.6f");
-    ImGui::InputFloat("Create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
+    probUpdated |= ImGui::InputFloat("Create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
                       "%.6f");
+
+    // After updating or creation is disabled, update one last time
+    if (probUpdated && rtPushConstants.irradianceUpdateProb <= 0 && rtPushConstants.irradianceCreateProb <= 0) {
+        irradianceCache.updateSpheres(true);
+        updateIrradianceCacheASDescriptorSets();
+    }
+
     ImGui::Spacing();
     ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
     bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
@@ -898,7 +919,8 @@ void RayTracingApp::imGuiADRRS() {
     hasInputChanged |= ImGui::InputFloat("Window width ratio",
                                          &rtPushConstants.adrrsS, 1.0f, 5.0f);
     hasInputChanged |= ImGui::Checkbox("Split", reinterpret_cast<bool *>(&rtPushConstants.adrrsSplit));
-
+    hasInputChanged |= ImGui::Checkbox("Estimate image",
+                                       reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));
     ImGui::End();
 }
 
@@ -910,8 +932,6 @@ void RayTracingApp::imGuiGuiding() {
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
                                        reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
-    hasInputChanged |= ImGui::Checkbox("Estimate image",
-                                       reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));
 
     ImGui::Checkbox("Enable", &guiding.splitRegions);
     ImGui::SameLine();

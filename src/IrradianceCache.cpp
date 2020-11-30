@@ -10,7 +10,7 @@
 
 IrradianceCache::IrradianceCache(uint32_t maxCaches, std::shared_ptr<VulkanOps> vulkanOps,
                                  vk::PhysicalDevice physicalDevice, uint32_t graphicsQueueIndex)
-        : maxCaches(maxCaches), vulkanOps(vulkanOps), device(vulkanOps->getDevice()) {
+        : maxCaches(maxCaches), vulkanOps(vulkanOps), device(vulkanOps->getDevice()), graphicsQueueIndex(graphicsQueueIndex) {
     createBuffers();
     rtBuilder.setup(device, physicalDevice, graphicsQueueIndex);
     createAccelerationStructure();
@@ -74,10 +74,33 @@ void IrradianceCache::createBuffers() {
     vulkanOps->setBufferName(cacheBuffer, "B: IC Cache");
 }
 
-void IrradianceCache::updateSpheres() {
-    rtBuilder.updateBlas(0);
-    rtBuilder.updateTlasMatrices(instances);
-    updated = true;
+/**
+ *
+ * @return true if new descriptor set need to be loaded
+ */
+bool IrradianceCache::updateSpheres(bool forceRebuild) {
+    updates++;
+
+    if(forceRebuild || updates % asUpdatesWithoutRebuild == 0) {
+        // Rebuild AS
+        rtBuilder.destroy();
+
+        rtBuilder = nvvkpp::RaytracingBuilderKHR();
+        rtBuilder.setup(device, vulkanOps->getPhysicalDevice(), graphicsQueueIndex);
+
+        createAccelerationStructure();
+
+        return true;
+    } else {
+        // Only update
+        rtBuilder.updateBlas(0);
+        rtBuilder.updateTlasMatrices(instances);
+        updated = true;
+
+        return false;
+    }
+
+
 }
 
 std::array<vk::DescriptorSetLayoutBinding, 4> IrradianceCache::getDescriptorSetLayouts() {
@@ -167,4 +190,14 @@ void IrradianceCache::cleanUp() {
 
 bool IrradianceCache::wasUpdated() const {
     return updated;
+}
+
+vk::WriteDescriptorSet IrradianceCache::getASWriteDescriptorSet(const vk::DescriptorSet &descriptorSet, vk::WriteDescriptorSetAccelerationStructureKHR &outDescASInfo) {
+    outDescASInfo.setAccelerationStructureCount(1);
+    outDescASInfo.setPAccelerationStructures(&accelerationStructure);
+
+    vk::WriteDescriptorSet write = vk::WriteDescriptorSet(descriptorSet, 11, 0, 1,
+                                                                 vk::DescriptorType::eAccelerationStructureKHR);
+    write.setPNext(&outDescASInfo);
+    return write;
 }

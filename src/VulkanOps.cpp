@@ -243,3 +243,7 @@ void VulkanOps::setObjectName(uint64_t object, vk::ObjectType objectType, const 
 void VulkanOps::setBufferName(const vk::Buffer &buffer, const char *name) {
     setObjectName((uint64_t)(VkBuffer)buffer, vk::Buffer::objectType, name);
 }
+
+vk::PhysicalDevice &VulkanOps::getPhysicalDevice() {
+    return physicalDevice;
+}

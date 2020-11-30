@@ -103,7 +103,7 @@ public:
         int isIrradiancePrepareFrame = 0;
         int irradianceNumNEE = 1;
         float irradianceCacheMinRadius = 0.1;
-        int irradianceCachePerformVisibilityCheck = 1;
+        int irradianceCachePerformVisibilityCheck = 0;
         int useVisibleSphereSampling = 0; // WIP/never finished
         int useADRRS = 0;
         float adrrsS = 5;
@@ -263,6 +263,8 @@ private:
     void sceneSwitcherFromKey(int num);
 
     void imGuiSceneSelection();
+
+    void updateIrradianceCacheASDescriptorSets();
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H
