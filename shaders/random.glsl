@@ -5,6 +5,8 @@
 
 uint seed;
 
+// Addapted from https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/blob/master/ray_tracing_anyhit/shaders/random.glsl
+
 // Generate a random unsigned int from two unsigned int values, using 16 pairs
 // of rounds of the Tiny Encryption Algorithm. See Zafar, Olano, and Curtis,
 // "GPU Random Numbers via the Tiny Encryption Algorithm"

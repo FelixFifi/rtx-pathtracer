@@ -2,11 +2,11 @@
 #include "RayTracingApp.h"
 
 void printHelp() {
-    std::cout << "Required parameters: WIDTH HEIGHT IC_SIZE GUIDING_SPLITS" << std::endl;
+    std::cout << "Required parameters: WIDTH HEIGHT IC_SIZE GUIDING_SPLITS Scenes ..." << std::endl;
 }
 
 int main(int argc, char **argv) {
-    if (argc != 5) {
+    if (argc <= 5) {
         printHelp();
         return EXIT_FAILURE;
     }
@@ -20,7 +20,13 @@ int main(int argc, char **argv) {
     IC_SIZE = std::stoi(argv[3]);
     GUIDING_SPLITS = std::stoi(argv[4]);
 
-    RayTracingApp app(WIDTH, HEIGHT, IC_SIZE, GUIDING_SPLITS);
+    std::vector<std::string> scenePaths;
+
+    for (int i = 5; i < argc; ++i) {
+        scenePaths.emplace_back(argv[i]);
+    }
+
+    RayTracingApp app(WIDTH, HEIGHT, IC_SIZE, GUIDING_SPLITS, scenePaths);
 
     app.run();
     app.cleanup();

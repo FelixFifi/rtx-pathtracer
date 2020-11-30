@@ -34,9 +34,6 @@ void main()
 
     vec2 textureUV = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
 
-    // Pseudo random location on noise texture for random
-    vec2 noiseUV = textureUV * gl_WorldRayOriginEXT.xz * gl_HitTEXT;
-
     Material mat = mats[v0.materialIndex];
     if (mat.textureIdDiffuse != -1) {
         uint seed = tea(uint(textureUV * 100000000 + gl_WorldRayOriginEXT.x * gl_HitTEXT) , pushC.randomUInt);

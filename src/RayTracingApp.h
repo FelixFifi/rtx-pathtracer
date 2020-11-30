@@ -37,21 +37,6 @@
 #include "PathGuiding.h"
 #include "SampleCollector.h"
 
-const std::vector<std::string> SCENES{
-        "cornell-dielectric/cornell-dielectric.xml",
-        "envMap/envMap.xml",
-        "veachMIS/veachMIS.xml",
-        "irradianceCache/irradianceCache.xml",
-        "testSpheres/testSpheres.xml",
-        "miPhong/miPhong.xml",
-        "roughConductor/roughConductor.xml",
-        "cornell-dielectric/cornell-dielectric-path.json",
-        "cornell/cornell.json",
-        "fireplace/fireplace.json",
-        "test-scene/test.json",
-        "sponza/sponza.json"
-};
-
 static const int MAX_RECURSION = 2;
 
 static const int ACCUMULATE_IMAGE_BINDING = 9;
@@ -83,7 +68,8 @@ struct CameraMatrices {
 
 class RayTracingApp {
 public:
-    RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits);
+    RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits,
+                  const std::vector<std::string> &scenes);
 
     void run();
 
@@ -118,7 +104,7 @@ public:
         int irradianceNumNEE = 1;
         float irradianceCacheMinRadius = 0.1;
         int irradianceCachePerformVisibilityCheck = 1;
-        int useVisibleSphereSampling = 0;
+        int useVisibleSphereSampling = 0; // WIP/never finished
         int useADRRS = 0;
         float adrrsS = 5;
         int adrrsSplit = 1;
@@ -141,6 +127,8 @@ public:
     } rtPushConstants;
 
 private:
+    std::vector<std::string> scenes;
+
     PostProcessing postProcessing;
     VulkanWindow vulkanWindow;
 
@@ -156,7 +144,7 @@ private:
     bool accumulateResults = false;
     bool hasInputChanged = false;
     bool needSceneReload = false;
-    int sceneIndex;
+    int sceneIndex = 0;
     bool showOtherVisualizations = false;
     int currentVisualizeMode = EGuidingOverlay;
 

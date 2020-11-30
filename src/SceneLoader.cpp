@@ -461,6 +461,8 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
             std::vector<int> emissiveFaces;
             converteObjData(shapes, attrib, -1, matIndex, vertices, indices, emissiveFaces);
 
+//            std::cout << "Vertices: " << vertices.size() << "   Faces: " << indices.size() / 3.0f << std::endl;
+
             models.emplace_back(vertices, indices, vulkanOps);
             emissiveFacesPerModel.push_back(emissiveFaces);
 

@@ -8,9 +8,10 @@
 #include <filesystem>
 #include "RayTracingApp.h"
 
-RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits) : icSize(icSize),
-                                                                                                         guidingSplits(
-                                                                                                                 guidingSplits) {
+RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits,
+                             const std::vector<std::string> &scenes) : icSize(icSize),
+                                                                       guidingSplits(guidingSplits),
+                                                                       scenes(scenes){
     startTime = std::chrono::high_resolution_clock::now();
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
     fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
@@ -217,17 +218,17 @@ void RayTracingApp::sceneSwitcher(int index) {
     needSceneReload = false;
 
     // Don't load out of bounds
-    int sceneCount = SCENES.size();
+    int sceneCount = scenes.size();
     sceneIndex = std::min(index, sceneCount - 1);
 
     sceneLoader.cleanup();
 
     uint32_t graphicsQueueIndex = vulkanWindow.getQueueFamilyIndices().graphicsFamily.value();
-    sceneLoader = SceneLoader(SCENES[sceneIndex], vulkanOps,
+    sceneLoader = SceneLoader(scenes[sceneIndex], vulkanOps,
                               physicalDevice,
                               graphicsQueueIndex);
 
-    currentScene = SCENES[sceneIndex];
+    currentScene = scenes[sceneIndex];
 
     cameraController.vfov = sceneLoader.vfov;
     cameraController.lookAt(sceneLoader.origin, sceneLoader.target, sceneLoader.upDir);
@@ -764,11 +765,11 @@ void RayTracingApp::imGuiWindowSetup() {
 
 void RayTracingApp::imGuiSceneSelection() {
     ImGui::Text("Scene");
-    if (ImGui::BeginCombo(" ", SCENES[sceneIndex].c_str())) {
+    if (ImGui::BeginCombo(" ", scenes[sceneIndex].c_str())) {
 
-        for (int iScene = 0; iScene < SCENES.size(); iScene++) {
-            const char *scene = SCENES[iScene].c_str();
-            if(ImGui::Selectable(scene, iScene == sceneIndex)) {
+        for (int iScene = 0; iScene < scenes.size(); iScene++) {
+            const char *scene = scenes[iScene].c_str();
+            if (ImGui::Selectable(scene, iScene == sceneIndex)) {
                 sceneIndex = iScene;
                 needSceneReload = true;
             }
@@ -800,15 +801,11 @@ void RayTracingApp::imGuiGeneral() {
     hasInputChanged |= ImGui::Checkbox("Use power heuristic, else balance heuristic",
                                        reinterpret_cast<bool *>(&rtPushConstants.usePowerHeuristic));
     ImGui::Spacing();
-    hasInputChanged |= ImGui::Checkbox("Estimate image",
-                                       reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));
 
     ImGui::Checkbox("Auto rotate", &autoRotate);
     ImGui::Spacing();
     hasInputChanged |= ImGui::Checkbox("Enable average instead of mix",
                                        reinterpret_cast<bool *>(&rtPushConstants.enableAverageInsteadOfMix));
-    hasInputChanged |= ImGui::Checkbox("Use only visible sphere sampling",
-                                       reinterpret_cast<bool *>(&rtPushConstants.useVisibleSphereSampling));
     hasInputChanged |= ImGui::Checkbox("Split on first surface",
                                        reinterpret_cast<bool *>(&rtPushConstants.splitOnFirst));
 
@@ -913,6 +910,8 @@ void RayTracingApp::imGuiGuiding() {
                                           &rtPushConstants.guidingProb, 0.0f, 1.0f);
     hasInputChanged |= ImGui::Checkbox("Use Parallax Compensation",
                                        reinterpret_cast<bool *>(&rtPushConstants.useParallaxCompensation));
+    hasInputChanged |= ImGui::Checkbox("Estimate image",
+                                       reinterpret_cast<bool *>(&rtPushConstants.storeEstimate));
 
     ImGui::Checkbox("Enable", &guiding.splitRegions);
     ImGui::SameLine();
