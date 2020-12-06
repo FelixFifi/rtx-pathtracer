@@ -11,7 +11,7 @@
 layout(push_constant) uniform PushConstant{ pushConstant pushC; };
 
 layout(location = 3) rayPayloadInEXT cacheHits cacheInfo;
-layout(binding = 12, set = 1, std430) buffer Spheres { sphere cacheSpheres[]; };
+layout(binding = 12, set = 1, scalar) buffer Spheres { sphere cacheSpheres[]; };
 layout(binding = 13, set = 1, scalar) buffer Cache {  cacheHeader header; cacheData cache[]; };
 //@formatter:on
 
