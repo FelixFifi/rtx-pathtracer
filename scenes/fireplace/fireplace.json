@@ -4,5 +4,9 @@
   ],
   "instances": [
     {"fireplace": {}}
-    ]
+    ],
+  "camera" : {"target":  [1.5,0.7,-1],
+    "origin": [2.6, 0.7, -2.6],
+    "up": [0, 1, 0]
+  }
 }

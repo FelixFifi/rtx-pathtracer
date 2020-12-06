@@ -144,9 +144,9 @@ private:
 
     std::vector<Model> defaultModels;
 public:
-    glm::vec3 origin {0, 2, 15};
-    glm::vec3 target {0, -2, 2.5};
-    glm::vec3 upDir {0, 1, 0};
+    glm::vec3 origin {0, -10, 4};
+    glm::vec3 target {0, 0, 4};
+    glm::vec3 upDir {0, 0, 1};
     float vfov = 28.0f;
 
     vk::Buffer sphereBuffer;
@@ -242,6 +242,8 @@ private:
     void parseEnvMap(tinyxml2::XMLElement *xScene);
 
     void calculateSceneSize();
+
+    void parseJsonCamera(const nlohmann::basic_json<> &j);
 };
 
 

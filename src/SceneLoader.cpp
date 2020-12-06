@@ -47,6 +47,9 @@ SceneLoader::SceneLoader(const std::string &filepath, std::shared_ptr<VulkanOps>
     }
 
 
+    std::cout << "Loading " << path << std::endl;
+
+
     // Reserve position for EnvMap
     textures.push_back({});
 
@@ -623,6 +626,23 @@ void SceneLoader::parseSceneFile(const std::string &filepath) {// read a JSON fi
 
     parsePointLights(j);
 
+    parseJsonCamera(j);
+
+    std::cout << "Loaded Scene" << std::endl;
+}
+
+void SceneLoader::parseJsonCamera(const json &j) {
+    if (j.contains("camera")) {
+        json camera = j["camera"];
+        std::vector<float> jTarget = camera["target"];
+        target = {jTarget[0], jTarget[1], jTarget[2]};
+
+        std::vector<float> jOrigin = camera["origin"];
+        origin = {jOrigin[0], jOrigin[1], jOrigin[2]};
+
+        std::vector<float> jUp = camera["up"];
+        upDir = {jUp[0], jUp[1], jUp[2]};
+    }
 }
 
 /**
