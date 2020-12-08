@@ -1439,10 +1439,6 @@ vec3 visualizeIC(vec3 origin, vec3 direction) {
     if (pushC.showIrradianceGradients) {
         // extra gradient visualization shader
         if (queryIrradianceCacheGradients(info.worldPos, info.normal, icColor)) {
-            if (pushC.highlightIrradianceCacheColor) {
-                icColor -= min(min(icColor.r, icColor.g), icColor.b).xxx;
-            }
-
             return pushC.irradianceVisualizationScale * icColor;
         }
     } else {
