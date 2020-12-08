@@ -894,6 +894,8 @@ void RayTracingApp::imGuiIC() {
     ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
     bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
     needSceneReload |= irradianceCache.wasUpdated() && irNumNeeChanged;
+    hasInputChanged |= ImGui::SliderFloat("IC min sphere radius",
+                                          &rtPushConstants.irradianceCacheMinRadius, 0.0f, 1);
     hasInputChanged |= ImGui::SliderFloat("Gradients max length", &rtPushConstants.irradianceGradientsMaxLength, 0.0f,
                                           50.0f);
 
@@ -906,9 +908,6 @@ void RayTracingApp::imGuiIC() {
                                        reinterpret_cast<bool *>(&rtPushConstants.highlightIrradianceCacheColor));
     hasInputChanged |= ImGui::SliderFloat("Visualization scale",
                                           &rtPushConstants.irradianceVisualizationScale, 0.0f, 20.0f);
-    hasInputChanged |= ImGui::SliderFloat("IC min sphere radius",
-                                          &rtPushConstants.irradianceCacheMinRadius, 0.0f, 1);
-
     ImGui::End();
 }
 
