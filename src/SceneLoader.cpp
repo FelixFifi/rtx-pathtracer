@@ -337,7 +337,10 @@ void SceneLoader::parseMitsubaSceneFile(const std::string &filepath) {
     XMLElement *xScene = document.FirstChildElement("scene");
 
     parseCameraSettings(xScene);
-    std::map<std::string, int> definedMaterials = parseXmlBSDFs(xScene);
+
+    std::map<std::string, int> definedTextures = parseXmlTextures(xScene);
+
+    std::map<std::string, int> definedMaterials = parseXmlBSDFs(xScene, definedTextures);
 
     parseXmlShapes(xScene, definedMaterials);
 
@@ -411,7 +414,7 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
         XMLElement *xBSDF = xShape->FirstChildElement("bsdf");
         if (xBSDF) {
             std::string tmp;
-            Material mat = parseXmlBSDF(xBSDF, tmp);
+            Material mat = parseXmlBSDF(xBSDF, tmp, definedMaterials);
 
             matIndex = materials.size();
             materials.push_back(mat);
@@ -510,13 +513,34 @@ void SceneLoader::parseXmlShapes(XMLElement *xScene, std::map<std::string, int> 
     }
 }
 
-std::map<std::string, int> SceneLoader::parseXmlBSDFs(XMLElement *xScene) {
+std::map<std::string, int> SceneLoader::parseXmlTextures(XMLElement *xScene) {
+    std::map<std::string, int> definedTextures;
+
+    XMLElement *xTexture = xScene->FirstChildElement("texture");
+    while (xTexture) {
+        std::string id = xTexture->Attribute("id");
+
+        if (definedTextures.contains(id)) {
+            throw std::runtime_error("Duplicate texture id");
+        }
+
+        std::string filename = getChildString(xTexture, "filename");
+        definedTextures[id] = addTexture(filename);
+
+        xTexture = xTexture->NextSiblingElement("texture");
+    }
+
+    return definedTextures;
+}
+
+std::map<std::string, int>
+SceneLoader::parseXmlBSDFs(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedTextures) {
     std::map<std::string, int> definedMaterials;
 
     XMLElement *xBSDF = xScene->FirstChildElement("bsdf");
     while (xBSDF) {
         std::string id;
-        Material mat = parseXmlBSDF(xBSDF, id);
+        Material mat = parseXmlBSDF(xBSDF, id, definedTextures);
 
         if (definedMaterials.contains(id)) {
             throw std::runtime_error("Duplicate BSDF id");
@@ -531,7 +555,7 @@ std::map<std::string, int> SceneLoader::parseXmlBSDFs(XMLElement *xScene) {
     return definedMaterials;
 }
 
-Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId) const {
+Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId, std::map<std::string, int> &definedTextures) const {
 
     const char *id = xBSDF->Attribute("id");
     if (id) {
@@ -548,8 +572,18 @@ Material SceneLoader::parseXmlBSDF(XMLElement *xBSDF, std::string &outId) const 
     } else if (type == "diffuse") {
         mat.type = eDiffuse;
         mat.specular = {0, 0, 0};
-        mat.diffuse = getChildRGB(xBSDF, "reflectance");
         mat.specularHighlight = 0;
+
+        // if it has a texture reference, use it instead
+        XMLElement *xRef = xBSDF->FirstChildElement("ref");
+        if (xRef && std::string("reflectance") == xRef->Attribute("name")) {
+            std::string textureId = xRef->Attribute("id");
+
+            mat.diffuse = {1 , 1, 1};
+            mat.textureIdDiffuse = definedTextures[textureId];
+        } else {
+            mat.diffuse = getChildRGB(xBSDF, "reflectance");
+        }
     } else if (type == "dielectric") {
         mat.type = eDielectric;
         mat.specular = {1, 1, 1};

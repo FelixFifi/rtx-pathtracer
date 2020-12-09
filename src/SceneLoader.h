@@ -221,9 +221,9 @@ private:
 
     void parseCameraSettings(tinyxml2::XMLElement *xScene);
 
-    Material parseXmlBSDF(tinyxml2::XMLElement *xBSDF, std::string &outId) const;
+    Material parseXmlBSDF(tinyxml2::XMLElement *xBSDF, std::string &outId, std::map<std::string, int> &definedTextures) const;
 
-    std::map<std::string, int> parseXmlBSDFs(tinyxml2::XMLElement *xScene);
+    std::map<std::string, int> parseXmlBSDFs(tinyxml2::XMLElement *xScene, std::map<std::string, int> &definedTextures);
 
     void
     converteObjData(const std::vector<tinyobj::shape_t> &shapes, const tinyobj::attrib_t &attrib,
@@ -244,6 +244,8 @@ private:
     void calculateSceneSize();
 
     void parseJsonCamera(const nlohmann::basic_json<> &j);
+
+    std::map<std::string, int> parseXmlTextures(tinyxml2::XMLElement *xScene);
 };
 
 
