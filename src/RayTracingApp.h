@@ -14,6 +14,7 @@
 // #VKRay
 #define ALLOC_DEDICATED
 
+
 #include <nvmath/nvmath.h>
 #include <nvvkpp/utilities_vkpp.hpp>
 #include <nvvkpp/descriptorsets_vkpp.hpp>
@@ -41,6 +42,9 @@ static const int MAX_RECURSION = 2;
 
 static const int ACCUMULATE_IMAGE_BINDING = 9;
 static const int ESTIMATE_IMAGE_BINDING = 14;
+
+
+typedef std::chrono::time_point<std::chrono::high_resolution_clock> timePoint;
 
 static const vk::Flags<vk::ShaderStageFlagBits> PUSH_CONSTANT_STAGES = vk::ShaderStageFlagBits::eRaygenKHR
                                                                        | vk::ShaderStageFlagBits::eClosestHitKHR
@@ -78,9 +82,9 @@ public:
     struct RtPushConstant {
         uint randomUInt;
         uint previousFrames = -1;
-        int maxDepth = 6;
+        int maxDepth = 30;
         int maxFollowDiscrete = 3;  // TODO: Option to estimate surface after > maxFollow as diffuse
-        int samplesPerPixel = 1;
+        int samplesPerPixel = 4;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
         int numNEE = 1;
@@ -134,7 +138,7 @@ private:
 
     SceneLoader sceneLoader;
 
-    std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
+    timePoint startTime;
 
     uint32_t icSize;
 
@@ -147,8 +151,24 @@ private:
     int sceneIndex = 0;
     bool showOtherVisualizations = false;
     int currentVisualizeMode = EGuidingOverlay;
+    bool hasStarted = false;
+    long startupTimeMillisecond;
 
     bool takePicture = false;
+
+
+    bool evalXSamples = false;
+    int evalCurrentSamples = 0;
+    int evalNumSamples = 512;
+    timePoint evalXSamplesStart;
+    long evalXSamplesTime = -1;
+
+    // If this is true from the beginning, then the program launch time is used
+    bool evalXSeconds = true;
+    int evalNumSeconds = 60;
+    timePoint evalXSecondsEnd;
+    long evalXSecondsLastResult = 0;
+    long evalXSecondsTotalSamples = 0;
 
     CameraController cameraController;
     IrradianceCache irradianceCache;
@@ -265,6 +285,10 @@ private:
     void imGuiSceneSelection();
 
     void updateIrradianceCacheASDescriptorSets();
+
+    void imGuiEval();
+
+    long getMillisecondsSinceStart(const timePoint &startTime) const;
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

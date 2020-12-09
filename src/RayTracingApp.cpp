@@ -11,8 +11,14 @@
 RayTracingApp::RayTracingApp(uint32_t width, uint32_t height, uint32_t icSize, uint32_t guidingSplits,
                              const std::vector<std::string> &scenes) : icSize(icSize),
                                                                        guidingSplits(guidingSplits),
-                                                                       scenes(scenes){
+                                                                       scenes(scenes) {
     startTime = std::chrono::high_resolution_clock::now();
+
+    if (evalXSeconds) {
+        // If X seconds evaluation is enabled, then since program start
+        evalXSecondsEnd = startTime + std::chrono::milliseconds(evalNumSeconds * 1000);
+    }
+
     fDrawCallback drawFunc = [this](uint32_t imageIndex) { drawCallback(imageIndex); };
     fRecreateSwapchainCallback recreateSwapchainFunc = [this] { recreateSwapchainCallback(); };
 
@@ -71,6 +77,29 @@ void RayTracingApp::run() {
 }
 
 void RayTracingApp::drawCallback(uint32_t imageIndex) {
+    if (!hasStarted) {
+        hasStarted = true;
+
+        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::high_resolution_clock::now() - startTime);
+        startupTimeMillisecond = milliseconds.count();
+
+        std::cout << "Startup time: " << startupTimeMillisecond << " milliseconds or "
+                  << startupTimeMillisecond / 1000.0f << " seconds" << std::endl;
+    }
+
+    if (evalXSamples && evalCurrentSamples == 0) {
+        evalXSamplesStart = std::chrono::high_resolution_clock::now();
+        accumulateResults = true;
+        hasInputChanged = true;
+    }
+
+    if (evalXSeconds && evalXSecondsTotalSamples == 0) {
+        accumulateResults = true;
+        hasInputChanged = true;
+    }
+
+
     if (needSceneReload) {
         sceneSwitcher(sceneIndex);
     }
@@ -84,7 +113,8 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 
     device.waitIdle();
 
-    if (rtPushConstants.useIrradianceCache && (rtPushConstants.irradianceUpdateProb > 0  || rtPushConstants.irradianceCreateProb > 0)) {
+    if (rtPushConstants.useIrradianceCache &&
+        (rtPushConstants.irradianceUpdateProb > 0 || rtPushConstants.irradianceCreateProb > 0)) {
         if (irradianceCache.updateSpheres(false)) {
             updateIrradianceCacheASDescriptorSets();
         }
@@ -124,6 +154,38 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     // TODO: Fences
     device.waitIdle();
 
+    if (evalXSamples) {
+        evalCurrentSamples += rtPushConstants.samplesPerPixel;
+
+        if (evalCurrentSamples >= evalNumSamples) {
+            evalXSamplesTime = getMillisecondsSinceStart(evalXSamplesStart);
+
+            std::cout << "Collecting " << evalNumSamples << " samples took " << evalXSamplesTime
+                      << " milliseconds with " << rtPushConstants.samplesPerPixel << " samples per pixel per frame"
+                      << std::endl;
+            std::cout << "With startup " << evalXSamplesTime + startupTimeMillisecond << " milliseconds" << std::endl;
+
+            takePicture = true;
+            evalXSamples = false;
+            evalCurrentSamples = 0;
+        }
+    }
+
+    if (evalXSeconds) {
+        evalXSecondsTotalSamples += rtPushConstants.samplesPerPixel;
+
+        if (std::chrono::high_resolution_clock::now() > evalXSecondsEnd) {
+            evalXSecondsLastResult = evalXSecondsTotalSamples;
+
+            std::cout << "Collected " << evalXSecondsTotalSamples << " in " << evalNumSeconds << std::endl;
+
+            evalXSeconds = false;
+            evalXSecondsTotalSamples = 0;
+            takePicture = true;
+        }
+
+    }
+
     if (takePicture) {
 
         takePictureCurrentTime();
@@ -132,6 +194,12 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     }
 
     postProcessing.drawCallback(imageIndex);
+}
+
+long RayTracingApp::getMillisecondsSinceStart(
+        const timePoint &startTime) const {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() -
+                                                                 RayTracingApp::startTime).count();
 }
 
 void RayTracingApp::updateGuidingDescriptorSets() {
@@ -493,10 +561,18 @@ void RayTracingApp::initRayTracing() {
     auto properties = physicalDevice.getProperties2<vk::PhysicalDeviceProperties2, vk::PhysicalDeviceRayTracingPropertiesKHR>();
     rtProperties = properties.get<vk::PhysicalDeviceRayTracingPropertiesKHR>();
 
+    auto start = std::chrono::high_resolution_clock::now();
+    std::cout << "Creating ray tracing pipeline" << std::endl;
+
     createRtDescriptorSet();
     updateRtDescriptorSet(0);
     createRtPipeline();
     createRtShaderBindingTable();
+
+    auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - start);
+    std::cout << "Ray tracing pipeline created in " << milliseconds.count() << " milliseconds or "
+              << milliseconds.count() / 1000.0f << " seconds" << std::endl;
 }
 
 void RayTracingApp::createRtDescriptorSet() {
@@ -775,6 +851,39 @@ void RayTracingApp::imGuiWindowSetup() {
     imGuiIC();
     imGuiADRRS();
     imGuiGuiding();
+    imGuiEval();
+
+}
+
+void RayTracingApp::imGuiEval() {
+    ImGui::Begin("Evaluation");
+    bool hasEvalXSamplesChanged = ImGui::Checkbox("Time Samples", reinterpret_cast<bool *>(&evalXSamples));
+    hasInputChanged |= hasEvalXSamplesChanged && evalXSamples;
+
+    ImGui::PushItemWidth(100.0f);
+    ImGui::InputInt("Samples per pixel", &evalNumSamples, 1, 5);
+    ImGui::PopItemWidth();
+    ImGui::Text("Current samples: %i of %i", evalCurrentSamples, evalNumSamples);
+    ImGui::Text("Last test took: %ld ms  with startupTime: %ld ms", evalXSamplesTime,
+                evalXSamplesTime + startupTimeMillisecond);
+
+    ImGui::Spacing();
+    bool hasEvalXSecondsChanged = ImGui::Checkbox("Collect Samples for time", reinterpret_cast<bool *>(&evalXSeconds));
+    if (hasEvalXSecondsChanged && evalXSeconds) {
+        hasInputChanged = true;
+        evalXSecondsEnd = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(evalNumSeconds * 1000);
+    }
+
+    ImGui::PushItemWidth(100.0f);
+    ImGui::InputInt("Time to collect in seconds", &evalNumSeconds, 10, 60);
+    ImGui::PopItemWidth();
+    long secondsLeft = std::chrono::duration_cast<std::chrono::seconds>(
+            evalXSecondsEnd - std::chrono::high_resolution_clock::now()).count();
+    ImGui::Text("Current time remaining: %ld s  Current samples: %li", secondsLeft > 0 ? secondsLeft : 0,
+                evalXSecondsTotalSamples);
+    ImGui::Text("Last test resulted in %ld samples", evalXSecondsLastResult);
+
+    ImGui::End();
 }
 
 void RayTracingApp::imGuiSceneSelection() {
@@ -880,9 +989,9 @@ void RayTracingApp::imGuiIC() {
 
     ImGui::Spacing();
     bool probUpdated = ImGui::InputFloat("Update prob", &rtPushConstants.irradianceUpdateProb, 0.0001, 0.001,
-                      "%.6f");
+                                         "%.6f");
     probUpdated |= ImGui::InputFloat("Create prob", &rtPushConstants.irradianceCreateProb, 0.0001, 0.001,
-                      "%.6f");
+                                     "%.6f");
 
     // After updating or creation is disabled, update one last time
     if (probUpdated && rtPushConstants.irradianceUpdateProb <= 0 && rtPushConstants.irradianceCreateProb <= 0) {
