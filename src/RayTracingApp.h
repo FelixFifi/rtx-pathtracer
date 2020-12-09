@@ -84,7 +84,7 @@ public:
         uint previousFrames = -1;
         int maxDepth = 30;
         int maxFollowDiscrete = 3;  // TODO: Option to estimate surface after > maxFollow as diffuse
-        int samplesPerPixel = 4;
+        int samplesPerPixel = 1;
         int enableRR = 0; // GLSL has 4 byte bool
         int enableNEE = 1; // GLSL has 4 byte bool
         int numNEE = 1;
@@ -164,7 +164,7 @@ private:
     long evalXSamplesTime = -1;
 
     // If this is true from the beginning, then the program launch time is used
-    bool evalXSeconds = true;
+    bool evalXSeconds = false;
     int evalNumSeconds = 60;
     timePoint evalXSecondsEnd;
     long evalXSecondsLastResult = 0;
@@ -288,7 +288,7 @@ private:
 
     void imGuiEval();
 
-    long getMillisecondsSinceStart(const timePoint &startTime) const;
+    long getMillisecondsSinceStart(const timePoint &start) const;
 };
 
 #endif //RTX_RAYTRACER_RAYTRACINGAPP_H

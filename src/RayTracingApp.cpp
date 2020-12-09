@@ -197,9 +197,9 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
 }
 
 long RayTracingApp::getMillisecondsSinceStart(
-        const timePoint &startTime) const {
+        const timePoint &start) const {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() -
-                                                                 RayTracingApp::startTime).count();
+                                                                 start).count();
 }
 
 void RayTracingApp::updateGuidingDescriptorSets() {
