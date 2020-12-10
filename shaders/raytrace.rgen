@@ -245,7 +245,7 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
     float cosThetaWo = dot(wo, normal);
     if (cosThetaWo > 0) {
         if (mat.textureIdDiffuse != -1) {
-            res += mat.diffuse * texture(textureSamplers[mat.textureIdDiffuse], info.textureUV).xyz /
+            res += mat.diffuse * texture(textureSamplers[mat.textureIdDiffuse], uv).xyz /
             M_PI;
         } else {
             res += mat.diffuse / M_PI;
@@ -255,7 +255,7 @@ vec3 phong(in Material mat, in vec2 uv, in vec3 normal, in vec3 wi, in vec3 wo) 
         if (dotReflDir > 0) {
             if (mat.textureIdSpecular != -1) {
                 res += (mat.specularHighlight + 2) / (2 * M_PI) * mat.specular * pow(dotReflDir, mat.specularHighlight) *
-                texture(textureSamplers[mat.textureIdSpecular], info.textureUV).xyz;
+                texture(textureSamplers[mat.textureIdSpecular], uv).xyz;
             } else {
                 res += (mat.specularHighlight + 2) / (2 * M_PI) * mat.specular * pow(dotReflDir, mat.specularHighlight);
             }
@@ -598,7 +598,7 @@ vec3 evalBsdf(Material mat, vec2 uv, vec3 normal, vec3 wi, vec3 wo, bool frontFa
     }
 }
 
-vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
+vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal, vec2 textureUV) {
     switch (mat.type) {
         case MAT_DIFFUSE:
         case MAT_PHONG:
@@ -617,8 +617,6 @@ vec3 nextEventEstimation(Material mat, vec3 origin, vec3 wi, vec3 normal) {
     vec3 lightColor;
     float lightDistance;
     float pdfLights = sampleLights(origin, normal, lightDir, lightColor, lightDistance);
-
-    vec2 textureUV = info.textureUV;
 
     // Check if shadowed
     shadowInfo.isShadowed = true;
@@ -870,10 +868,10 @@ float applyWeightWindow(vec3 throughput, vec3 adjoint, out int n) {
     }
 }
 
-vec3 multipleNEE(Material mat, vec3 origin, vec3 wi, vec3 normal, int numNEE) {
+vec3 multipleNEE(Material mat, vec3 origin, vec3 wi, vec3 normal, vec2 textureUV, int numNEE) {
     vec3 result = vec3(0, 0, 0);
     for (int i = 0; i < numNEE; i++) {
-        result += nextEventEstimation(mat, origin, wi, normal);
+        result += nextEventEstimation(mat, origin, wi, normal, textureUV);
     }
     return result / numNEE;
 }
@@ -1045,6 +1043,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
         Material mat = mats[info.matIndex];
         origin = info.worldPos;
         normal = info.normal;
+        vec2 textureUV = info.textureUV;
 
         // For average distance calculation
         if (depth == 1) {
@@ -1083,7 +1082,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                 if (isICCapable(mat)) {
                     vec3 irradianceColor;
                     if (queryIrradianceCache(origin, normal, irradianceColor)) {
-                        vec3 diffuse = approxDiffuse(mat, normal, -direction, info.textureUV);
+                        vec3 diffuse = approxDiffuse(mat, normal, -direction, textureUV);
 
                         if (useADRRS) {
                             vec3 adjoint = diffuse * irradianceColor;
@@ -1112,7 +1111,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
                                 // n => n - 1 splits, because the current ray continues on
                                 for (int iSplit = 0; iSplit < n - 1; iSplit++) {
-                                    split(origin, normal, -direction, throughput, info.textureUV, info.matIndex, depth, info.isFrontFace);
+                                    split(origin, normal, -direction, throughput, textureUV, info.matIndex, depth, info.isFrontFace);
                                 }
                             }
                         } else {
@@ -1120,7 +1119,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
                             result += throughput * diffuse * irradianceColor;
 
                             // If IC values are used, then NEE is necessary for the complete light values
-                            result += throughput * multipleNEE(mat, origin, -direction, normal, numNEE);
+                            result += throughput * multipleNEE(mat, origin, -direction, normal, textureUV, numNEE);
                             break;
                         }
                     } else if (createIC && rnd() < pushC.irradianceCreateProb) {
@@ -1141,7 +1140,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
             }
 
             if (pushC.splitOnFirst && depth == 1) {
-                if (split(origin, normal, -direction, throughput * 0.5, info.textureUV, info.matIndex, depth, info.isFrontFace)) {
+                if (split(origin, normal, -direction, throughput * 0.5, textureUV, info.matIndex, depth, info.isFrontFace)) {
                     throughput *= 0.5;
                 }
             }
@@ -1158,7 +1157,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
 
             // NEE is after possible splits, as each split should calculate its own NEE
             if (useNEE) {
-                vec3 neeLight = multipleNEE(mat, origin, -direction, normal, numNEE);
+                vec3 neeLight = multipleNEE(mat, origin, -direction, normal, textureUV, numNEE);
                 result += throughput * neeLight;
 
                 if (saveSamples) {
@@ -1174,7 +1173,7 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
             break;
         }
 
-        vec3 throughputChange = evalBsdf(mat, info.textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
+        vec3 throughputChange = evalBsdf(mat, textureUV, normal, -direction, newDirection, info.isFrontFace) / pdf;
         throughput *= throughputChange;
 
         if (saveSamples && currentSampleOffset < MAX_DIRECTIONAL_DATA_PER_PIXEL) {
@@ -1686,7 +1685,7 @@ void main() {
             // Split happens before NEE
             // => calculate NEE for origin
             if (useNEE) {
-                result += split.throughput * multipleNEE(mat, split.origin, split.wi, split.normal, numNEE);
+                result += split.throughput * multipleNEE(mat, split.origin, split.wi, split.normal, split.textureUV, numNEE);
             }
 
             vec3 direction;
