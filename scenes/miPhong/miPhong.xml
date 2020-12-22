@@ -124,6 +124,7 @@
 			<integer name="height" value="720"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+            <rfilter type="box"/>
 		</film>
 	</sensor>
 </scene>

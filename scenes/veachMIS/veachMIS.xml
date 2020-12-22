@@ -5,7 +5,7 @@
 -->
 <scene version="0.6.0">
 	<integrator type="path">
-		<integer name="maxDepth" value="8"/>
+		<integer name="maxDepth" value="30"/>
 	</integrator>
 
 	<shape type="sphere">
@@ -122,12 +122,18 @@
 			<lookAt origin="0, 2, 15" target="0, -2, 2.5" up="0, 1, 0"/>
 		</transform>
 		<float name="fov" value="28"/>
+		
+
+		<sampler type="independent">
+			<integer name="sampleCount" value="500"/>
+		</sampler>
 
 		<film type="hdrfilm">
 			<integer name="width" value="1280"/>
 			<integer name="height" value="720"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+		    <rfilter type="box"/>
 		</film>
 	</sensor>
 </scene>

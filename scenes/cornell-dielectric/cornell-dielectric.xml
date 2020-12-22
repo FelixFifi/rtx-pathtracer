@@ -11,7 +11,7 @@
         </transform>
 
         <sampler type="independent">
-            <integer name="sampleCount" value="50"/>
+            <integer name="sampleCount" value="1100"/>
         </sampler>
 
         <film type="hdrfilm" id="film">
@@ -19,6 +19,7 @@
             <integer name="height" value="720"/>
             <string name="pixelFormat" value="rgb"/>
             <boolean name="banner" value="false"/>
+            <rfilter type="box"/>
         </film>
     </sensor>
 
