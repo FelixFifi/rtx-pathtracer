@@ -1215,7 +1215,11 @@ vec3 raytrace(vec3 origin, vec3 direction, vec3 throughput, inout int currentDep
     } while (depth <= maxDepth || (follow && followCount <= maxFollowDiscrete));
 
     commitSamples(currentSampleOffset);
-    sampleOffset += currentSampleOffset;
+
+    // If no light was encountered, then the directional data slots can be reused by the next pixel sample
+    if (length(result) > 0) {
+        sampleOffset += currentSampleOffset;
+    }
 
     currentDepth = depth;
     return result;
