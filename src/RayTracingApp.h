@@ -99,7 +99,7 @@ public:
         int highlightIrradianceCacheColor = 0;
         float irradianceA = 0.2;
         float irradianceUpdateProb = 0.00001;
-        float irradianceCreateProb = 0.0001;
+        float irradianceCreateProb = 0.0005;
         float irradianceVisualizationScale = 1.0;
         int useIrradianceGradients = 0;
         int useIrradianceCacheOnGlossy = 0;
@@ -156,6 +156,7 @@ private:
 
     bool takePicture = false;
 
+    bool setSPPToOneAfterEval = false;
 
     bool evalXSamples = false;
     int evalCurrentSamples = 0;
@@ -172,18 +173,21 @@ private:
 
     CameraController cameraController;
     IrradianceCache irradianceCache;
-    int irradianceCachePrepareFrames = 10;
+    int irradianceCachePrepareFrames = 50;
     int currentPrepareFrames = 0;
 
     PathGuiding guiding;
     bool enableParallaxCompensationForOptimization = true;
     int numGuidingOptimizations = 6;
     int currentGuidingOptimizations = -1;
+    timePoint guidingUpdateStart;
+    long guidingUpdateTimeMs = -1;
     uint guidingSplits;
     SampleCollector sampleCollector;
 
     RtPushConstant backupPushConstant;
     bool loadBackupNextIteration = false;
+    bool activateADRRSAfterPrepareFrames = false;
 
     // Vulkan
     vk::Buffer uniformBuffer;
@@ -264,7 +268,7 @@ private:
 
     void cleanupRtPipeline();
 
-    void takePictureCurrentTime();
+    void takePictureCurrentTime(const std::string &postFix);
 
     void setEstimateRTSettings();
 

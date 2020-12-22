@@ -126,11 +126,13 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     if (rtPushConstants.updateGuiding) {
         if (currentGuidingOptimizations == -1) {
             currentGuidingOptimizations = 0;
+            guidingUpdateStart = std::chrono::high_resolution_clock::now();
         } else {
             currentGuidingOptimizations++;
         }
 
         if (numGuidingOptimizations != -1 && currentGuidingOptimizations >= numGuidingOptimizations) {
+            guidingUpdateTimeMs = getMillisecondsSinceStart(guidingUpdateStart);
             rtPushConstants.updateGuiding = 0;
             currentGuidingOptimizations = -1;
         }
@@ -155,7 +157,10 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
     device.waitIdle();
 
     if (evalXSamples) {
-        evalCurrentSamples += rtPushConstants.samplesPerPixel;
+        if (!(rtPushConstants.useIrradianceCache && currentPrepareFrames < irradianceCachePrepareFrames)) {
+            // Prepare frame only updates irradiance cache
+            evalCurrentSamples += rtPushConstants.samplesPerPixel;
+        }
 
         if (evalCurrentSamples >= evalNumSamples) {
             evalXSamplesTime = getMillisecondsSinceStart(evalXSamplesStart);
@@ -165,30 +170,53 @@ void RayTracingApp::drawCallback(uint32_t imageIndex) {
                       << std::endl;
             std::cout << "With startup " << evalXSamplesTime + startupTimeMillisecond << " milliseconds" << std::endl;
 
-            takePicture = true;
             evalXSamples = false;
             evalCurrentSamples = 0;
+
+            std::stringstream ss;
+            ss << "_" << evalNumSamples << "samples_in_" << evalXSamplesTime << "ms_withStartup"
+               << evalXSamplesTime + startupTimeMillisecond << "ms" << rtPushConstants.samplesPerPixel << "spp";
+
+            takePictureCurrentTime(ss.str());
+
+            if (setSPPToOneAfterEval) {
+                rtPushConstants.samplesPerPixel = 1;
+            }
         }
     }
 
     if (evalXSeconds) {
-        evalXSecondsTotalSamples += rtPushConstants.samplesPerPixel;
+        if (!(rtPushConstants.useIrradianceCache && currentPrepareFrames < irradianceCachePrepareFrames)) {
+            // Prepare frame only updates irradiance cache
+            evalXSecondsTotalSamples += rtPushConstants.samplesPerPixel;
+        }
+
 
         if (std::chrono::high_resolution_clock::now() > evalXSecondsEnd) {
             evalXSecondsLastResult = evalXSecondsTotalSamples;
 
             std::cout << "Collected " << evalXSecondsTotalSamples << " in " << evalNumSeconds << std::endl;
 
+
+            std::stringstream ss;
+            ss << "_" << evalNumSeconds << "s_got_" << evalXSecondsTotalSamples << "samples"
+               << rtPushConstants.samplesPerPixel << "spp";
+            takePictureCurrentTime(ss.str());
+
+
             evalXSeconds = false;
             evalXSecondsTotalSamples = 0;
-            takePicture = true;
+
+            if (setSPPToOneAfterEval) {
+                rtPushConstants.samplesPerPixel = 1;
+            }
         }
 
     }
 
     if (takePicture) {
 
-        takePictureCurrentTime();
+        takePictureCurrentTime("");
 
         takePicture = false;
     }
@@ -237,7 +265,7 @@ void RayTracingApp::updateIrradianceCacheASDescriptorSets() {
     device.updateDescriptorSets(writes, nullptr);
 }
 
-void RayTracingApp::takePictureCurrentTime() {
+void RayTracingApp::takePictureCurrentTime(const std::string &postFix) {
     time_t t = time(nullptr);   // get time now
     tm *now = localtime(&t);
 
@@ -251,7 +279,7 @@ void RayTracingApp::takePictureCurrentTime() {
     std::string separator = "_";
 
     const std::string filepath =
-            timestring + separator + scene + mode + ".exr";
+            timestring + separator + scene + mode + postFix + ".exr";
 
     postProcessing.saveOffscreenImage(filepath);
     std::cout << "Wrote file " << filepath << std::endl;
@@ -1001,6 +1029,7 @@ void RayTracingApp::imGuiIC() {
 
     ImGui::Spacing();
     ImGui::InputInt("Prepare frames", &irradianceCachePrepareFrames, 1, 10);
+    ImGui::Text("Prepare frame %i of %i", currentPrepareFrames, irradianceCachePrepareFrames);
     bool irNumNeeChanged = ImGui::InputInt("Num NEE", &rtPushConstants.irradianceNumNEE, 1, 10);
     needSceneReload |= irradianceCache.wasUpdated() && irNumNeeChanged;
     hasInputChanged |= ImGui::SliderFloat("IC min sphere radius",
@@ -1056,6 +1085,9 @@ void RayTracingApp::imGuiGuiding() {
     ImGui::InputInt("times", &numGuidingOptimizations, 1, 10);
 
     ImGui::PopItemWidth();
+    ImGui::Text("Update step %i of %i\nOptimization took %f seconds", currentGuidingOptimizations,
+                numGuidingOptimizations, guidingUpdateTimeMs / 1000.0f);
+
 
     needSceneReload |= ImGui::Checkbox("Use Parallax Compensation for Optimization",
                                        &enableParallaxCompensationForOptimization);
@@ -1095,10 +1127,30 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
     }
 
     // Irradiance cache needs a few iterations to create the initial irradiance caches
-    if (rtPushConstants.useIrradianceCache && currentPrepareFrames < irradianceCachePrepareFrames) {
-        rtPushConstants.isIrradiancePrepareFrame = 1;
-        rtPushConstants.previousFrames = -1;
-        currentPrepareFrames++;
+    if (rtPushConstants.useIrradianceCache || rtPushConstants.useADRRS) {
+        if (currentPrepareFrames < irradianceCachePrepareFrames) {
+            if (rtPushConstants.useADRRS) {
+                // ADRRS cant be enabled during prepare frames, but should be afterwards
+                rtPushConstants.useIrradianceCacheOnGlossy = 1;
+                rtPushConstants.useIrradianceCache = 1;
+                rtPushConstants.useADRRS = 0;
+                activateADRRSAfterPrepareFrames = true;
+            }
+
+            rtPushConstants.isIrradiancePrepareFrame = 1;
+            rtPushConstants.previousFrames = -1;
+            currentPrepareFrames++;
+        } else if (activateADRRSAfterPrepareFrames && currentPrepareFrames == irradianceCachePrepareFrames) {
+            // ADRRS => After prepare frames store estimate
+            rtPushConstants.storeEstimate = 1;
+            rtPushConstants.useIrradianceCache = 0;
+            rtPushConstants.isIrradiancePrepareFrame = 0;
+            rtPushConstants.useADRRS = 1;
+            activateADRRSAfterPrepareFrames = false;
+            currentPrepareFrames++;
+        } else {
+            rtPushConstants.isIrradiancePrepareFrame = 0;
+        }
     } else {
         rtPushConstants.isIrradiancePrepareFrame = 0;
     }
@@ -1152,7 +1204,7 @@ void RayTracingApp::raytrace(const vk::CommandBuffer &cmdBuf) {
 }
 
 void RayTracingApp::setEstimateRTSettings() {
-    rtPushConstants.samplesPerPixel = 4;
+    rtPushConstants.samplesPerPixel = 16;
     rtPushConstants.useIrradianceCache = true;
     rtPushConstants.useIrradianceCacheOnGlossy = true;
     rtPushConstants.enableNEE = true;
@@ -1160,6 +1212,8 @@ void RayTracingApp::setEstimateRTSettings() {
     rtPushConstants.maxDepth = 1;
     rtPushConstants.maxFollowDiscrete = 10;
     rtPushConstants.showIrradianceCacheOnly = false;
+    rtPushConstants.numNEE = 5;
+    rtPushConstants.useADRRS = false;
 }
 
 void RayTracingApp::cleanup() {
