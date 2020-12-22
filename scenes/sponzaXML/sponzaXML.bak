@@ -1,0 +1,459 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+
+	Automatically converted from COLLADA
+
+-->
+
+<scene version="0.4.0">
+
+	<integrator type="path"/>
+
+	<texture type="bitmap" id="Map__1_image-image">
+		<string name="filename" value="textures/sp_luk.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__46_image-image">
+		<string name="filename" value="textures/00_skap.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__38_image-image">
+		<string name="filename" value="textures/01_STUB.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__35_image-image">
+		<string name="filename" value="textures/01_S_ba.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__40_image-image">
+		<string name="filename" value="textures/x01_st.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__9_image-image">
+		<string name="filename" value="textures/KAMEN.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__44_image-image">
+		<string name="filename" value="textures/reljef.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__11_image-image">
+		<string name="filename" value="textures/prozor1.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__55_image-image">
+		<string name="filename" value="textures/vrata_kr.JPG"/>
+	</texture>
+
+	<texture type="bitmap" id="Map__54_image-image">
+		<string name="filename" value="textures/vrata_ko.JPG"/>
+	</texture>
+
+	<bsdf type="diffuse" id="sp_00_luk_mali">
+		<ref name="reflectance" id="Map__1_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_svod_kapitel">
+		<ref name="reflectance" id="Map__46_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stub_baza_">
+		<rgb name="reflectance" value="0.784314 0.784314 0.784314"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stub_kut">
+		<ref name="reflectance" id="Map__38_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_stup">
+		<ref name="reflectance" id="Map__38_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stub_baza">
+		<ref name="reflectance" id="Map__35_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stub">
+		<ref name="reflectance" id="Map__38_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stup">
+		<ref name="reflectance" id="Map__40_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_vijenac">
+		<ref name="reflectance" id="Map__46_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_pod">
+		<ref name="reflectance" id="Map__9_image-image"/>
+	</bsdf>
+
+	<bsdf type="phong" id="sp_00_svod">
+		<rgb name="diffuseReflectance" value="0.941177 0.866667 0.737255"/>
+		<rgb name="specularReflectance" value="0.034039 0.032314 0.029333"/>
+		<float name="exponent" value="1.07177"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_02_reljef">
+		<ref name="reflectance" id="Map__44_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_luk_a">
+		<ref name="reflectance" id="Map__1_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_zid_vani">
+		<ref name="reflectance" id="Map__9_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_01_stup_baza">
+		<ref name="reflectance" id="Map__35_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_zid">
+		<ref name="reflectance" id="Map__9_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_prozor">
+		<ref name="reflectance" id="Map__11_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_vrata_krug">
+		<ref name="reflectance" id="Map__55_image-image"/>
+	</bsdf>
+
+	<bsdf type="diffuse" id="sp_00_vrata_kock">
+		<ref name="reflectance" id="Map__54_image-image"/>
+	</bsdf>
+
+	<sensor type="perspective" id="Camera-camera">
+		<string name="fovAxis" value="smaller"/>
+		<float name="fov" value="45"/>
+		<transform name="toWorld">
+			<lookat target="13.4563, 6.78438, -1.15861" origin="14.4499, 6.89415, -1.18547" up="-0.109708, 0.993957, 0.00374357"/>
+		</transform>
+
+		<sampler type="independent">
+			<integer name="sampleCount" value="50"/>
+		</sampler>
+
+		<film type="hdrfilm" id="film">
+			<integer name="width" value="1280"/>
+			<integer name="height" value="720"/>
+			<string name="pixelFormat" value="rgb"/>
+			<boolean name="banner" value="false"/>
+			<rfilter type="box"/>
+		</film>
+	</sensor>
+
+	<shape type="sphere">
+		<point name="center" x="0" y="17" z="0"/>
+		<float name="radius" value="0.1"/>
+
+		<emitter type="area">
+			<rgb name="radiance" value="10000 10000 10000"/>
+		</emitter>
+
+		<bsdf type="diffuse">		    
+		    <rgb name="reflectance" value="0 0 0"/>
+		</bsdf>
+	</shape>
+
+	<shape type="obj" id="arcs_floor_small-lib_0">
+		<string name="filename" value="arcs_floor_small-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="arcs_03-lib_0">
+		<string name="filename" value="arcs_03-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="object32-lib_0">
+		<string name="filename" value="object32-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_svod_kapitel"/>
+	</shape>
+
+	<shape type="obj" id="object31-lib_0">
+		<string name="filename" value="object31-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stub_baza_"/>
+	</shape>
+
+	<shape type="obj" id="pillar_corners-lib_0">
+		<string name="filename" value="pillar_corners-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stub_kut"/>
+	</shape>
+
+	<shape type="obj" id="pillar_floor-lib_0">
+		<string name="filename" value="pillar_floor-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_stup"/>
+	</shape>
+
+	<shape type="obj" id="object28-lib_0">
+		<string name="filename" value="object28-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stub_baza"/>
+	</shape>
+
+	<shape type="obj" id="object27-lib_0">
+		<string name="filename" value="object27-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="pillar_quader-lib_0">
+		<string name="filename" value="pillar_quader-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stub"/>
+	</shape>
+
+	<shape type="obj" id="pillar_round-lib_0">
+		<string name="filename" value="pillar_round-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stup"/>
+	</shape>
+
+	<shape type="obj" id="arcs_floor_long-lib_0">
+		<string name="filename" value="arcs_floor_long-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="object23-lib_0">
+		<string name="filename" value="object23-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_vijenac"/>
+	</shape>
+
+	<shape type="obj" id="floors-lib_0">
+		<string name="filename" value="floors-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_pod"/>
+	</shape>
+
+	<shape type="obj" id="object21-lib_0">
+		<string name="filename" value="object21-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_svod"/>
+	</shape>
+
+	<shape type="obj" id="puillar_floor_corner-lib_0">
+		<string name="filename" value="puillar_floor_corner-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_stup"/>
+	</shape>
+
+	<shape type="obj" id="object19-lib_0">
+		<string name="filename" value="object19-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="relief-lib_0">
+		<string name="filename" value="relief-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_02_reljef"/>
+	</shape>
+
+	<shape type="obj" id="arcs_small-lib_0">
+		<string name="filename" value="arcs_small-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="holes-lib_0">
+		<string name="filename" value="holes-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stup"/>
+	</shape>
+
+	<shape type="obj" id="outside01-lib_0">
+		<string name="filename" value="outside01-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_zid_vani"/>
+	</shape>
+
+	<shape type="obj" id="arcs_long-lib_0">
+		<string name="filename" value="arcs_long-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="parapet-lib_0">
+		<string name="filename" value="parapet-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="round_holes-lib_0">
+		<string name="filename" value="round_holes-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="ceiling-lib_0">
+		<string name="filename" value="ceiling-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_svod"/>
+	</shape>
+
+	<shape type="obj" id="arcs_01-lib_0">
+		<string name="filename" value="arcs_01-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="object6-lib_0">
+		<string name="filename" value="object6-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_svod_kapitel"/>
+	</shape>
+
+	<shape type="obj" id="object5-lib_0">
+		<string name="filename" value="object5-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_svod_kapitel"/>
+	</shape>
+
+	<shape type="obj" id="object4-lib_0">
+		<string name="filename" value="object4-lib_0.obj"/>
+		
+		
+		<float name="maxSmoothAngle" value="40"/>
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="object3-lib_0">
+		<string name="filename" value="object3-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_stup_baza"/>
+	</shape>
+
+	<shape type="obj" id="arcs_02-lib_0">
+		<string name="filename" value="arcs_02-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_01_luk_a"/>
+	</shape>
+
+	<shape type="obj" id="arcs_04-lib_0">
+		<string name="filename" value="arcs_04-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_luk_mali"/>
+	</shape>
+
+	<shape type="obj" id="walls-lib_0">
+		<string name="filename" value="walls-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_zid"/>
+	</shape>
+
+	<shape type="obj" id="walls-lib_1">
+		<string name="filename" value="walls-lib_1.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_prozor"/>
+	</shape>
+
+	<shape type="obj" id="walls-lib_2">
+		<string name="filename" value="walls-lib_2.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_vrata_krug"/>
+	</shape>
+
+	<shape type="obj" id="windows-lib_0">
+		<string name="filename" value="windows-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_prozor"/>
+	</shape>
+
+	<shape type="obj" id="doors-lib_0">
+		<string name="filename" value="doors-lib_0.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_vrata_kock"/>
+	</shape>
+
+	<shape type="obj" id="doors-lib_1">
+		<string name="filename" value="doors-lib_1.obj"/>
+		
+		
+
+		<ref name="bsdf" id="sp_00_vrata_krug"/>
+	</shape>
+</scene>
