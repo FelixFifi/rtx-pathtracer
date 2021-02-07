@@ -3,14 +3,14 @@ project(rtx_raytracer)
 
 set(CMAKE_CXX_STANDARD 20)
 
-set(CMAKE_CXX_FLAGS_DEBUG_INIT "-Wall -O0")
+set(CMAKE_CXX_FLAGS_DEBUG_INIT "-Wall -O4")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "-Wall -O4")
 
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(OpenEXR REQUIRED)
 
-include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} ${OpenEXR_INCLUDE_DIRS} "../nvidia_shared_sources" "external" "external/lightpmm/include")
+include_directories(${Vulkan_INCLUDE_DIR} ${SDL2_INCLUDE_DIRS} ${OpenEXR_INCLUDE_DIRS} "external" "external/lightpmm/include")
 
 set(EXTERNAL
         external/imgui/imgui.cpp

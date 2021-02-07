@@ -15,7 +15,6 @@
 #define ALLOC_DEDICATED
 
 
-#include <nvmath/nvmath.h>
 #include <nvvkpp/utilities_vkpp.hpp>
 #include <nvvkpp/descriptorsets_vkpp.hpp>
 #include <nvvkpp/raytraceKHR_vkpp.hpp>
