@@ -1,4 +1,7 @@
 # Advance Path Tracing with NVIDIA RTX
+This project was the result of my master thesis at the University of Tübingen, which is included in this repository as `MasterThesis.pdf`.
+
+The master thesis contains the theoretical background, as well as a more in-depth description of the capabilities of the project.
 ## Abstract
 Hardware accelerated ray tracing is now possible with the NVIDIA RTX and the
 newly released AMD RDNA 2 GPUs.
