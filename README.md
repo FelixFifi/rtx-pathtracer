@@ -14,6 +14,18 @@ resulting fast convergence rate, allows for interactive comparisons between the
 different methods.
 
 ## Images
+### Path tracing of a dielectric element in a Cornell box
+![DielectricPathTracing](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/dielectric_PT.png?raw=true)
+### Irradiance Cache enabled
+![IC](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/dielectric_IC.png?raw=true)
+### Visualization of Irradiance Cache values
+![IC_visu](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/IC_visu.png?raw=true)
+### UI of the path tracer, where most settings can be changed at runtime to switch between different methods
+![CompleteUI](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/Ui_Complete.png?raw=true)
+### Visualization of the generated guiding information as spherical distributions in the scene
+![GuidingVisualization](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/Visu_guiding_all.png?raw=true)
+![GuidingVisualizationSingle](https://github.com/FelixFifi/rtx-pathtracer/blob/master/resources/Visu_veach_guidingMove2.png?raw=true)
+
 
 
 ## Requirements
@@ -25,6 +37,8 @@ different methods.
 * GLM
 
 `sudo apt-get install libsdl2-dev libopenexr-dev cmake build-essential libglm-dev`
+
+## Build steps
 
 `cmake -DCMAKE_BUILD_TYPE=Debug -S . -B cmake-build-debug`
 
